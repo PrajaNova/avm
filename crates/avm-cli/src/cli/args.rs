@@ -45,13 +45,8 @@ enum ToolCommands {
     Use(ToolUseArgs),
     Install(ToolInstallArgs),
     Uninstall(ToolUninstallArgs),
-    Node(NodeToolArgs),
-}
-
-#[derive(Args)]
-struct NodeToolArgs {
-    #[arg(trailing_var_arg = true)]
-    args: Vec<String>,
+    #[command(external_subcommand)]
+    Provider(Vec<String>),
 }
 
 #[derive(Subcommand)]

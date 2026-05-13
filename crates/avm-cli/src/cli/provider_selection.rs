@@ -1,4 +1,7 @@
-fn select_tool_version(title: &str, versions: Vec<avm_plugin_api::ToolVersion>) -> Result<()> {
+fn select_tool_version(
+    provider_name: &str,
+    versions: Vec<avm_plugin_api::ToolVersion>,
+) -> Result<()> {
     let items = versions
         .iter()
         .map(|version| ui::SelectItem {
@@ -6,8 +9,9 @@ fn select_tool_version(title: &str, versions: Vec<avm_plugin_api::ToolVersion>) 
         })
         .collect::<Vec<_>>();
 
-    match ui::select(title, "Use Up/Down to move, Enter to select, q to cancel.", &items, 10)? {
-        Some(selected) => confirm_node_version_selection(&versions[selected].version),
+    let title = format!("Available {provider_name} versions");
+    match ui::select(&title, "Use Up/Down to move, Enter to select, q to cancel.", &items, 10)? {
+        Some(selected) => confirm_tool_version_selection(provider_name, &versions[selected].version),
         None => {
             println!("Cancelled.");
             Ok(())
@@ -15,30 +19,30 @@ fn select_tool_version(title: &str, versions: Vec<avm_plugin_api::ToolVersion>) 
     }
 }
 
-fn confirm_node_version_selection(version: &str) -> Result<()> {
+fn confirm_tool_version_selection(provider_name: &str, version: &str) -> Result<()> {
     let cwd = std::env::current_dir().context("failed to read current directory")?;
     let has_local_config = cwd.join(CONFIG_FILE).exists();
 
     if has_local_config {
-        print!("Use node {version} locally or globally? [l/g/c]: ");
+        print!("Use {provider_name} {version} locally or globally? [l/g/c]: ");
         io::stdout().flush()?;
         let mut answer = String::new();
         io::stdin().read_line(&mut answer)?;
         match answer.trim().to_ascii_lowercase().as_str() {
-            "l" | "local" => set_tool_version("node", version, false),
-            "g" | "global" => set_tool_version("node", version, true),
+            "l" | "local" => set_tool_version(provider_name, version, false),
+            "g" | "global" => set_tool_version(provider_name, version, true),
             _ => {
                 println!("Cancelled.");
                 Ok(())
             }
         }
     } else {
-        print!("No local .avm.json found. Set node {version} globally? [y/N]: ");
+        print!("No local .avm.json found. Set {provider_name} {version} globally? [y/N]: ");
         io::stdout().flush()?;
         let mut answer = String::new();
         io::stdin().read_line(&mut answer)?;
         match answer.trim().to_ascii_lowercase().as_str() {
-            "y" | "yes" => set_tool_version("node", version, true),
+            "y" | "yes" => set_tool_version(provider_name, version, true),
             _ => {
                 println!("Cancelled.");
                 Ok(())

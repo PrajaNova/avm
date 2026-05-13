@@ -55,9 +55,23 @@ fn cmd_run(args: RunArgs) -> Result<()> {
     }
 
     let cfg = load_state()?;
-    let alias = cfg.resolve_alias(&args.args[0], &cfg).ok_or_else(|| {
-        alias_not_found_error(&args.args[0], &cfg)
-    })?;
+    let alias_key = args.args[0].clone();
+    let alias = match cfg.resolve_alias(&alias_key, &cfg) {
+        Some(alias) => alias,
+        None => {
+            if ui::can_select() {
+                let suggestions = cfg.suggest_aliases(&alias_key);
+                if let Some(selected) = select_alias_suggestion(&alias_key, &suggestions)? {
+                    cfg.resolve_alias(&selected, &cfg)
+                        .ok_or_else(|| alias_not_found_error(&alias_key, &cfg))?
+                } else {
+                    return Ok(());
+                }
+            } else {
+                return Err(alias_not_found_error(&alias_key, &cfg));
+            }
+        }
+    };
     let command = build_alias_command(&alias.command, &args.args[1..])?;
     if command.is_empty() {
         return Err(anyhow!("alias '{}' resolved to empty command", args.args[0]));
@@ -77,6 +91,32 @@ fn cmd_run(args: RunArgs) -> Result<()> {
         .status()
         .context("failed to run alias")?;
     std::process::exit(status.code().unwrap_or(1));
+}
+
+fn select_alias_suggestion(query: &str, suggestions: &[String]) -> Result<Option<String>> {
+    if suggestions.is_empty() {
+        return Err(anyhow!("alias '{query}' not found"));
+    }
+
+    let items = suggestions
+        .iter()
+        .map(|suggestion| ui::SelectItem {
+            label: format!("avm {suggestion}"),
+        })
+        .collect::<Vec<_>>();
+
+    match ui::select(
+        &format!("Alias '{query}' not found"),
+        "Use Up/Down to choose a suggestion, Enter to run, q to cancel.",
+        &items,
+        8,
+    )? {
+        Some(index) => Ok(Some(suggestions[index].clone())),
+        None => {
+            println!("Cancelled.");
+            Ok(None)
+        }
+    }
 }
 
 fn alias_not_found_error(key: &str, cfg: &ResolvedConfig) -> anyhow::Error {

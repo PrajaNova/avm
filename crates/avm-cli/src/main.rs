@@ -980,10 +980,10 @@ fn render_node_version_picker(
     page_size: usize,
 ) -> Result<()> {
     let mut stdout = io::stdout();
-    write!(stdout, "\x1b[2J\x1b[H")?;
-    writeln!(stdout, "Available node versions")?;
-    writeln!(stdout, "Use ↑/↓ to move, Enter to select, q to cancel.")?;
-    writeln!(stdout)?;
+    write!(stdout, "\x1b[?25l\x1b[2J\x1b[H")?;
+    write!(stdout, "Available node versions\r\n")?;
+    write!(stdout, "Use Up/Down to move, Enter to select, q to cancel.\r\n")?;
+    write!(stdout, "\r\n")?;
 
     for (index, version) in versions
         .iter()
@@ -992,15 +992,15 @@ fn render_node_version_picker(
         .take(page_size)
     {
         if index == selected {
-            writeln!(stdout, "> {}", format_node_version(version))?;
+            write!(stdout, "> {}\r\n", format_node_version(version))?;
         } else {
-            writeln!(stdout, "  {}", format_node_version(version))?;
+            write!(stdout, "  {}\r\n", format_node_version(version))?;
         }
     }
 
-    writeln!(
+    write!(
         stdout,
-        "\nShowing {}-{} of {}",
+        "\r\nShowing {}-{} of {}\r\n",
         offset + 1,
         usize::min(offset + page_size, versions.len()),
         versions.len()
@@ -1047,6 +1047,8 @@ struct RawTerminal {
 
 impl RawTerminal {
     fn enter() -> Result<Self> {
+        write!(io::stdout(), "\x1b[?25l")?;
+        io::stdout().flush()?;
         let status = Command::new("stty")
             .arg("raw")
             .arg("-echo")
@@ -1061,6 +1063,8 @@ impl RawTerminal {
     fn restore(&mut self) -> Result<()> {
         if self.active {
             let _ = Command::new("stty").arg("sane").status();
+            let _ = write!(io::stdout(), "\x1b[?25h\r\n");
+            let _ = io::stdout().flush();
             self.active = false;
         }
         Ok(())

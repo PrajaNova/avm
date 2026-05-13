@@ -2,12 +2,13 @@ use anyhow::{anyhow, Context, Result};
 use avm_core::{load_with_env, AliasSource, ConfigLoadResult, Resolver, ResolvedConfig};
 use avm_plugin_api::ResolvedAlias;
 use avm_plugin_api::ToolProvider;
-use avm_plugin_node::{NodeAlias, NodeProvider};
+use avm_plugin_node::{NodeAlias, NodeProvider, NodeVersion};
 use avm_runtime::PluginManager;
 use avm_shims::{install_shims, remove_shim, shim_path_env};
 use clap::{Args, Parser, Subcommand};
 use std::collections::{HashMap, HashSet};
 use std::fs;
+use std::io::{self, IsTerminal, Read, Write};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -62,21 +63,13 @@ enum ToolCommands {
     Use(ToolUseArgs),
     Install(ToolInstallArgs),
     Uninstall(ToolUninstallArgs),
-    Node {
-        #[command(subcommand)]
-        command: Option<NodeToolCommands>,
-    },
+    Node(NodeToolArgs),
 }
 
-#[derive(Subcommand)]
-enum NodeToolCommands {
-    #[command(alias = "ls")]
-    List,
-    #[command(alias = "available")]
-    Versions,
-    Use(NodeToolUseArgs),
-    Install(NodeToolVersionArgs),
-    Uninstall(NodeToolVersionArgs),
+#[derive(Args)]
+struct NodeToolArgs {
+    #[arg(trailing_var_arg = true)]
+    args: Vec<String>,
 }
 
 #[derive(Subcommand)]
@@ -160,18 +153,6 @@ struct ToolInstallArgs {
 #[derive(Args)]
 struct ToolUninstallArgs {
     tool: String,
-    version: String,
-}
-
-#[derive(Args)]
-struct NodeToolUseArgs {
-    version: String,
-    #[arg(short = 'g', long)]
-    global: bool,
-}
-
-#[derive(Args)]
-struct NodeToolVersionArgs {
     version: String,
 }
 
@@ -725,36 +706,87 @@ fn cmd_tool(cmd: Option<ToolCommands>) -> Result<()> {
             println!("✓ Removed {} {}", args.tool, args.version);
             Ok(())
         }
-        ToolCommands::Node { command } => cmd_node_tool(command, &cfg, &node),
+        ToolCommands::Node(args) => cmd_node_tool(args, &cfg, &node),
     }
 }
 
 fn cmd_node_tool(
-    command: Option<NodeToolCommands>,
+    args: NodeToolArgs,
     cfg: &ResolvedConfig,
     node: &NodeProvider,
 ) -> Result<()> {
-    match command.unwrap_or(NodeToolCommands::List) {
-        NodeToolCommands::List => {
+    let parts = args.args;
+    match parts.as_slice() {
+        [] => {
             print_node_tool_status(cfg, node)?;
             Ok(())
         }
-        NodeToolCommands::Versions => {
-            print_available_node_versions(node)?;
+        [cmd] if cmd == "list" || cmd == "ls" => {
+            print_node_tool_status(cfg, node)?;
             Ok(())
         }
-        NodeToolCommands::Use(args) => set_tool_version("node", &args.version, args.global),
-        NodeToolCommands::Install(args) => {
-            node.install(&args.version)?;
-            println!("✓ Installed node {}", args.version);
+        [cmd] if cmd == "versions" || cmd == "available" => {
+            print_available_node_versions(node, NodeVersionFilter::Recent)?;
             Ok(())
         }
-        NodeToolCommands::Uninstall(args) => {
-            node.uninstall(&args.version)?;
-            println!("✓ Removed node {}", args.version);
+        [filter, cmd] if cmd == "versions" || cmd == "available" => {
+            let filter = parse_node_version_filter(filter)?;
+            print_available_node_versions(node, filter)?;
             Ok(())
         }
+        [cmd, version] if cmd == "use" => set_tool_version("node", version, false),
+        [cmd, version, flag] if cmd == "use" && (flag == "--global" || flag == "-g") => {
+            set_tool_version("node", version, true)
+        }
+        [cmd, version] if cmd == "install" => {
+            node.install(version)?;
+            println!("✓ Installed node {version}");
+            Ok(())
+        }
+        [cmd, version] if cmd == "uninstall" => {
+            node.uninstall(version)?;
+            println!("✓ Removed node {version}");
+            Ok(())
+        }
+        [cmd] if cmd == "--help" || cmd == "-h" || cmd == "help" => {
+            print_node_tool_help();
+            Ok(())
+        }
+        _ => Err(anyhow!(
+            "unknown node tool command. Try `avm tool node --help`"
+        )),
     }
+}
+
+enum NodeVersionFilter {
+    Recent,
+    Major(u64),
+    Latest,
+}
+
+fn parse_node_version_filter(value: &str) -> Result<NodeVersionFilter> {
+    if value == "latest" || value == "latets" {
+        return Ok(NodeVersionFilter::Latest);
+    }
+
+    let major = value
+        .trim_start_matches('v')
+        .parse::<u64>()
+        .with_context(|| format!("unknown node version filter: {value}"))?;
+    Ok(NodeVersionFilter::Major(major))
+}
+
+fn print_node_tool_help() {
+    println!("Usage: avm tool node [COMMAND]");
+    println!();
+    println!("Commands:");
+    println!("  list                         Show selected and installed Node.js versions");
+    println!("  versions                     Pick from available Node.js versions");
+    println!("  <major> versions             Pick from one major line, for example `avm tool node 19 versions`");
+    println!("  latest versions              Pick the latest available Node.js version");
+    println!("  use <version> [-g|--global]  Set Node.js version locally or globally");
+    println!("  install <version>            Install Node.js version");
+    println!("  uninstall <version>          Remove managed Node.js version");
 }
 
 fn set_tool_version(tool: &str, version: &str, global: bool) -> Result<()> {
@@ -835,22 +867,25 @@ fn print_installed_node_versions(node: &NodeProvider) -> Result<()> {
     Ok(())
 }
 
-fn print_available_node_versions(node: &NodeProvider) -> Result<()> {
-    let versions = node.available_versions()?;
+fn print_available_node_versions(node: &NodeProvider, filter: NodeVersionFilter) -> Result<()> {
+    let versions = filter_node_versions(node.available_versions()?, &filter);
     if versions.is_empty() {
         println!("Available node versions: none");
         return Ok(());
     }
 
+    if io::stdin().is_terminal() && io::stdout().is_terminal() {
+        return select_available_node_version(versions);
+    }
+
     println!("Available node versions:");
-    for version in versions.iter().take(40) {
-        let clean_version = version.version.trim_start_matches('v');
-        match (&version.lts, version.security) {
-            (Some(lts), true) => println!("  {clean_version}  LTS {lts}  security"),
-            (Some(lts), false) => println!("  {clean_version}  LTS {lts}"),
-            (None, true) => println!("  {clean_version}  security"),
-            (None, false) => println!("  {clean_version}"),
-        }
+    let limit = match filter {
+        NodeVersionFilter::Recent => 10,
+        NodeVersionFilter::Latest => 1,
+        NodeVersionFilter::Major(_) => versions.len(),
+    };
+    for version in versions.iter().take(limit) {
+        println!("  {}", format_node_version(version));
     }
 
     println!();
@@ -858,6 +893,184 @@ fn print_available_node_versions(node: &NodeProvider) -> Result<()> {
     println!("  avm tool node install <version>");
     println!("  avm tool node use <version>");
     Ok(())
+}
+
+fn filter_node_versions(versions: Vec<NodeVersion>, filter: &NodeVersionFilter) -> Vec<NodeVersion> {
+    match filter {
+        NodeVersionFilter::Recent => versions,
+        NodeVersionFilter::Latest => versions.into_iter().take(1).collect(),
+        NodeVersionFilter::Major(major) => versions
+            .into_iter()
+            .filter(|version| node_major(&version.version) == Some(*major))
+            .collect(),
+    }
+}
+
+fn node_major(version: &str) -> Option<u64> {
+    version
+        .trim_start_matches('v')
+        .split('.')
+        .next()
+        .and_then(|value| value.parse::<u64>().ok())
+}
+
+fn format_node_version(version: &NodeVersion) -> String {
+    let clean_version = version.version.trim_start_matches('v');
+    match (&version.lts, version.security) {
+        (Some(lts), true) => format!("{clean_version}  LTS {lts}  security"),
+        (Some(lts), false) => format!("{clean_version}  LTS {lts}"),
+        (None, true) => format!("{clean_version}  security"),
+        (None, false) => clean_version.to_string(),
+    }
+}
+
+fn select_available_node_version(versions: Vec<NodeVersion>) -> Result<()> {
+    let mut terminal = RawTerminal::enter()?;
+    let mut selected = 0usize;
+    let mut offset = 0usize;
+    let page_size = 10usize;
+
+    loop {
+        render_node_version_picker(&versions, selected, offset, page_size)?;
+
+        let mut byte = [0u8; 1];
+        io::stdin().read_exact(&mut byte)?;
+        match byte[0] {
+            b'\n' | b'\r' => {
+                terminal.restore()?;
+                let version = versions[selected].version.trim_start_matches('v').to_string();
+                return confirm_node_version_selection(&version);
+            }
+            b'q' | 3 => {
+                terminal.restore()?;
+                println!("Cancelled.");
+                return Ok(());
+            }
+            27 => {
+                let mut seq = [0u8; 2];
+                if io::stdin().read_exact(&mut seq).is_ok() && seq[0] == b'[' {
+                    match seq[1] {
+                        b'A' => {
+                            selected = selected.saturating_sub(1);
+                        }
+                        b'B' => {
+                            if selected + 1 < versions.len() {
+                                selected += 1;
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+            }
+            _ => {}
+        }
+
+        if selected < offset {
+            offset = selected;
+        } else if selected >= offset + page_size {
+            offset = selected + 1 - page_size;
+        }
+    }
+}
+
+fn render_node_version_picker(
+    versions: &[NodeVersion],
+    selected: usize,
+    offset: usize,
+    page_size: usize,
+) -> Result<()> {
+    let mut stdout = io::stdout();
+    write!(stdout, "\x1b[2J\x1b[H")?;
+    writeln!(stdout, "Available node versions")?;
+    writeln!(stdout, "Use ↑/↓ to move, Enter to select, q to cancel.")?;
+    writeln!(stdout)?;
+
+    for (index, version) in versions
+        .iter()
+        .enumerate()
+        .skip(offset)
+        .take(page_size)
+    {
+        if index == selected {
+            writeln!(stdout, "> {}", format_node_version(version))?;
+        } else {
+            writeln!(stdout, "  {}", format_node_version(version))?;
+        }
+    }
+
+    writeln!(
+        stdout,
+        "\nShowing {}-{} of {}",
+        offset + 1,
+        usize::min(offset + page_size, versions.len()),
+        versions.len()
+    )?;
+    stdout.flush()?;
+    Ok(())
+}
+
+fn confirm_node_version_selection(version: &str) -> Result<()> {
+    let cwd = std::env::current_dir().context("failed to read current directory")?;
+    let has_local_config = cwd.join(CONFIG_FILE).exists();
+
+    if has_local_config {
+        print!("Use node {version} locally or globally? [l/g/c]: ");
+        io::stdout().flush()?;
+        let mut answer = String::new();
+        io::stdin().read_line(&mut answer)?;
+        match answer.trim().to_ascii_lowercase().as_str() {
+            "l" | "local" => set_tool_version("node", version, false),
+            "g" | "global" => set_tool_version("node", version, true),
+            _ => {
+                println!("Cancelled.");
+                Ok(())
+            }
+        }
+    } else {
+        print!("No local .avm.json found. Set node {version} globally? [y/N]: ");
+        io::stdout().flush()?;
+        let mut answer = String::new();
+        io::stdin().read_line(&mut answer)?;
+        match answer.trim().to_ascii_lowercase().as_str() {
+            "y" | "yes" => set_tool_version("node", version, true),
+            _ => {
+                println!("Cancelled.");
+                Ok(())
+            }
+        }
+    }
+}
+
+struct RawTerminal {
+    active: bool,
+}
+
+impl RawTerminal {
+    fn enter() -> Result<Self> {
+        let status = Command::new("stty")
+            .arg("raw")
+            .arg("-echo")
+            .status()
+            .context("failed to enter raw terminal mode")?;
+        if !status.success() {
+            return Err(anyhow!("failed to enter raw terminal mode"));
+        }
+        Ok(Self { active: true })
+    }
+
+    fn restore(&mut self) -> Result<()> {
+        if self.active {
+            let _ = Command::new("stty").arg("sane").status();
+            self.active = false;
+        }
+        Ok(())
+    }
+}
+
+impl Drop for RawTerminal {
+    fn drop(&mut self) {
+        let _ = self.restore();
+    }
 }
 
 fn cmd_plugin(cmd: PluginCommands) -> Result<()> {

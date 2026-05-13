@@ -1,15 +1,10 @@
 fn shell_init_script() -> String {
-    let shim_dir = "$HOME/.avm/shims";
-    format!(
-        r#"
-if [ -n "{shim_dir}" ] && [ -d "{shim_dir}" ]; then
-  case ":$PATH:" in
-    *":{shim_dir}:"*) ;;
-    *) export PATH="{shim_dir}:$PATH" ;;
-  esac
+    r#"AVM_SHIM_DIR="$HOME/.avm/shims"
+if [[ -d "$AVM_SHIM_DIR" && ":$PATH:" != *":$AVM_SHIM_DIR:"* ]]; then
+  export PATH="$AVM_SHIM_DIR:$PATH"
 fi
 
-avm() {{
+avm() {
   if [ $# -eq 0 ]; then
     command avm-bin "$@"
     return $?
@@ -33,9 +28,9 @@ avm() {{
     return $?
   fi
   command "$@"
-}}
+}
 "#
-    )
+    .to_string()
 }
 
 fn shell_quote(value: &str) -> String {

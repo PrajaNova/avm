@@ -79,6 +79,7 @@ fn print_tool_list(cfg: &ResolvedConfig, node: &NodeProvider) -> Result<()> {
 
     print_installed_node_versions(node)
 }
+
 fn print_node_tool_status(cfg: &ResolvedConfig, node: &NodeProvider) -> Result<()> {
     println!("Tool provider: node");
     if let Some((version, source)) = cfg.resolve_tool("node", cfg) {
@@ -107,24 +108,24 @@ fn print_installed_node_versions(node: &NodeProvider) -> Result<()> {
 }
 
 fn print_available_node_versions(node: &NodeProvider, filter: NodeVersionFilter) -> Result<()> {
-    let versions = filter_node_versions(node.available_versions()?, &filter);
+    let query = match filter {
+        NodeVersionFilter::Recent => avm_plugin_api::ToolVersionQuery::Recent,
+        NodeVersionFilter::Latest => avm_plugin_api::ToolVersionQuery::Latest,
+        NodeVersionFilter::Major(major) => avm_plugin_api::ToolVersionQuery::Major(major),
+    };
+    let versions = node.available_versions(query)?;
     if versions.is_empty() {
         println!("Available node versions: none");
         return Ok(());
     }
 
     if ui::can_select() {
-        return select_available_node_version(versions);
+        return select_tool_version("Available node versions", versions);
     }
 
     println!("Available node versions:");
-    let limit = match filter {
-        NodeVersionFilter::Recent => 10,
-        NodeVersionFilter::Latest => 1,
-        NodeVersionFilter::Major(_) => versions.len(),
-    };
-    for version in versions.iter().take(limit) {
-        println!("  {}", format_node_version(version));
+    for version in &versions {
+        println!("  {}", version.label);
     }
 
     println!();
@@ -132,33 +133,4 @@ fn print_available_node_versions(node: &NodeProvider, filter: NodeVersionFilter)
     println!("  avm tool node install <version>");
     println!("  avm tool node use <version>");
     Ok(())
-}
-
-fn filter_node_versions(versions: Vec<NodeVersion>, filter: &NodeVersionFilter) -> Vec<NodeVersion> {
-    match filter {
-        NodeVersionFilter::Recent => versions,
-        NodeVersionFilter::Latest => versions.into_iter().take(1).collect(),
-        NodeVersionFilter::Major(major) => versions
-            .into_iter()
-            .filter(|version| node_major(&version.version) == Some(*major))
-            .collect(),
-    }
-}
-
-fn node_major(version: &str) -> Option<u64> {
-    version
-        .trim_start_matches('v')
-        .split('.')
-        .next()
-        .and_then(|value| value.parse::<u64>().ok())
-}
-
-fn format_node_version(version: &NodeVersion) -> String {
-    let clean_version = version.version.trim_start_matches('v');
-    match (&version.lts, version.security) {
-        (Some(lts), true) => format!("{clean_version}  LTS {lts}  security"),
-        (Some(lts), false) => format!("{clean_version}  LTS {lts}"),
-        (None, true) => format!("{clean_version}  security"),
-        (None, false) => clean_version.to_string(),
-    }
 }

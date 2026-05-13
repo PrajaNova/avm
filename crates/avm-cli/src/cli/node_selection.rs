@@ -1,21 +1,13 @@
-fn select_available_node_version(versions: Vec<NodeVersion>) -> Result<()> {
+fn select_tool_version(title: &str, versions: Vec<avm_plugin_api::ToolVersion>) -> Result<()> {
     let items = versions
         .iter()
         .map(|version| ui::SelectItem {
-            label: format_node_version(version),
+            label: version.label.clone(),
         })
         .collect::<Vec<_>>();
 
-    match ui::select(
-        "Available node versions",
-        "Use Up/Down to move, Enter to select, q to cancel.",
-        &items,
-        10,
-    )? {
-        Some(selected) => {
-            let version = versions[selected].version.trim_start_matches('v').to_string();
-            confirm_node_version_selection(&version)
-        }
+    match ui::select(title, "Use Up/Down to move, Enter to select, q to cancel.", &items, 10)? {
+        Some(selected) => confirm_node_version_selection(&versions[selected].version),
         None => {
             println!("Cancelled.");
             Ok(())

@@ -12,7 +12,8 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 const CONFIG_FILE: &str = ".avm.json";
-const BUILTIN_NODE_PLUGIN_MARKER: &str = ".builtin-node";
+const BUILTIN_PLUGIN_DIR: &str = ".builtins";
+const BUILTIN_NODE_PLUGIN_MARKER: &str = "node";
 
 #[derive(Parser)]
 #[command(name = "avm", version, about = "Any Version Manager")]
@@ -827,17 +828,25 @@ fn installed_plugins(plugin_manager: &PluginManager) -> Result<HashMap<String, a
 }
 
 fn install_builtin_node_plugin(plugin_manager: &PluginManager) -> Result<()> {
-    let dir = plugin_manager.plugin_dir().join("node");
-    fs::create_dir_all(&dir).context("failed to create built-in node plugin marker")?;
+    let dir = plugin_manager.plugin_dir().join(BUILTIN_PLUGIN_DIR);
+    fs::create_dir_all(&dir).with_context(|| {
+        format!(
+            "failed to create built-in plugin marker directory: {}",
+            dir.display()
+        )
+    })?;
     fs::write(dir.join(BUILTIN_NODE_PLUGIN_MARKER), "builtin\n")
         .context("failed to write built-in node plugin marker")?;
     Ok(())
 }
 
 fn remove_builtin_node_plugin(plugin_manager: &PluginManager) -> Result<()> {
-    let dir = plugin_manager.plugin_dir().join("node");
-    if dir.join(BUILTIN_NODE_PLUGIN_MARKER).exists() {
-        fs::remove_dir_all(dir).context("failed to remove built-in node plugin marker")?;
+    let marker = plugin_manager
+        .plugin_dir()
+        .join(BUILTIN_PLUGIN_DIR)
+        .join(BUILTIN_NODE_PLUGIN_MARKER);
+    if marker.exists() {
+        fs::remove_file(marker).context("failed to remove built-in node plugin marker")?;
     }
     Ok(())
 }
@@ -845,7 +854,7 @@ fn remove_builtin_node_plugin(plugin_manager: &PluginManager) -> Result<()> {
 fn is_builtin_node_plugin_installed(plugin_manager: &PluginManager) -> bool {
     plugin_manager
         .plugin_dir()
-        .join("node")
+        .join(BUILTIN_PLUGIN_DIR)
         .join(BUILTIN_NODE_PLUGIN_MARKER)
         .exists()
 }

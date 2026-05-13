@@ -41,9 +41,9 @@ fn cmd_env(args: EnvArgs) -> Result<()> {
 
 fn cmd_resolve(args: ResolveArgs) -> Result<()> {
     let cfg = load_state()?;
-    let alias = cfg
-        .resolve_alias(&args.key, &cfg)
-        .ok_or_else(|| anyhow!("alias '{}' not found", args.key))?;
+    let alias = cfg.resolve_alias(&args.key, &cfg).ok_or_else(|| {
+        alias_not_found_error(&args.key, &cfg)
+    })?;
     let command = build_alias_command(&alias.command, &args.args)?;
     println!("{}", shell_quote_command(&command));
     Ok(())
@@ -55,9 +55,9 @@ fn cmd_run(args: RunArgs) -> Result<()> {
     }
 
     let cfg = load_state()?;
-    let alias = cfg
-        .resolve_alias(&args.args[0], &cfg)
-        .ok_or_else(|| anyhow!("alias '{}' not found", args.args[0]))?;
+    let alias = cfg.resolve_alias(&args.args[0], &cfg).ok_or_else(|| {
+        alias_not_found_error(&args.args[0], &cfg)
+    })?;
     let command = build_alias_command(&alias.command, &args.args[1..])?;
     if command.is_empty() {
         return Err(anyhow!("alias '{}' resolved to empty command", args.args[0]));
@@ -77,6 +77,22 @@ fn cmd_run(args: RunArgs) -> Result<()> {
         .status()
         .context("failed to run alias")?;
     std::process::exit(status.code().unwrap_or(1));
+}
+
+fn alias_not_found_error(key: &str, cfg: &ResolvedConfig) -> anyhow::Error {
+    let suggestions = cfg.suggest_aliases(key);
+    if suggestions.is_empty() {
+        return anyhow!("alias '{key}' not found");
+    }
+
+    anyhow!(
+        "alias '{key}' not found\n\nDid you mean?\n{}",
+        suggestions
+            .iter()
+            .map(|suggestion| format!("  avm {suggestion}"))
+            .collect::<Vec<_>>()
+            .join("\n")
+    )
 }
 
 fn shell_quote_command(parts: &[String]) -> String {

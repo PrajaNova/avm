@@ -29,7 +29,7 @@ avm() {
     command avm-bin "$@"
     return $?
   fi
-  command "$@"
+  command avm-bin run "$@"
 }
 "#
     .to_string()

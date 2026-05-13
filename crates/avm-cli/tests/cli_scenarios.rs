@@ -64,6 +64,15 @@ fn assert_success(output: &Output) {
     );
 }
 
+fn assert_failure(output: &Output) {
+    assert!(
+        !output.status.success(),
+        "expected failure\nstdout:\n{}\nstderr:\n{}",
+        stdout(output),
+        stderr(output)
+    );
+}
+
 #[test]
 fn resolves_and_runs_local_aliases() {
     let root = temp_root("basic-alias");
@@ -180,6 +189,31 @@ fn node_provider_exposes_package_scripts_with_lockfile_manager() {
     let output = run_avm(&work, &home, &["which", "build"]);
     assert_success(&output);
     assert!(stdout(&output).contains("plugin alias 'build' from node"));
+}
+
+#[test]
+fn fuzzy_alias_suggestion_matches_reordered_words() {
+    let root = temp_root("fuzzy-alias");
+    let home = root.join("home");
+    let work = root.join("work");
+    fs::create_dir_all(&home).expect("create home");
+    fs::create_dir_all(&work).expect("create work");
+    write_file(
+        &work.join(".avm.json"),
+        r#"{
+  "aliases": {
+    "tv:run": "echo tv-run"
+  },
+  "env": {},
+  "tools": {}
+}"#,
+    );
+
+    let output = run_avm(&work, &home, &["run", "runtv"]);
+    assert_failure(&output);
+    assert!(stderr(&output).contains("alias 'runtv' not found"));
+    assert!(stderr(&output).contains("Did you mean?"));
+    assert!(stderr(&output).contains("avm tv:run"));
 }
 
 #[test]

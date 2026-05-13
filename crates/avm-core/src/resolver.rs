@@ -76,6 +76,15 @@ impl ResolvedConfig {
         }
         merged
     }
+
+    pub fn suggest_aliases(&self, query: &str) -> Vec<String> {
+        suggest_aliases_from_parts(
+            query,
+            self.local_aliases.keys(),
+            self.global_aliases.keys(),
+            self.plugin_aliases.keys(),
+        )
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -166,42 +175,58 @@ impl Resolver {
     }
 
     pub fn suggest_aliases(&self, query: &str, cfg: &ResolvedConfig) -> Vec<String> {
-        let mut suggestions = Vec::new();
-        let mut candidates = HashMap::new();
-
-        for key in cfg.local_aliases.keys() {
-            candidates.insert(key.clone(), true);
-        }
-        for key in cfg.global_aliases.keys() {
-            candidates.insert(key.clone(), true);
-        }
-        for key in cfg.plugin_aliases.keys() {
-            candidates.insert(key.clone(), true);
-        }
-
-        let normalized_query = normalize_for_comparison(query);
-        for key in candidates.keys() {
-            if levenshtein_distance(query, key) <= 2 {
-                suggestions.push(key.clone());
-                continue;
-            }
-
-            let normalized_key = normalize_for_comparison(key);
-            if normalized_query == normalized_key && !normalized_query.is_empty() {
-                suggestions.push(key.clone());
-                continue;
-            }
-
-            if (normalized_key.contains(&normalized_query) || normalized_query.contains(&normalized_key))
-                && (normalized_key.len() > 3 || normalized_query.len() > 3)
-            {
-                suggestions.push(key.clone());
-            }
-        }
-
-        suggestions.sort_unstable();
-        suggestions
+        suggest_aliases_from_parts(
+            query,
+            cfg.local_aliases.keys(),
+            cfg.global_aliases.keys(),
+            cfg.plugin_aliases.keys(),
+        )
     }
+}
+
+fn suggest_aliases_from_parts<'a>(
+    query: &str,
+    local: impl Iterator<Item = &'a String>,
+    global: impl Iterator<Item = &'a String>,
+    plugin: impl Iterator<Item = &'a String>,
+) -> Vec<String> {
+    let mut candidates = HashMap::new();
+    for key in local.chain(global).chain(plugin) {
+        candidates.insert(key.clone(), true);
+    }
+
+    let mut scored = Vec::new();
+    for key in candidates.keys() {
+        let score = alias_match_score(query, key);
+        if score >= 0.80 {
+            scored.push((key.clone(), score));
+        }
+    }
+
+    scored.sort_by(|a, b| {
+        b.1.partial_cmp(&a.1)
+            .unwrap_or(std::cmp::Ordering::Equal)
+            .then_with(|| a.0.cmp(&b.0))
+    });
+    scored.into_iter().map(|(key, _)| key).take(8).collect()
+}
+
+fn alias_match_score(query: &str, candidate: &str) -> f64 {
+    let query = normalize_for_comparison(query);
+    let candidate = normalize_for_comparison(candidate);
+    if query.is_empty() || candidate.is_empty() {
+        return 0.0;
+    }
+    if query == candidate {
+        return 1.0;
+    }
+    if query.contains(&candidate) || candidate.contains(&query) {
+        return 0.90;
+    }
+
+    let distance = levenshtein_distance(&query, &candidate);
+    let max_len = query.len().max(candidate.len()) as f64;
+    1.0 - (distance as f64 / max_len)
 }
 
 fn normalize_for_comparison(s: &str) -> String {
@@ -210,7 +235,7 @@ fn normalize_for_comparison(s: &str) -> String {
         .filter(|p| !p.is_empty())
         .collect();
     parts.sort_unstable();
-    parts.join("-")
+    parts.join("")
 }
 
 fn levenshtein_distance(s: &str, t: &str) -> usize {

@@ -7,10 +7,12 @@ use avm_runtime::PluginManager;
 use avm_shims::{install_shims, remove_shim, shim_path_env};
 use clap::{Args, Parser, Subcommand};
 use std::collections::{HashMap, HashSet};
+use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
 const CONFIG_FILE: &str = ".avm.json";
+const BUILTIN_NODE_PLUGIN_MARKER: &str = ".builtin-node";
 
 #[derive(Parser)]
 #[command(name = "avm", version, about = "Any Version Manager")]
@@ -747,13 +749,18 @@ fn cmd_plugin(cmd: PluginCommands) -> Result<()> {
     let plugin_manager = PluginManager::new(None)?;
     match cmd {
         PluginCommands::Add { source } => {
+            if source == "node" {
+                install_builtin_node_plugin(&plugin_manager)?;
+                println!("✓ Installed built-in plugin node");
+                return Ok(());
+            }
             println!("Installing plugin from {source}...");
             plugin_manager.install_plugin(&source)?;
             println!("✓ Installed plugin");
             Ok(())
         }
         PluginCommands::List { all } => {
-            let installed = plugin_manager.list_plugins()?;
+            let installed = installed_plugins(&plugin_manager)?;
             if installed.is_empty() {
                 println!("No plugins installed.");
             } else {
@@ -782,6 +789,11 @@ fn cmd_plugin(cmd: PluginCommands) -> Result<()> {
             Ok(())
         }
         PluginCommands::Remove { name } => {
+            if name == "node" {
+                remove_builtin_node_plugin(&plugin_manager)?;
+                println!("Plugin 'node' removed.");
+                return Ok(());
+            }
             plugin_manager.remove_plugin(&name)?;
             println!("Plugin '{name}' removed.");
             Ok(())
@@ -806,9 +818,55 @@ fn cmd_plugin(cmd: PluginCommands) -> Result<()> {
     }
 }
 
+fn installed_plugins(plugin_manager: &PluginManager) -> Result<HashMap<String, avm_plugin_api::Manifest>> {
+    let mut installed = plugin_manager.list_plugins()?;
+    if is_builtin_node_plugin_installed(plugin_manager) {
+        installed.insert("node".to_string(), builtin_node_manifest());
+    }
+    Ok(installed)
+}
+
+fn install_builtin_node_plugin(plugin_manager: &PluginManager) -> Result<()> {
+    let dir = plugin_manager.plugin_dir().join("node");
+    fs::create_dir_all(&dir).context("failed to create built-in node plugin marker")?;
+    fs::write(dir.join(BUILTIN_NODE_PLUGIN_MARKER), "builtin\n")
+        .context("failed to write built-in node plugin marker")?;
+    Ok(())
+}
+
+fn remove_builtin_node_plugin(plugin_manager: &PluginManager) -> Result<()> {
+    let dir = plugin_manager.plugin_dir().join("node");
+    if dir.join(BUILTIN_NODE_PLUGIN_MARKER).exists() {
+        fs::remove_dir_all(dir).context("failed to remove built-in node plugin marker")?;
+    }
+    Ok(())
+}
+
+fn is_builtin_node_plugin_installed(plugin_manager: &PluginManager) -> bool {
+    plugin_manager
+        .plugin_dir()
+        .join("node")
+        .join(BUILTIN_NODE_PLUGIN_MARKER)
+        .exists()
+}
+
+fn builtin_node_manifest() -> avm_plugin_api::Manifest {
+    avm_plugin_api::Manifest {
+        name: "node".to_string(),
+        version: env!("CARGO_PKG_VERSION").to_string(),
+        api_version: Some(1),
+        description: Some("Built-in Node.js provider for package.json scripts and node tool resolution".to_string()),
+        section_label: Some("Node Scripts".to_string()),
+        homepage: Some("https://github.com/prajanova/avm".to_string()),
+    }
+}
+
 fn print_available_plugins() {
     println!("Available plugins:");
-    println!("  node (built-in) - Node.js provider for package.json scripts and node tool resolution");
+    println!("  node - built-in Node.js provider for package.json scripts and node tool resolution");
+    println!();
+    println!("Install with:");
+    println!("  avm plugin add node");
     println!();
     println!("Install external plugins with:");
     println!("  avm plugin add <path-or-url>");

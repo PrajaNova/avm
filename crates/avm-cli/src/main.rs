@@ -64,7 +64,12 @@ enum PluginCommands {
     Add {
         source: String,
     },
-    List,
+    List {
+        #[arg(short, long)]
+        all: bool,
+    },
+    #[command(alias = "all", alias = "marketplace")]
+    Available,
     Remove {
         name: String,
     },
@@ -747,25 +752,33 @@ fn cmd_plugin(cmd: PluginCommands) -> Result<()> {
             println!("✓ Installed plugin");
             Ok(())
         }
-        PluginCommands::List => {
+        PluginCommands::List { all } => {
             let installed = plugin_manager.list_plugins()?;
             if installed.is_empty() {
                 println!("No plugins installed.");
-                return Ok(());
+            } else {
+                println!("Installed plugins:");
+                let mut names: Vec<_> = installed.keys().collect();
+                names.sort();
+                for name in names {
+                    let manifest = &installed[name];
+                    println!(
+                        "  {} ({}) - {}",
+                        manifest.name,
+                        manifest.version,
+                        manifest.description.clone().unwrap_or_default()
+                    );
+                }
             }
 
-            println!("Installed plugins:");
-            let mut names: Vec<_> = installed.keys().collect();
-            names.sort();
-            for name in names {
-                let manifest = &installed[name];
-                println!(
-                    "  {} ({}) - {}",
-                    manifest.name,
-                    manifest.version,
-                    manifest.description.clone().unwrap_or_default()
-                );
+            if all {
+                println!();
+                print_available_plugins();
             }
+            Ok(())
+        }
+        PluginCommands::Available => {
+            print_available_plugins();
             Ok(())
         }
         PluginCommands::Remove { name } => {
@@ -791,6 +804,14 @@ fn cmd_plugin(cmd: PluginCommands) -> Result<()> {
             Ok(())
         }
     }
+}
+
+fn print_available_plugins() {
+    println!("Available plugins:");
+    println!("  node (built-in) - Node.js provider for package.json scripts and node tool resolution");
+    println!();
+    println!("Install external plugins with:");
+    println!("  avm plugin add <path-or-url>");
 }
 
 fn cmd_shims(command: ShimsCommands) -> Result<()> {

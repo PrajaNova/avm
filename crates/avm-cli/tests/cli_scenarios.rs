@@ -34,6 +34,19 @@ fn run_avm(cwd: &Path, home: &Path, args: &[&str]) -> Output {
         .expect("run avm-bin")
 }
 
+fn run_avm_with_env(cwd: &Path, home: &Path, args: &[&str], envs: &[(&str, &Path)]) -> Output {
+    let mut command = Command::new(avm_bin());
+    command
+        .args(args)
+        .current_dir(cwd)
+        .env("HOME", home)
+        .env("AVM_PLUGIN_DIR", home.join(".avm").join("plugins"));
+    for (key, value) in envs {
+        command.env(key, value);
+    }
+    command.output().expect("run avm-bin")
+}
+
 fn stdout(output: &Output) -> String {
     String::from_utf8_lossy(&output.stdout).to_string()
 }
@@ -167,6 +180,41 @@ fn node_provider_exposes_package_scripts_with_lockfile_manager() {
     let output = run_avm(&work, &home, &["which", "build"]);
     assert_success(&output);
     assert!(stdout(&output).contains("plugin alias 'build' from node"));
+}
+
+#[test]
+fn plugin_first_node_command_sets_and_lists_versions() {
+    let root = temp_root("plugin-first-node");
+    let home = root.join("home");
+    let work = root.join("work");
+    let dist = root.join("dist");
+    fs::create_dir_all(&home).expect("create home");
+    fs::create_dir_all(&work).expect("create work");
+    fs::create_dir_all(&dist).expect("create dist");
+    write_file(&work.join(".avm.json"), r#"{"aliases":{},"env":{},"tools":{}}"#);
+    write_file(
+        &dist.join("index.json"),
+        r#"[
+  {"version":"v21.1.0","lts":false,"security":false},
+  {"version":"v20.11.1","lts":"Iron","security":true},
+  {"version":"v19.9.0","lts":false,"security":false}
+]"#,
+    );
+
+    let output = run_avm(&work, &home, &["node", "use", "20.11.1"]);
+    assert_success(&output);
+    assert!(stdout(&output).contains("✓ Set local node version to 20.11.1"));
+
+    let output = run_avm_with_env(
+        &work,
+        &home,
+        &["node", "latest", "versions"],
+        &[("AVM_NODE_DIST_URL", dist.as_path())],
+    );
+    assert_success(&output);
+    assert!(stdout(&output).contains("Available node versions:"));
+    assert!(stdout(&output).contains("21.1.0"));
+    assert!(!stdout(&output).contains("20.11.1"));
 }
 
 #[test]

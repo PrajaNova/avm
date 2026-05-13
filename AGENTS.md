@@ -14,9 +14,9 @@
 - `crates/avm-cli`: command parsing, shell protocol, user-facing behavior.
 - `crates/avm-core`: `.avm.json`, resolve/merge rules, aliases, env, tools.
 - `crates/avm-shims`: shim generation and PATH integration scripts.
-- `crates/avm-plugin-api`: plugin/host contracts and tool provider traits.
+- `crates/avm-plugin-api`: plugin/host contracts and version/install provider traits.
 - `crates/avm-runtime`: plugin loading, manifest validation, plugin execution and adapter behavior.
-- `crates/avm-plugin-node`: merged Node plugin + node-tool provider.
+- `crates/avm-plugin-node`: merged Node plugin for scripts, versions, and install contract.
 
 ## Plugin and compatibility policy
 - Keep a plugin compatibility adapter during v1 rollout.

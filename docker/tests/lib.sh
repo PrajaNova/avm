@@ -19,7 +19,7 @@ run_avm() {
   local status
 
   set +e
-  output="$(cd "$cwd" && "$avm_bin" "$@" 2>&1)"
+  output="$(cd "$cwd" && env AVM_NODE_DIST_URL="${AVM_NODE_DIST_URL:-}" "$avm_bin" "$@" 2>&1)"
   status=$?
   set -e
 

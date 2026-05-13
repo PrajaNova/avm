@@ -37,7 +37,8 @@ For positioning versus popular alternatives, see [Comparison with asdf and vfox]
 ```bash
 avm init
 avm add dev "pnpm run dev"
-avm tool use node 20.11.1
+avm plugin add node
+avm node use 20.11.1
 avm run dev
 ```
 
@@ -86,11 +87,15 @@ Precedence rules:
 - `avm run <alias> [args...]` executes resolved command
 - `avm env` prints shell-safe `export` lines
 - `avm resolve <alias> [args...]` prints the expanded shell command
-- `avm tool use [--global] <tool> <version>` sets tool version
-- `avm tool install <tool> <version>` is reserved for provider installers; the current Node baseline does not auto-install
-- `avm tool uninstall <tool> <version>` removes an installed managed Node directory when present
-- `avm tool list` prints configured and installed tools
-- `avm plugin add|list|remove|update` manages external providers
+- `avm plugin add|list|remove|update` manages plugins
+- `avm <plugin> versions` lists installable versions, for example `avm node versions`
+- `avm <plugin> <major> versions` filters installable versions, for example `avm node 20 versions`
+- `avm <plugin> latest versions` shows the latest installable version
+- `avm <plugin> use <version>` sets plugin version locally
+- `avm <plugin> use <version> --global` sets plugin version globally
+- `avm <plugin> install <version>` is reserved for plugin installers; the current Node baseline does not auto-install
+- `avm <plugin> uninstall <version>` removes an installed managed version when present
+- `avm tool ...` remains a compatibility alias for older scripts, but new docs and examples use plugin-first commands
 - `avm shims install|remove|path` controls shim lifecycle
 - `avm shell-init` prints shell bootstrap script
 - `avm version` prints current CLI version
@@ -177,7 +182,7 @@ Scenario files:
 The Node provider currently powers:
 
 - project `package.json` alias extraction
-- tool version selection for `node`
+- version selection for `node` through `avm node ...`
 - manager fallback to an existing system installation when managed version is missing
 
 The architecture is plugin-first, so additional providers can be added without changing the CLI flow.

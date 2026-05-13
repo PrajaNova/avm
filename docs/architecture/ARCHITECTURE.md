@@ -1,6 +1,6 @@
 # avm Architecture
 
-`avm` is a Rust-native CLI for project-local aliases, runtime selection, shims, and provider plugins.
+`avm` is a Rust-native CLI for project-local aliases, runtime selection, shims, and plugins.
 
 ## Workspace crates
 
@@ -9,7 +9,7 @@
 | `crates/avm-cli` | Binary entrypoint, command routing, shell protocol, and user-facing behavior. |
 | `crates/avm-core` | `.avm.json` parsing, config migration, local/global merge rules, alias/env/tool resolution. |
 | `crates/avm-shims` | Shim directory management and executable shim generation. |
-| `crates/avm-plugin-api` | Shared plugin manifest, alias response, and tool provider contracts. |
+| `crates/avm-plugin-api` | Shared plugin manifest, alias response, and version/install provider contracts. |
 | `crates/avm-runtime` | Plugin discovery, manifest validation, timeout handling, and legacy executable adapter. |
 | `crates/avm-plugin-node` | Built-in Node provider for package scripts and Node version lookup. |
 
@@ -55,11 +55,23 @@ Resolution order:
 - External plugin execution stays in `avm-runtime`.
 - Shim creation and path handling stays in `avm-shims`.
 
-## Tool behavior
+## Plugin command behavior
+
+User-facing runtime commands are plugin-first:
+
+```bash
+avm node versions
+avm node 20 versions
+avm node latest versions
+avm node use 20.11.1
+avm node install 20.11.1
+```
+
+Internally, plugins implement a common provider contract so the CLI can call any plugin through the same version/install API.
 
 `avm` does not auto-install missing tools during execution. If a configured Node version is missing, shim execution warns and falls back to the next matching system binary outside the avm shim directory.
 
-The `tool install` command is present as the provider installer surface, but the current Node baseline reports installation as unsupported until the Node downloader/verifier is implemented.
+The `avm node install` command is present as the plugin installer surface, but the current Node baseline reports installation as unsupported until the Node downloader/verifier is implemented.
 
 ## Plugin behavior
 

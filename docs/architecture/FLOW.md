@@ -46,6 +46,18 @@ Manager detection order:
 3. `yarn.lock`
 4. `npm run`
 
+## Plugin version selection
+
+```mermaid
+flowchart TD
+  A["User runs avm node versions"] --> B["CLI resolves plugin name node"]
+  B --> C["Call ToolProvider.available_versions"]
+  C --> D["Node plugin fetches and filters release index"]
+  D --> E["CLI renders shared selector"]
+  E --> F["User picks version"]
+  F --> G["Write local or global .avm.json selection"]
+```
+
 ## Release flow
 
 ```mermaid

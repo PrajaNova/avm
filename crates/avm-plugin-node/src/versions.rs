@@ -1,6 +1,8 @@
 use anyhow::{anyhow, Context, Result};
 use avm_plugin_api::{ToolVersion, ToolVersionQuery};
 use serde_json::Value;
+use std::fs;
+use std::path::Path;
 use std::process::Command;
 
 pub fn available_versions(query: ToolVersionQuery) -> Result<Vec<ToolVersion>> {
@@ -11,6 +13,15 @@ pub fn available_versions(query: ToolVersionQuery) -> Result<Vec<ToolVersion>> {
 fn release_index() -> Result<Vec<NodeRelease>> {
     let mirror = std::env::var("AVM_NODE_DIST_URL")
         .unwrap_or_else(|_| "https://nodejs.org/dist".to_string());
+    let local_index = Path::new(&mirror).join("index.json");
+    if local_index.exists() {
+        let raw = fs::read(&local_index)
+            .with_context(|| format!("failed to read Node.js versions from {}", local_index.display()))?;
+        let parsed: Vec<NodeReleaseIndexEntry> = serde_json::from_slice(&raw)
+            .context("failed to parse Node.js version index")?;
+        return Ok(parsed.into_iter().map(NodeRelease::from).collect());
+    }
+
     let url = format!("{}/index.json", mirror.trim_end_matches('/'));
     let output = Command::new("curl")
         .arg("-fsSL")

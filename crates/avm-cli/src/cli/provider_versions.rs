@@ -55,7 +55,7 @@ fn print_available_versions(
 
     println!();
     println!("Use:");
-    println!("  avm tool {provider_name} install <version>");
-    println!("  avm tool {provider_name} use <version>");
+    println!("  avm {provider_name} install <version>");
+    println!("  avm {provider_name} use <version>");
     Ok(())
 }

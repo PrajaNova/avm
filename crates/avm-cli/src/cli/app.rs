@@ -28,5 +28,6 @@ fn run(cli: Cli) -> Result<()> {
             println!("{}", env!("CARGO_PKG_VERSION"));
             Ok(())
         }
+        Commands::PluginCommand(args) => cmd_plugin_command(args),
     }
 }

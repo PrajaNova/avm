@@ -56,6 +56,12 @@ fn cmd_provider_tool(
     }
 }
 
+fn cmd_plugin_command(args: Vec<String>) -> Result<()> {
+    let node = NodeProvider::new();
+    let cfg = load_state()?;
+    cmd_provider_tool(args, &cfg, &node)
+}
+
 fn parse_version_filter(value: &str) -> Result<VersionFilter> {
     if value == "latest" || value == "latets" {
         return Ok(VersionFilter::Latest);
@@ -100,7 +106,7 @@ fn set_tool_version(tool: &str, version: &str, global: bool) -> Result<()> {
 }
 
 fn print_provider_help(provider_name: &str) {
-    println!("Usage: avm tool {provider_name} [COMMAND]");
+    println!("Usage: avm {provider_name} [COMMAND]");
     println!();
     println!("Commands:");
     println!("  list                         Show selected and installed versions");

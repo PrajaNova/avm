@@ -17,7 +17,7 @@ avm() {{
 
   local _avm_key="$1"
   case "$_avm_key" in
-    init|add|list|ls|remove|rm|which|env|tool|tools|version|help|shell-init|plugin|completion|--help|-h|--version|-v|resolve|run|shims|exec-shim)
+    init|add|list|ls|remove|rm|which|env|tool|tools|version|help|shell-init|plugin|completion|--help|-h|--version|-v|resolve|run|shims|exec-shim|node)
       command avm-bin "$@"
       return $?
       ;;

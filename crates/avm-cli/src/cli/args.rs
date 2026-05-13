@@ -36,6 +36,8 @@ enum Commands {
     #[command(name = "exec-shim")]
     ExecShim(ExecShimArgs),
     Version,
+    #[command(external_subcommand)]
+    PluginCommand(Vec<String>),
 }
 
 #[derive(Subcommand)]

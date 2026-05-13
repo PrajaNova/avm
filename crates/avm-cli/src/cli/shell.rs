@@ -1,5 +1,7 @@
 fn shell_init_script() -> String {
-    r#"AVM_SHIM_DIR="$HOME/.avm/shims"
+    r#"unfunction avm 2>/dev/null || unset -f avm 2>/dev/null || true
+
+AVM_SHIM_DIR="$HOME/.avm/shims"
 if [[ -d "$AVM_SHIM_DIR" && ":$PATH:" != *":$AVM_SHIM_DIR:"* ]]; then
   export PATH="$AVM_SHIM_DIR:$PATH"
 fi

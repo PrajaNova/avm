@@ -36,9 +36,10 @@ enum Commands {
     Env(EnvArgs),
     Resolve(ResolveArgs),
     Run(RunArgs),
+    #[command(alias = "tools")]
     Tool {
         #[command(subcommand)]
-        command: ToolCommands,
+        command: Option<ToolCommands>,
     },
     Plugin {
         #[command(subcommand)]
@@ -56,10 +57,26 @@ enum Commands {
 
 #[derive(Subcommand)]
 enum ToolCommands {
+    #[command(alias = "ls")]
     List,
     Use(ToolUseArgs),
     Install(ToolInstallArgs),
     Uninstall(ToolUninstallArgs),
+    Node {
+        #[command(subcommand)]
+        command: Option<NodeToolCommands>,
+    },
+}
+
+#[derive(Subcommand)]
+enum NodeToolCommands {
+    #[command(alias = "ls")]
+    List,
+    #[command(alias = "available")]
+    Versions,
+    Use(NodeToolUseArgs),
+    Install(NodeToolVersionArgs),
+    Uninstall(NodeToolVersionArgs),
 }
 
 #[derive(Subcommand)]
@@ -143,6 +160,18 @@ struct ToolInstallArgs {
 #[derive(Args)]
 struct ToolUninstallArgs {
     tool: String,
+    version: String,
+}
+
+#[derive(Args)]
+struct NodeToolUseArgs {
+    version: String,
+    #[arg(short = 'g', long)]
+    global: bool,
+}
+
+#[derive(Args)]
+struct NodeToolVersionArgs {
     version: String,
 }
 
@@ -668,64 +697,17 @@ fn split_command_template(input: &str) -> Result<Vec<String>> {
     }
 }
 
-fn cmd_tool(cmd: ToolCommands) -> Result<()> {
+fn cmd_tool(cmd: Option<ToolCommands>) -> Result<()> {
+    let cmd = cmd.unwrap_or(ToolCommands::List);
     let node = NodeProvider::new();
     let cfg = load_state()?;
     match cmd {
         ToolCommands::List => {
-            println!("Tool providers:");
-            println!("  node");
-            let resolved = cfg.resolve_tools_with_source(&cfg);
-            if resolved.is_empty() {
-                println!("Resolved tools: none");
-            } else {
-                println!("Resolved tools:");
-                let mut keys: Vec<_> = resolved.keys().collect();
-                keys.sort_unstable();
-                for key in keys {
-                    if let Some((version, source)) = resolved.get(key) {
-                        println!("  {key}: {version} ({})", alias_source_label(source));
-                    }
-                }
-            }
-
-            let installed = node.installed_versions()?;
-            if installed.is_empty() {
-                println!("Installed node versions: none");
-            } else {
-                println!("Installed node versions: {}", installed.join(", "));
-            }
+            print_tool_list(&cfg, &node)?;
             Ok(())
         }
         ToolCommands::Use(args) => {
-            let root = if args.global {
-                home_dir()?
-            } else {
-                std::env::current_dir().context("failed to read current directory")?
-            };
-            if !args.global {
-                let path = root.join(CONFIG_FILE);
-                if !path.exists() {
-                    return Err(anyhow!(
-                        "no {CONFIG_FILE} found in current directory. Run `avm init` first"
-                    ));
-                }
-            } else {
-                let path = root.join(CONFIG_FILE);
-                if !path.exists() {
-                    avm_core::write_default_config(root.as_path(), CONFIG_FILE)?;
-                }
-            }
-
-            let mut parsed = load_config_for_root(&root)?;
-            parsed.tools.insert(args.tool.clone(), args.version.clone());
-            save_config_for_root(&root, &parsed.aliases, &parsed.env, &parsed.tools, true)?;
-            if args.global {
-                println!("✓ Set global {} version to {}", args.tool, args.version);
-            } else {
-                println!("✓ Set local {} version to {}", args.tool, args.version);
-            }
-            Ok(())
+            set_tool_version(&args.tool, &args.version, args.global)
         }
         ToolCommands::Install(args) => {
             if args.tool != "node" {
@@ -743,7 +725,121 @@ fn cmd_tool(cmd: ToolCommands) -> Result<()> {
             println!("✓ Removed {} {}", args.tool, args.version);
             Ok(())
         }
+        ToolCommands::Node { command } => cmd_node_tool(command, &cfg, &node),
     }
+}
+
+fn cmd_node_tool(
+    command: Option<NodeToolCommands>,
+    cfg: &ResolvedConfig,
+    node: &NodeProvider,
+) -> Result<()> {
+    match command.unwrap_or(NodeToolCommands::List) {
+        NodeToolCommands::List => {
+            print_node_tool_status(cfg, node)?;
+            Ok(())
+        }
+        NodeToolCommands::Versions => {
+            println!("Available node versions: not implemented yet");
+            println!("This build can list installed managed versions and select a version.");
+            println!();
+            print_installed_node_versions(node)?;
+            println!();
+            println!("Use:");
+            println!("  avm tool node use <version>");
+            println!("  avm tool node install <version>");
+            Ok(())
+        }
+        NodeToolCommands::Use(args) => set_tool_version("node", &args.version, args.global),
+        NodeToolCommands::Install(args) => {
+            node.install(&args.version)?;
+            println!("✓ Installed node {}", args.version);
+            Ok(())
+        }
+        NodeToolCommands::Uninstall(args) => {
+            node.uninstall(&args.version)?;
+            println!("✓ Removed node {}", args.version);
+            Ok(())
+        }
+    }
+}
+
+fn set_tool_version(tool: &str, version: &str, global: bool) -> Result<()> {
+    let root = if global {
+        home_dir()?
+    } else {
+        std::env::current_dir().context("failed to read current directory")?
+    };
+    if !global {
+        let path = root.join(CONFIG_FILE);
+        if !path.exists() {
+            return Err(anyhow!(
+                "no {CONFIG_FILE} found in current directory. Run `avm init` first"
+            ));
+        }
+    } else {
+        let path = root.join(CONFIG_FILE);
+        if !path.exists() {
+            avm_core::write_default_config(root.as_path(), CONFIG_FILE)?;
+        }
+    }
+
+    let mut parsed = load_config_for_root(&root)?;
+    parsed.tools.insert(tool.to_string(), version.to_string());
+    save_config_for_root(&root, &parsed.aliases, &parsed.env, &parsed.tools, true)?;
+    if global {
+        println!("✓ Set global {tool} version to {version}");
+    } else {
+        println!("✓ Set local {tool} version to {version}");
+    }
+    Ok(())
+}
+
+fn print_tool_list(cfg: &ResolvedConfig, node: &NodeProvider) -> Result<()> {
+    println!("Tool providers:");
+    println!("  node");
+    let resolved = cfg.resolve_tools_with_source(cfg);
+    if resolved.is_empty() {
+        println!("Resolved tools: none");
+    } else {
+        println!("Resolved tools:");
+        let mut keys: Vec<_> = resolved.keys().collect();
+        keys.sort_unstable();
+        for key in keys {
+            if let Some((version, source)) = resolved.get(key) {
+                println!("  {key}: {version} ({})", alias_source_label(source));
+            }
+        }
+    }
+
+    print_installed_node_versions(node)
+}
+
+fn print_node_tool_status(cfg: &ResolvedConfig, node: &NodeProvider) -> Result<()> {
+    println!("Tool provider: node");
+    if let Some((version, source)) = cfg.resolve_tool("node", cfg) {
+        println!("Selected version: {version} ({})", alias_source_label(&source));
+    } else {
+        println!("Selected version: none");
+    }
+    print_installed_node_versions(node)?;
+    println!();
+    println!("Commands:");
+    println!("  avm tool node versions");
+    println!("  avm tool node use <version>");
+    println!("  avm tool node install <version>");
+    println!("  avm tool node uninstall <version>");
+    Ok(())
+}
+
+fn print_installed_node_versions(node: &NodeProvider) -> Result<()> {
+    let installed = node.installed_versions()?;
+    if installed.is_empty() {
+        println!("Installed node versions: none");
+    } else {
+        println!("Installed node versions: {}", installed.join(", "));
+    }
+    Ok(())
 }
 
 fn cmd_plugin(cmd: PluginCommands) -> Result<()> {
@@ -1082,7 +1178,7 @@ avm() {{
 
   local _avm_key="$1"
   case "$_avm_key" in
-    init|add|list|ls|remove|rm|which|env|tool|version|help|shell-init|plugin|completion|--help|-h|--version|-v|resolve|run|shims|exec-shim)
+    init|add|list|ls|remove|rm|which|env|tool|tools|version|help|shell-init|plugin|completion|--help|-h|--version|-v|resolve|run|shims|exec-shim)
       command avm-bin "$@"
       return $?
       ;;

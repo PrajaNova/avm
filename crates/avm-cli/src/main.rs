@@ -740,14 +740,7 @@ fn cmd_node_tool(
             Ok(())
         }
         NodeToolCommands::Versions => {
-            println!("Available node versions: not implemented yet");
-            println!("This build can list installed managed versions and select a version.");
-            println!();
-            print_installed_node_versions(node)?;
-            println!();
-            println!("Use:");
-            println!("  avm tool node use <version>");
-            println!("  avm tool node install <version>");
+            print_available_node_versions(node)?;
             Ok(())
         }
         NodeToolCommands::Use(args) => set_tool_version("node", &args.version, args.global),
@@ -839,6 +832,31 @@ fn print_installed_node_versions(node: &NodeProvider) -> Result<()> {
     } else {
         println!("Installed node versions: {}", installed.join(", "));
     }
+    Ok(())
+}
+
+fn print_available_node_versions(node: &NodeProvider) -> Result<()> {
+    let versions = node.available_versions()?;
+    if versions.is_empty() {
+        println!("Available node versions: none");
+        return Ok(());
+    }
+
+    println!("Available node versions:");
+    for version in versions.iter().take(40) {
+        let clean_version = version.version.trim_start_matches('v');
+        match (&version.lts, version.security) {
+            (Some(lts), true) => println!("  {clean_version}  LTS {lts}  security"),
+            (Some(lts), false) => println!("  {clean_version}  LTS {lts}"),
+            (None, true) => println!("  {clean_version}  security"),
+            (None, false) => println!("  {clean_version}"),
+        }
+    }
+
+    println!();
+    println!("Use:");
+    println!("  avm tool node install <version>");
+    println!("  avm tool node use <version>");
     Ok(())
 }
 

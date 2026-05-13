@@ -4,6 +4,7 @@ use serde_json::Value;
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::process::Command;
 
 #[derive(Debug)]
 pub struct NodeProvider;
@@ -75,6 +76,32 @@ impl NodeProvider {
         Ok(None)
     }
 
+    pub fn available_versions(&self) -> Result<Vec<NodeVersion>> {
+        let mirror = std::env::var("AVM_NODE_DIST_URL")
+            .unwrap_or_else(|_| "https://nodejs.org/dist".to_string());
+        let url = format!("{}/index.json", mirror.trim_end_matches('/'));
+        let output = Command::new("curl")
+            .arg("-fsSL")
+            .arg("--connect-timeout")
+            .arg("5")
+            .arg("--max-time")
+            .arg("20")
+            .arg(&url)
+            .output()
+            .with_context(|| format!("failed to fetch Node.js versions from {url}"))?;
+
+        if !output.status.success() {
+            return Err(anyhow!(
+                "failed to fetch Node.js versions from {url}: curl exited with {}",
+                output.status
+            ));
+        }
+
+        let raw: Vec<NodeReleaseIndexEntry> = serde_json::from_slice(&output.stdout)
+            .context("failed to parse Node.js version index")?;
+        Ok(raw.into_iter().map(NodeVersion::from).collect())
+    }
+
     fn install_root(&self) -> Option<PathBuf> {
         std::env::var_os("HOME").map(PathBuf::from)
     }
@@ -141,6 +168,37 @@ pub struct NodeAlias {
     pub command: String,
     pub description: Option<String>,
     pub manager: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct NodeVersion {
+    pub version: String,
+    pub lts: Option<String>,
+    pub security: bool,
+}
+
+#[derive(Debug, Clone, serde::Deserialize)]
+struct NodeReleaseIndexEntry {
+    version: String,
+    #[serde(default)]
+    lts: Value,
+    #[serde(default)]
+    security: bool,
+}
+
+impl From<NodeReleaseIndexEntry> for NodeVersion {
+    fn from(value: NodeReleaseIndexEntry) -> Self {
+        let lts = match value.lts {
+            Value::String(name) => Some(name),
+            _ => None,
+        };
+
+        Self {
+            version: value.version,
+            lts,
+            security: value.security,
+        }
+    }
 }
 
 fn binary_name(name: &str) -> String {

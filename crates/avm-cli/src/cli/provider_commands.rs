@@ -57,9 +57,20 @@ fn cmd_provider_tool(
 }
 
 fn cmd_plugin_command(args: Vec<String>) -> Result<()> {
+    let Some(provider_name) = args.first() else {
+        return Err(anyhow!("plugin name required"));
+    };
+    if !is_known_provider(provider_name) {
+        return Err(anyhow!("unknown plugin '{provider_name}'"));
+    }
+
     let node = NodeProvider::new();
     let cfg = load_state()?;
     cmd_provider_tool(args, &cfg, &node)
+}
+
+fn is_known_provider(name: &str) -> bool {
+    matches!(name, "node")
 }
 
 fn parse_version_filter(value: &str) -> Result<VersionFilter> {

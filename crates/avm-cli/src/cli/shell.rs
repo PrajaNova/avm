@@ -27,6 +27,11 @@ avm() {{
     command avm-bin run "$@"
     return $?
   fi
+
+  if command avm-bin "$_avm_key" --help >/dev/null 2>&1; then
+    command avm-bin "$@"
+    return $?
+  fi
   command "$@"
 }}
 "#

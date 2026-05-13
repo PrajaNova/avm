@@ -99,6 +99,7 @@ Precedence rules:
 - `avm shims install|remove|path` controls shim lifecycle
 - `avm shell-init` prints shell bootstrap script
 - `avm version` prints current CLI version
+- `avm all` prints grouped help for aliases, plugins, plugin commands, shell, and shims
 
 ## Package layout (workspace crates)
 

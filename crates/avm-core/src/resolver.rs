@@ -103,7 +103,10 @@ impl Resolver {
         }
     }
 
-    pub fn load(&self, plugin_aliases: HashMap<String, ResolvedAlias>) -> anyhow::Result<ResolvedConfig> {
+    pub fn load(
+        &self,
+        plugin_aliases: HashMap<String, ResolvedAlias>,
+    ) -> anyhow::Result<ResolvedConfig> {
         let local = crate::config::load_with_env(&self.cwd, &self.config_file)?;
         let global = crate::config::load_with_env(&self.home, &self.config_file)?;
 
@@ -153,7 +156,10 @@ impl Resolver {
         merged
     }
 
-    pub fn resolve_tools_with_source(&self, cfg: &ResolvedConfig) -> HashMap<String, (String, AliasSource)> {
+    pub fn resolve_tools_with_source(
+        &self,
+        cfg: &ResolvedConfig,
+    ) -> HashMap<String, (String, AliasSource)> {
         let mut merged: HashMap<String, (String, AliasSource)> = HashMap::new();
         for (tool, version) in &cfg.global_tools {
             merged.insert(tool.clone(), (version.clone(), AliasSource::Global));
@@ -255,7 +261,11 @@ fn levenshtein_distance(s: &str, t: &str) -> usize {
 
     for i in 1..=m {
         for j in 1..=n {
-            let cost = if s_bytes[i - 1] == t_bytes[j - 1] { 0 } else { 1 };
+            let cost = if s_bytes[i - 1] == t_bytes[j - 1] {
+                0
+            } else {
+                1
+            };
             dp[i][j] = std::cmp::min(
                 std::cmp::min(dp[i - 1][j] + 1, dp[i][j - 1] + 1),
                 dp[i - 1][j - 1] + cost,

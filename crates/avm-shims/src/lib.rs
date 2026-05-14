@@ -1,10 +1,24 @@
 use anyhow::{Context, Result};
 use std::fs;
-use std::path::{Path, PathBuf};
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
+use std::path::{Path, PathBuf};
 
-const SHIMS: &[&str] = &["node", "npm", "npx", "pnpm", "yarn", "bun"];
+const SHIMS: &[&str] = &[
+    "node",
+    "npm",
+    "npx",
+    "pnpm",
+    "yarn",
+    "bun",
+    "java",
+    "javac",
+    "jar",
+    "javadoc",
+    "jshell",
+    "jarsigner",
+    "keytool",
+];
 
 pub fn avm_home() -> Result<PathBuf> {
     let home = std::env::var("HOME").context("HOME not set")?;

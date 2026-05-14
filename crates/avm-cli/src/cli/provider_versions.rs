@@ -3,7 +3,7 @@ fn print_provider_status(
     provider: &dyn ToolProvider,
     cfg: &ResolvedConfig,
 ) -> Result<()> {
-    println!("Tool provider: {provider_name}");
+    println!("Plugin: {provider_name}");
     if let Some((version, source)) = cfg.resolve_tool(provider_name, cfg) {
         println!("Selected version: {version} ({})", alias_source_label(&source));
     } else {
@@ -12,10 +12,10 @@ fn print_provider_status(
     print_installed_versions(provider)?;
     println!();
     println!("Commands:");
-    println!("  avm tool {provider_name} versions");
-    println!("  avm tool {provider_name} use <version>");
-    println!("  avm tool {provider_name} install <version>");
-    println!("  avm tool {provider_name} uninstall <version>");
+    println!("  avm {provider_name} versions");
+    println!("  avm {provider_name} use <version>");
+    println!("  avm {provider_name} install <version>");
+    println!("  avm {provider_name} uninstall <version>");
     Ok(())
 }
 
@@ -45,7 +45,7 @@ fn print_available_versions(
     }
 
     if ui::can_select() {
-        return select_tool_version(provider_name, versions);
+        return select_tool_version(provider_name, provider, versions);
     }
 
     println!("Available {provider_name} versions:");

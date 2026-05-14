@@ -1,4 +1,5 @@
 mod aliases;
+mod install;
 mod versions;
 
 use anyhow::{anyhow, Context};
@@ -95,9 +96,7 @@ impl ToolProvider for NodeProvider {
     }
 
     fn install(&self, _version: &str) -> anyhow::Result<()> {
-        Err(anyhow!(
-            "node install is not supported in this baseline; avm will not auto-install while resolving binaries",
-        ))
+        install::install_node(_version)
     }
 
     fn uninstall(&self, version: &str) -> anyhow::Result<()> {

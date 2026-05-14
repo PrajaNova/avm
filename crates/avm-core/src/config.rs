@@ -70,8 +70,10 @@ fn parse_config(raw: &[u8]) -> Result<ConfigLoadResult> {
                 });
             }
 
-            let aliases = serde_json::from_value::<HashMap<String, String>>(serde_json::Value::Object(object))
-                .context("invalid legacy flat config")?;
+            let aliases = serde_json::from_value::<HashMap<String, String>>(
+                serde_json::Value::Object(object),
+            )
+            .context("invalid legacy flat config")?;
             return Ok(ConfigLoadResult {
                 aliases,
                 env: HashMap::new(),
@@ -89,7 +91,10 @@ fn parse_config(raw: &[u8]) -> Result<ConfigLoadResult> {
     }
 }
 
-fn parse_string_map(value: Option<&serde_json::Value>, section: &str) -> Result<HashMap<String, String>> {
+fn parse_string_map(
+    value: Option<&serde_json::Value>,
+    section: &str,
+) -> Result<HashMap<String, String>> {
     match value {
         None | Some(serde_json::Value::Null) => Ok(HashMap::new()),
         Some(value) => serde_json::from_value(value.clone())
@@ -128,7 +133,14 @@ pub fn write_default_config(root: impl AsRef<Path>, local_file: &str) -> Result<
     fs::write(path, raw).context("unable to create default config")
 }
 
-pub fn save_config(root: impl AsRef<Path>, local_file: &str, aliases: &HashMap<String, String>, env: &HashMap<String, String>, tools: &HashMap<String, String>, structured: bool) -> Result<()> {
+pub fn save_config(
+    root: impl AsRef<Path>,
+    local_file: &str,
+    aliases: &HashMap<String, String>,
+    env: &HashMap<String, String>,
+    tools: &HashMap<String, String>,
+    structured: bool,
+) -> Result<()> {
     let mut path = PathBuf::from(root.as_ref());
     path.push(local_file);
 
@@ -137,7 +149,7 @@ pub fn save_config(root: impl AsRef<Path>, local_file: &str, aliases: &HashMap<S
         aliases = HashMap::new();
     }
 
-        if !structured {
+    if !structured {
         let raw = serde_json::to_vec_pretty(&aliases)?;
         fs::write(path, raw).context("failed to save flat config")
     } else {
@@ -156,8 +168,19 @@ pub fn save_config(root: impl AsRef<Path>, local_file: &str, aliases: &HashMap<S
     }
 }
 
-pub fn save_flat_legacy(root: impl AsRef<Path>, local_file: &str, aliases: &HashMap<String, String>) -> Result<()> {
-    save_config(root, local_file, aliases, &HashMap::new(), &HashMap::new(), false)
+pub fn save_flat_legacy(
+    root: impl AsRef<Path>,
+    local_file: &str,
+    aliases: &HashMap<String, String>,
+) -> Result<()> {
+    save_config(
+        root,
+        local_file,
+        aliases,
+        &HashMap::new(),
+        &HashMap::new(),
+        false,
+    )
 }
 
 pub fn migrate_legacy_if_needed(root: impl AsRef<Path>, local_file: &str) -> Result<bool> {
@@ -165,6 +188,13 @@ pub fn migrate_legacy_if_needed(root: impl AsRef<Path>, local_file: &str) -> Res
     if parsed.is_structured {
         return Ok(false);
     }
-    save_config(root, local_file, &parsed.aliases, &parsed.env, &parsed.tools, true)?;
+    save_config(
+        root,
+        local_file,
+        &parsed.aliases,
+        &parsed.env,
+        &parsed.tools,
+        true,
+    )?;
     Ok(true)
 }

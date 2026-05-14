@@ -1,5 +1,8 @@
 use anyhow::{anyhow, Context, Result};
-use avm_plugin_api::{AliasDetail, AliasValue, ExportResponse, Manifest, ResolvedAlias};
+use avm_plugin_api::{
+    AliasDetail, AliasValue, ExportResponse, Manifest, ResolvedAlias, ToolProvider, ToolVersion,
+    ToolVersionQuery,
+};
 use std::collections::HashMap;
 use std::fs;
 use std::io::Read;
@@ -10,6 +13,8 @@ use wait_timeout::ChildExt;
 
 const PLUGIN_TIMEOUT_MS: u64 = 500;
 const GLOBAL_TIMEOUT_MS: u64 = 1000;
+const ASDF_LIST_TIMEOUT_MS: u64 = 20_000;
+const ASDF_INSTALL_TIMEOUT_MS: u64 = 120_000;
 
 #[derive(Debug)]
 pub struct PluginManager {
@@ -94,6 +99,8 @@ impl PluginManager {
             let name = entry.file_name().to_string_lossy().to_string();
             if let Ok(manifest) = read_manifest_path(&entry.path()) {
                 plugins.insert(name, manifest);
+            } else if is_asdf_plugin_source(&entry.path()) {
+                plugins.insert(name, asdf_manifest(&entry.path()));
             }
         }
 
@@ -111,7 +118,8 @@ impl PluginManager {
             let plugin_name = derive_remote_plugin_name(source)?;
             self.plugin_dir.join(plugin_name)
         } else {
-            let source_metadata = fs::symlink_metadata(source).context("invalid plugin source path")?;
+            let source_metadata =
+                fs::symlink_metadata(source).context("invalid plugin source path")?;
             if source_metadata.file_type().is_symlink() {
                 return Err(anyhow!("plugin source must not be a symlink"));
             }
@@ -155,18 +163,22 @@ impl PluginManager {
             return Err(err);
         }
 
-        let manifest_path = target.join("plugin.json");
-        if !manifest_path.exists() {
+        if is_avm_plugin_source(&target) {
+            return Ok(());
+        }
+        if is_asdf_plugin_source(&target) {
+            return Ok(());
+        }
+
+        if !target.join("plugin.json").exists() {
             let _ = fs::remove_dir_all(&target);
             return Err(anyhow!("invalid plugin: missing plugin.json"));
         }
 
-        if !target.join("bin").join("export-aliases").exists() {
-            let _ = fs::remove_dir_all(&target);
-            return Err(anyhow!("invalid plugin: missing bin/export-aliases"));
-        }
-
-        Ok(())
+        let _ = fs::remove_dir_all(&target);
+        Err(anyhow!(
+            "invalid plugin: missing bin/export-aliases or asdf bin/list-all + bin/install"
+        ))
     }
 
     pub fn remove_plugin(&self, name: &str) -> Result<()> {
@@ -201,6 +213,213 @@ impl PluginManager {
 
         Ok(())
     }
+
+    pub fn asdf_provider(&self, name: &str) -> Result<Option<AsdfToolProvider>> {
+        let Some((plugin_name, plugin_path)) = self.find_asdf_plugin(name)? else {
+            return Ok(None);
+        };
+
+        Ok(Some(AsdfToolProvider {
+            name: name.to_string(),
+            plugin_name,
+            plugin_path,
+        }))
+    }
+
+    pub fn list_asdf_provider_names(&self) -> Result<Vec<String>> {
+        if !self.plugin_dir.exists() {
+            return Ok(Vec::new());
+        }
+
+        let mut providers = Vec::new();
+        for entry in fs::read_dir(&self.plugin_dir).context("unable to read plugin directory")? {
+            let entry = match entry {
+                Ok(entry) => entry,
+                Err(_) => continue,
+            };
+            if !entry.file_type().map(|ty| ty.is_dir()).unwrap_or(false) {
+                continue;
+            }
+            let plugin_path = entry.path();
+            if !is_asdf_plugin_source(&plugin_path) {
+                continue;
+            }
+            let plugin_name = entry.file_name().to_string_lossy().to_string();
+            providers.push(asdf_tool_name(&plugin_name));
+        }
+        providers.sort_unstable();
+        providers.dedup();
+        Ok(providers)
+    }
+
+    fn find_asdf_plugin(&self, name: &str) -> Result<Option<(String, PathBuf)>> {
+        if !self.plugin_dir.exists() {
+            return Ok(None);
+        }
+
+        let mut entries: Vec<_> = fs::read_dir(&self.plugin_dir)
+            .context("unable to read plugin directory")?
+            .filter_map(Result::ok)
+            .filter(|entry| entry.file_type().map(|ty| ty.is_dir()).unwrap_or(false))
+            .collect();
+        entries.sort_by_key(|entry| entry.file_name().to_string_lossy().to_ascii_lowercase());
+
+        for entry in entries {
+            let plugin_path = entry.path();
+            if !is_asdf_plugin_source(&plugin_path) {
+                continue;
+            }
+
+            let plugin_name = entry.file_name().to_string_lossy().to_string();
+            if asdf_tool_name(&plugin_name) == name {
+                return Ok(Some((plugin_name, plugin_path)));
+            }
+        }
+
+        Ok(None)
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct AsdfToolProvider {
+    name: String,
+    plugin_name: String,
+    plugin_path: PathBuf,
+}
+
+impl AsdfToolProvider {
+    fn install_path(&self, version: &str) -> Result<PathBuf> {
+        let home = std::env::var_os("HOME").ok_or_else(|| anyhow!("HOME not set"))?;
+        Ok(PathBuf::from(home)
+            .join(".avm")
+            .join("tools")
+            .join(&self.name)
+            .join(version))
+    }
+
+    fn bin_path_for(&self, version: &str, binary: &str) -> Result<Option<PathBuf>> {
+        let install_path = self.install_path(version)?;
+        let candidate = install_path.join("bin").join(binary_name(binary));
+        if candidate.exists() {
+            return Ok(Some(candidate));
+        }
+        Ok(None)
+    }
+
+    fn run_asdf_command(
+        &self,
+        command: &str,
+        version: Option<&str>,
+        timeout_ms: u64,
+    ) -> Result<String> {
+        let command_path = self.plugin_path.join("bin").join(command);
+        if !command_path.exists() {
+            return Err(anyhow!("asdf plugin missing bin/{command}"));
+        }
+
+        let mut cmd = Command::new(command_path);
+        sandbox_asdf_command(&mut cmd, &self.plugin_path);
+        if let Some(version) = version {
+            cmd.env("ASDF_INSTALL_VERSION", version);
+            cmd.env("ASDF_INSTALL_PATH", self.install_path(version)?);
+        }
+        run_with_timeout(cmd, timeout_ms)
+    }
+}
+
+impl ToolProvider for AsdfToolProvider {
+    fn name(&self) -> &str {
+        &self.name
+    }
+
+    fn is_installed(&self, version: &str) -> bool {
+        self.bin_path_for(version, &self.name)
+            .ok()
+            .flatten()
+            .is_some()
+    }
+
+    fn installed_versions(&self) -> Result<Vec<String>> {
+        let home = match std::env::var_os("HOME") {
+            Some(home) => PathBuf::from(home),
+            None => return Ok(Vec::new()),
+        };
+        let root = home.join(".avm").join("tools").join(&self.name);
+        let mut versions = Vec::new();
+        let entries = match fs::read_dir(root) {
+            Ok(entries) => entries,
+            Err(err) if err.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
+            Err(err) => return Err(err.into()),
+        };
+
+        for entry in entries.flatten() {
+            if entry.path().is_dir() {
+                if let Some(name) = entry.file_name().to_str() {
+                    versions.push(name.to_string());
+                }
+            }
+        }
+
+        versions.sort_unstable();
+        Ok(versions)
+    }
+
+    fn available_versions(&self, query: ToolVersionQuery) -> Result<Vec<ToolVersion>> {
+        let output = self.run_asdf_command("list-all", None, ASDF_LIST_TIMEOUT_MS)?;
+        let mut versions = output
+            .split_whitespace()
+            .filter(|version| matches_tool_query(version, &query))
+            .map(|version| ToolVersion {
+                version: version.to_string(),
+                label: version.to_string(),
+                channel: Some(self.plugin_name.clone()),
+                is_lts: false,
+                is_security: false,
+            })
+            .collect::<Vec<_>>();
+
+        if matches!(query, ToolVersionQuery::Recent) {
+            versions.truncate(10);
+        } else if matches!(query, ToolVersionQuery::Latest) {
+            versions.truncate(1);
+        }
+
+        Ok(versions)
+    }
+
+    fn executable_path(&self, version: &str) -> Result<Option<PathBuf>> {
+        self.bin_path_for(version, &self.name)
+    }
+
+    fn install(&self, version: &str) -> Result<()> {
+        let install_path = self.install_path(version)?;
+        if install_path
+            .join("bin")
+            .join(binary_name(&self.name))
+            .exists()
+        {
+            return Ok(());
+        }
+        fs::create_dir_all(&install_path).context("failed to create asdf install path")?;
+        if let Err(err) = self.run_asdf_command("install", Some(version), ASDF_INSTALL_TIMEOUT_MS) {
+            let _ = fs::remove_dir_all(&install_path);
+            return Err(err);
+        }
+        Ok(())
+    }
+
+    fn uninstall(&self, version: &str) -> Result<()> {
+        let uninstall = self.plugin_path.join("bin").join("uninstall");
+        if uninstall.exists() {
+            self.run_asdf_command("uninstall", Some(version), ASDF_INSTALL_TIMEOUT_MS)?;
+        }
+
+        let install_path = self.install_path(version)?;
+        if install_path.exists() {
+            fs::remove_dir_all(install_path).context("failed to remove asdf-managed version")?;
+        }
+        Ok(())
+    }
 }
 
 fn default_plugin_dir() -> PathBuf {
@@ -216,7 +435,8 @@ fn default_plugin_dir() -> PathBuf {
 }
 
 fn read_manifest_path(path: &Path) -> Result<Manifest> {
-    let raw = fs::read_to_string(path.join("plugin.json")).context("unable to read plugin manifest")?;
+    let raw =
+        fs::read_to_string(path.join("plugin.json")).context("unable to read plugin manifest")?;
     let manifest: Manifest = serde_json::from_str(&raw).context("invalid plugin manifest")?;
     Ok(manifest)
 }
@@ -231,7 +451,7 @@ fn validate_plugin_source_permissions(path: &Path) -> Result<()> {
     {
         use std::os::unix::fs::MetadataExt;
         use std::os::unix::fs::PermissionsExt;
-        if meta.uid() == 0 {
+        if meta.uid() == 0 && current_euid() != 0 {
             return Err(anyhow!("plugin sources owned by root are not allowed"));
         }
         let mode = meta.permissions().mode();
@@ -243,6 +463,88 @@ fn validate_plugin_source_permissions(path: &Path) -> Result<()> {
     Ok(())
 }
 
+#[cfg(unix)]
+fn current_euid() -> u32 {
+    extern "C" {
+        fn geteuid() -> u32;
+    }
+
+    // SAFETY: geteuid has no arguments, does not mutate Rust-managed memory, and is always available on Unix.
+    unsafe { geteuid() }
+}
+
+fn is_avm_plugin_source(path: &Path) -> bool {
+    path.join("plugin.json").exists() && path.join("bin").join("export-aliases").exists()
+}
+
+fn is_asdf_plugin_source(path: &Path) -> bool {
+    path.join("bin").join("list-all").exists() && path.join("bin").join("install").exists()
+}
+
+fn asdf_manifest(path: &Path) -> Manifest {
+    let plugin_name = path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or("asdf-plugin")
+        .to_string();
+    let tool_name = asdf_tool_name(&plugin_name);
+
+    Manifest {
+        name: tool_name,
+        version: "asdf-compatible".to_string(),
+        api_version: Some(1),
+        description: Some(format!("asdf-compatible plugin from {plugin_name}")),
+        section_label: Some("asdf plugins".to_string()),
+        homepage: None,
+    }
+}
+
+fn asdf_tool_name(plugin_name: &str) -> String {
+    plugin_name
+        .strip_prefix("asdf-")
+        .unwrap_or(plugin_name)
+        .to_string()
+}
+
+fn sandbox_asdf_command(cmd: &mut Command, plugin_path: &Path) {
+    cmd.env_clear();
+    cmd.current_dir(plugin_path);
+    cmd.env("ASDF_DIR", plugin_path);
+    cmd.env("PATH", default_plugin_path_env());
+    if let Ok(home) = std::env::var("HOME") {
+        cmd.env("HOME", home);
+    }
+    if let Ok(tmpdir) = std::env::var("TMPDIR") {
+        cmd.env("TMPDIR", tmpdir);
+    }
+}
+
+fn matches_tool_query(version: &str, query: &ToolVersionQuery) -> bool {
+    match query {
+        ToolVersionQuery::Recent | ToolVersionQuery::Latest => true,
+        ToolVersionQuery::Major(major) => version_major(version) == Some(*major),
+    }
+}
+
+fn version_major(version: &str) -> Option<u64> {
+    let version = version
+        .rsplit_once('-')
+        .map(|(_, version)| version)
+        .unwrap_or(version);
+    version
+        .split(['.', '+', '-'])
+        .find(|part| !part.is_empty())
+        .and_then(|part| part.parse::<u64>().ok())
+}
+
+fn binary_name(name: &str) -> String {
+    if cfg!(windows) && !name.ends_with(".exe") {
+        format!("{name}.exe")
+    } else {
+        name.to_string()
+    }
+}
+
 fn derive_remote_plugin_name(source: &str) -> Result<String> {
     let trimmed = source.trim();
     if trimmed.is_empty() {
@@ -251,10 +553,17 @@ fn derive_remote_plugin_name(source: &str) -> Result<String> {
 
     let mut candidate = trimmed;
     if candidate.starts_with("git@") {
-        candidate = candidate.split_once(':').map(|(_, tail)| tail).unwrap_or(candidate);
+        candidate = candidate
+            .split_once(':')
+            .map(|(_, tail)| tail)
+            .unwrap_or(candidate);
     }
 
-    candidate = candidate.split(['#', '?']).next().unwrap_or(candidate).trim_end_matches('/');
+    candidate = candidate
+        .split(['#', '?'])
+        .next()
+        .unwrap_or(candidate)
+        .trim_end_matches('/');
     let name = candidate
         .split('/')
         .filter(|part| !part.is_empty())
@@ -399,7 +708,8 @@ fn load_plugin_aliases(plugin_path: &Path, cwd: &Path) -> Result<HashMap<String,
         return Ok(HashMap::new());
     }
 
-    let response: ExportResponse = serde_json::from_str(&hook_output).context("invalid plugin response")?;
+    let response: ExportResponse =
+        serde_json::from_str(&hook_output).context("invalid plugin response")?;
     let mut aliases = HashMap::new();
     let section = normalize_section(&manifest);
 

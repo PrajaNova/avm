@@ -7,33 +7,45 @@ fn cmd_tool(cmd: Option<ToolCommands>) -> Result<()> {
             print_tool_list(&cfg, &node)?;
             Ok(())
         }
-        ToolCommands::Use(args) => set_tool_version(&args.tool, &args.version, args.global),
+        ToolCommands::Use(args) => {
+            let provider = provider_by_name(&args.tool)?;
+            use_provider_version(&args.tool, provider.as_ref(), &args.version, args.global)
+        }
         ToolCommands::Install(args) => {
-            let provider = provider_by_name(&args.tool, &node)?;
+            let provider = provider_by_name(&args.tool)?;
             provider.install(&args.version)?;
             println!("✓ Installed {} {}", args.tool, args.version);
             Ok(())
         }
         ToolCommands::Uninstall(args) => {
-            let provider = provider_by_name(&args.tool, &node)?;
+            let provider = provider_by_name(&args.tool)?;
             provider.uninstall(&args.version)?;
             println!("✓ Removed {} {}", args.tool, args.version);
             Ok(())
         }
-        ToolCommands::Provider(args) => cmd_provider_tool(args, &cfg, &node),
+        ToolCommands::Provider(args) => cmd_provider_tool(args, &cfg),
     }
 }
 
-fn provider_by_name<'a>(name: &str, node: &'a NodeProvider) -> Result<&'a dyn ToolProvider> {
+fn provider_by_name(name: &str) -> Result<Box<dyn ToolProvider>> {
+    let plugin_manager = PluginManager::new(None)?;
+    if let Some(provider) = plugin_manager.asdf_provider(name)? {
+        return Ok(Box::new(provider));
+    }
+
     match name {
-        "node" => Ok(node),
-        _ => Err(anyhow!("unsupported tool provider '{name}'")),
+        "node" => Ok(Box::new(NodeProvider::new())),
+        _ => Err(anyhow!("unknown plugin '{name}'")),
     }
 }
 
 fn print_tool_list(cfg: &ResolvedConfig, node: &NodeProvider) -> Result<()> {
     println!("Tool providers:");
     println!("  node");
+    let plugin_manager = PluginManager::new(None)?;
+    for provider in plugin_manager.list_asdf_provider_names()? {
+        println!("  {provider}");
+    }
     let resolved = cfg.resolve_tools_with_source(cfg);
     if resolved.is_empty() {
         println!("Resolved tools: none");

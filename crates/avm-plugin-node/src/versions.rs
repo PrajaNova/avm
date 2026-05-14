@@ -15,10 +15,14 @@ fn release_index() -> Result<Vec<NodeRelease>> {
         .unwrap_or_else(|_| "https://nodejs.org/dist".to_string());
     let local_index = Path::new(&mirror).join("index.json");
     if local_index.exists() {
-        let raw = fs::read(&local_index)
-            .with_context(|| format!("failed to read Node.js versions from {}", local_index.display()))?;
-        let parsed: Vec<NodeReleaseIndexEntry> = serde_json::from_slice(&raw)
-            .context("failed to parse Node.js version index")?;
+        let raw = fs::read(&local_index).with_context(|| {
+            format!(
+                "failed to read Node.js versions from {}",
+                local_index.display()
+            )
+        })?;
+        let parsed: Vec<NodeReleaseIndexEntry> =
+            serde_json::from_slice(&raw).context("failed to parse Node.js version index")?;
         return Ok(parsed.into_iter().map(NodeRelease::from).collect());
     }
 
@@ -40,8 +44,8 @@ fn release_index() -> Result<Vec<NodeRelease>> {
         ));
     }
 
-    let raw: Vec<NodeReleaseIndexEntry> = serde_json::from_slice(&output.stdout)
-        .context("failed to parse Node.js version index")?;
+    let raw: Vec<NodeReleaseIndexEntry> =
+        serde_json::from_slice(&output.stdout).context("failed to parse Node.js version index")?;
     Ok(raw.into_iter().map(NodeRelease::from).collect())
 }
 

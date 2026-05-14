@@ -50,14 +50,20 @@ impl From<(&str, AliasValue, &Manifest)> for ResolvedAlias {
                 command,
                 description: None,
                 plugin_name: plugin_name.to_string(),
-                section_name: manifest.section_label.clone().unwrap_or_else(|| plugin_name.to_string()),
+                section_name: manifest
+                    .section_label
+                    .clone()
+                    .unwrap_or_else(|| plugin_name.to_string()),
                 source: Some("script".to_string()),
             },
             AliasValue::Detailed(detail) => Self {
                 command: detail.command,
                 description: detail.description,
                 plugin_name: plugin_name.to_string(),
-                section_name: manifest.section_label.clone().unwrap_or_else(|| plugin_name.to_string()),
+                section_name: manifest
+                    .section_label
+                    .clone()
+                    .unwrap_or_else(|| plugin_name.to_string()),
                 source: detail.source,
             },
         }

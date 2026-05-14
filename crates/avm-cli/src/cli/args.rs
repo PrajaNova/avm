@@ -46,7 +46,7 @@ enum Commands {
     },
     /// Print shell setup for avm aliases and shims.
     ShellInit,
-    /// Manage executable shims used for plain commands like node.
+    /// Manage executable shims used for plain commands like node and java.
     Shims {
         #[command(subcommand)]
         command: ShimsCommands,
@@ -59,7 +59,7 @@ enum Commands {
     Version,
     /// Show grouped command help.
     All,
-    /// Run an installed plugin command, for example `avm node versions`.
+    /// Run an installed plugin command, for example `avm node versions` or `avm java versions`.
     #[command(external_subcommand)]
     PluginCommand(Vec<String>),
 }

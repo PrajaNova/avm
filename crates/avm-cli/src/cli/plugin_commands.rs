@@ -128,6 +128,7 @@ fn print_available_plugins() {
     println!("Install with:");
     println!("  avm plugin add node");
     println!();
-    println!("Install external plugins with:");
+    println!("Install external AVM or compatible asdf plugins with:");
     println!("  avm plugin add <path-or-url>");
+    println!("  avm plugin add https://github.com/halcyon/asdf-java.git");
 }

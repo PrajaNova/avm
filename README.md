@@ -88,12 +88,13 @@ Precedence rules:
 - `avm env` prints shell-safe `export` lines
 - `avm resolve <alias> [args...]` prints the expanded shell command
 - `avm plugin add|list|remove|update` manages plugins
+- `avm plugin add <asdf-plugin-url>` installs compatible asdf-style tool plugins
 - `avm <plugin> versions` lists installable versions, for example `avm node versions`
 - `avm <plugin> <major> versions` filters installable versions, for example `avm node 20 versions`
 - `avm <plugin> latest versions` shows the latest installable version
 - `avm <plugin> use <version>` sets plugin version locally
 - `avm <plugin> use <version> --global` sets plugin version globally
-- `avm <plugin> install <version>` is reserved for plugin installers; the current Node baseline does not auto-install
+- `avm <plugin> install <version>` installs a managed plugin version when supported
 - `avm <plugin> uninstall <version>` removes an installed managed version when present
 - `avm tool ...` remains a compatibility alias for older scripts, but new docs and examples use plugin-first commands
 - `avm shims install|remove|path` controls shim lifecycle
@@ -177,6 +178,8 @@ Scenario files:
 - `docker/tests/scenarios/02-local-global-precedence.sh`
 - `docker/tests/scenarios/03-shim-fallback.sh`
 - `docker/tests/scenarios/04-node-package-scripts.sh`
+- `docker/tests/scenarios/05-plugin-first-node.sh`
+- `docker/tests/scenarios/06-asdf-java-plugin.sh`
 
 ## Plugin behavior
 
@@ -184,7 +187,16 @@ The Node provider currently powers:
 
 - project `package.json` alias extraction
 - version selection for `node` through `avm node ...`
+- automatic Node install when a selected version is missing
 - manager fallback to an existing system installation when managed version is missing
+
+Java support is provided through the generic asdf compatibility adapter, not a built-in Java crate. External asdf-style tool plugins are supported when they provide `bin/list-all` and `bin/install`. For example, installing `https://github.com/halcyon/asdf-java.git` exposes the provider as `java` and lets `avm java ...` use the plugin scripts.
+
+The generic asdf adapter powers:
+
+- version selection through `avm <tool> ...`
+- automatic install when a selected version is missing
+- shim routing through managed installs under `~/.avm/tools/<tool>/<version>/bin`
 
 The architecture is plugin-first, so additional providers can be added without changing the CLI flow.
 

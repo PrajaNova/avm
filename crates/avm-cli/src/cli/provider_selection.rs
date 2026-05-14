@@ -1,5 +1,6 @@
 fn select_tool_version(
     provider_name: &str,
+    provider: &dyn ToolProvider,
     versions: Vec<avm_plugin_api::ToolVersion>,
 ) -> Result<()> {
     let items = versions
@@ -11,7 +12,9 @@ fn select_tool_version(
 
     let title = format!("Available {provider_name} versions");
     match ui::select(&title, "Use Up/Down to move, Enter to select, q to cancel.", &items, 10)? {
-        Some(selected) => confirm_tool_version_selection(provider_name, &versions[selected].version),
+        Some(selected) => {
+            confirm_tool_version_selection(provider_name, provider, &versions[selected].version)
+        }
         None => {
             println!("Cancelled.");
             Ok(())
@@ -19,7 +22,11 @@ fn select_tool_version(
     }
 }
 
-fn confirm_tool_version_selection(provider_name: &str, version: &str) -> Result<()> {
+fn confirm_tool_version_selection(
+    provider_name: &str,
+    provider: &dyn ToolProvider,
+    version: &str,
+) -> Result<()> {
     let cwd = std::env::current_dir().context("failed to read current directory")?;
     let has_local_config = cwd.join(CONFIG_FILE).exists();
 
@@ -29,8 +36,8 @@ fn confirm_tool_version_selection(provider_name: &str, version: &str) -> Result<
         let mut answer = String::new();
         io::stdin().read_line(&mut answer)?;
         match answer.trim().to_ascii_lowercase().as_str() {
-            "l" | "local" => set_tool_version(provider_name, version, false),
-            "g" | "global" => set_tool_version(provider_name, version, true),
+            "l" | "local" => use_provider_version(provider_name, provider, version, false),
+            "g" | "global" => use_provider_version(provider_name, provider, version, true),
             _ => {
                 println!("Cancelled.");
                 Ok(())
@@ -42,7 +49,7 @@ fn confirm_tool_version_selection(provider_name: &str, version: &str) -> Result<
         let mut answer = String::new();
         io::stdin().read_line(&mut answer)?;
         match answer.trim().to_ascii_lowercase().as_str() {
-            "y" | "yes" => set_tool_version(provider_name, version, true),
+            "y" | "yes" => use_provider_version(provider_name, provider, version, true),
             _ => {
                 println!("Cancelled.");
                 Ok(())

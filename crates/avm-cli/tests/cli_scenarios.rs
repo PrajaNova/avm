@@ -489,3 +489,460 @@ fn shim_falls_back_to_system_binary_when_managed_node_is_missing() {
     ));
     assert!(stdout(&output).contains("system-node:-v"));
 }
+
+#[test]
+fn alias_with_chained_command_runs_both_sides() {
+    let root = temp_root("chained-alias");
+    let home = root.join("home");
+    let work = root.join("work");
+    fs::create_dir_all(&home).expect("create home");
+    fs::create_dir_all(&work).expect("create work");
+    write_file(
+        &work.join(".avm.json"),
+        r#"{
+  "aliases": {
+    "chain": "echo first && echo second"
+  },
+  "env": {},
+  "tools": {}
+}"#,
+    );
+
+    let output = run_avm(&work, &home, &["run", "chain"]);
+    assert_success(&output);
+    let out = stdout(&output);
+    assert!(out.contains("first"), "missing first half: {out}");
+    assert!(out.contains("second"), "missing second half: {out}");
+}
+
+#[test]
+fn alias_with_pipe_runs_through_shell() {
+    let root = temp_root("piped-alias");
+    let home = root.join("home");
+    let work = root.join("work");
+    fs::create_dir_all(&home).expect("create home");
+    fs::create_dir_all(&work).expect("create work");
+    write_file(
+        &work.join(".avm.json"),
+        r#"{
+  "aliases": {
+    "p": "echo hello | tr a-z A-Z"
+  },
+  "env": {},
+  "tools": {}
+}"#,
+    );
+
+    let output = run_avm(&work, &home, &["run", "p"]);
+    assert_success(&output);
+    assert!(stdout(&output).contains("HELLO"));
+}
+
+#[test]
+fn install_auto_pins_local_and_global_when_no_global() {
+    let root = temp_root("install-auto-pin");
+    let home = root.join("home");
+    let work = root.join("work");
+    let dist = root.join("dist");
+    fs::create_dir_all(&home).expect("create home");
+    fs::create_dir_all(&work).expect("create work");
+    fs::create_dir_all(&dist).expect("create dist");
+    write_file(
+        &dist.join("index.json"),
+        r#"[{"version":"v20.11.1","lts":"Iron","security":false}]"#,
+    );
+    create_node_archive(&dist, "20.11.1");
+
+    let output = run_avm_with_env(
+        &work,
+        &home,
+        &["node", "install", "20.11.1"],
+        &[("AVM_NODE_DIST_URL", dist.as_path())],
+    );
+    assert_success(&output);
+    let out = stdout(&output);
+    assert!(out.contains("✓ Installed node 20.11.1"), "got: {out}");
+    assert!(out.contains("local + global"), "expected dual pin: {out}");
+
+    let local = fs::read_to_string(work.join(".avm.json")).expect("read local");
+    assert!(local.contains("\"node\""), "local pin missing: {local}");
+    assert!(local.contains("20.11.1"));
+    let global = fs::read_to_string(home.join(".avm.json")).expect("read global");
+    assert!(global.contains("\"node\""), "global pin missing: {global}");
+    assert!(global.contains("20.11.1"));
+}
+
+#[test]
+fn install_keeps_existing_global_pin() {
+    let root = temp_root("install-keep-global");
+    let home = root.join("home");
+    let work = root.join("work");
+    let dist = root.join("dist");
+    fs::create_dir_all(&home).expect("create home");
+    fs::create_dir_all(&work).expect("create work");
+    fs::create_dir_all(&dist).expect("create dist");
+    // Pre-existing global pin for node.
+    write_file(
+        &home.join(".avm.json"),
+        r#"{"aliases":{},"env":{},"tools":{"node":"18.0.0"}}"#,
+    );
+    write_file(
+        &dist.join("index.json"),
+        r#"[{"version":"v20.11.1","lts":"Iron","security":false}]"#,
+    );
+    create_node_archive(&dist, "20.11.1");
+
+    let output = run_avm_with_env(
+        &work,
+        &home,
+        &["node", "install", "20.11.1"],
+        &[("AVM_NODE_DIST_URL", dist.as_path())],
+    );
+    assert_success(&output);
+    let out = stdout(&output);
+    assert!(
+        out.contains("(local pin set)"),
+        "expected local-only: {out}"
+    );
+
+    let global = fs::read_to_string(home.join(".avm.json")).expect("read global");
+    assert!(
+        global.contains("18.0.0"),
+        "global pin overwritten: {global}"
+    );
+    let local = fs::read_to_string(work.join(".avm.json")).expect("read local");
+    assert!(local.contains("20.11.1"));
+}
+
+#[test]
+fn corrupt_local_config_is_backed_up_and_recovered() {
+    let root = temp_root("corrupt-config");
+    let home = root.join("home");
+    let work = root.join("work");
+    fs::create_dir_all(&home).expect("create home");
+    fs::create_dir_all(&work).expect("create work");
+    write_file(&work.join(".avm.json"), "{this is not json");
+
+    // Any avm command should now succeed; the corrupt file gets backed up.
+    let output = run_avm(&work, &home, &["which", "anything"]);
+    assert_success(&output);
+    assert!(stderr(&output).contains("was malformed"));
+
+    // The original file should be gone and replaced by a .broken-*.json backup.
+    let entries: Vec<_> = fs::read_dir(&work)
+        .expect("read work")
+        .filter_map(Result::ok)
+        .map(|e| e.file_name().to_string_lossy().to_string())
+        .collect();
+    assert!(
+        entries.iter().any(|n| n.starts_with(".avm.broken-")),
+        "no backup file in: {entries:?}"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Deeper coverage for shell-mode alias execution
+// ---------------------------------------------------------------------------
+
+#[test]
+fn alias_with_semicolon_runs_through_shell() {
+    let root = temp_root("semicolon-alias");
+    let home = root.join("home");
+    let work = root.join("work");
+    fs::create_dir_all(&home).expect("create home");
+    fs::create_dir_all(&work).expect("create work");
+    write_file(
+        &work.join(".avm.json"),
+        r#"{"aliases":{"two":"echo one; echo two"},"env":{},"tools":{}}"#,
+    );
+    let output = run_avm(&work, &home, &["run", "two"]);
+    assert_success(&output);
+    let out = stdout(&output);
+    assert!(out.contains("one") && out.contains("two"), "got: {out}");
+}
+
+#[test]
+fn alias_with_env_var_expands_via_shell() {
+    let root = temp_root("envvar-alias");
+    let home = root.join("home");
+    let work = root.join("work");
+    fs::create_dir_all(&home).expect("create home");
+    fs::create_dir_all(&work).expect("create work");
+    write_file(
+        &work.join(".avm.json"),
+        r#"{"aliases":{"greet":"echo hello $WHO"},"env":{"WHO":"world"},"tools":{}}"#,
+    );
+    let output = run_avm(&work, &home, &["run", "greet"]);
+    assert_success(&output);
+    assert!(stdout(&output).contains("hello world"));
+}
+
+#[test]
+fn alias_with_command_substitution_runs_through_shell() {
+    let root = temp_root("subshell-alias");
+    let home = root.join("home");
+    let work = root.join("work");
+    fs::create_dir_all(&home).expect("create home");
+    fs::create_dir_all(&work).expect("create work");
+    write_file(
+        &work.join(".avm.json"),
+        r#"{"aliases":{"now":"echo got=$(echo inside)"},"env":{},"tools":{}}"#,
+    );
+    let output = run_avm(&work, &home, &["run", "now"]);
+    assert_success(&output);
+    assert!(stdout(&output).contains("got=inside"));
+}
+
+#[test]
+fn alias_positional_placeholder_in_shell_mode() {
+    // `$1` is replaced by AVM *before* the shell sees it (so the user can
+    // pass arguments safely). Shell semantics still apply for `&&`.
+    let root = temp_root("placeholder-shell");
+    let home = root.join("home");
+    let work = root.join("work");
+    fs::create_dir_all(&home).expect("create home");
+    fs::create_dir_all(&work).expect("create work");
+    write_file(
+        &work.join(".avm.json"),
+        r#"{"aliases":{"p":"echo start && echo got=$1"},"env":{},"tools":{}}"#,
+    );
+    let output = run_avm(&work, &home, &["run", "p", "value with spaces"]);
+    assert_success(&output);
+    let out = stdout(&output);
+    assert!(out.contains("start"), "missing first half: {out}");
+    assert!(out.contains("got=value with spaces"), "got: {out}");
+}
+
+#[test]
+fn alias_exit_code_propagates_in_shell_mode() {
+    let root = temp_root("exit-code-alias");
+    let home = root.join("home");
+    let work = root.join("work");
+    fs::create_dir_all(&home).expect("create home");
+    fs::create_dir_all(&work).expect("create work");
+    write_file(
+        &work.join(".avm.json"),
+        r#"{"aliases":{"ok":"false || true","bad":"true && false"},"env":{},"tools":{}}"#,
+    );
+
+    let ok = run_avm(&work, &home, &["run", "ok"]);
+    assert_eq!(ok.status.code(), Some(0));
+
+    let bad = run_avm(&work, &home, &["run", "bad"]);
+    assert_eq!(bad.status.code(), Some(1));
+}
+
+#[test]
+fn alias_quoted_metacharacters_stay_in_direct_mode() {
+    // `;` inside double quotes is literal; needs_shell() must not promote.
+    // We can't directly observe direct vs shell mode, but we can ensure the
+    // literal semicolon survives intact in the output.
+    let root = temp_root("quoted-meta-alias");
+    let home = root.join("home");
+    let work = root.join("work");
+    fs::create_dir_all(&home).expect("create home");
+    fs::create_dir_all(&work).expect("create work");
+    write_file(
+        &work.join(".avm.json"),
+        r#"{"aliases":{"q":"printf %s \"a;b\""},"env":{},"tools":{}}"#,
+    );
+    let output = run_avm(&work, &home, &["run", "q"]);
+    assert_success(&output);
+    assert_eq!(stdout(&output).trim(), "a;b");
+}
+
+#[test]
+fn alias_extra_args_are_shell_quoted_when_no_placeholder() {
+    // Extra positional args passed in shell mode must be safely quoted so
+    // metacharacters in arg values don't reinterpret the alias body.
+    let root = temp_root("safe-quoting");
+    let home = root.join("home");
+    let work = root.join("work");
+    fs::create_dir_all(&home).expect("create home");
+    fs::create_dir_all(&work).expect("create work");
+    write_file(
+        &work.join(".avm.json"),
+        r#"{"aliases":{"echoer":"echo a && echo"},"env":{},"tools":{}}"#,
+    );
+    let output = run_avm(&work, &home, &["run", "echoer", "rm -rf /tmp/x; echo BAD"]);
+    assert_success(&output);
+    let out = stdout(&output);
+    // The arg must round-trip as a single literal line, not be re-parsed by sh.
+    let lines: Vec<&str> = out.lines().collect();
+    assert_eq!(
+        lines,
+        vec!["a", "rm -rf /tmp/x; echo BAD"],
+        "shell parse leak: {out:?}"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Deeper coverage for install pinning flags
+// ---------------------------------------------------------------------------
+
+#[test]
+fn install_global_flag_pins_only_globally() {
+    let root = temp_root("install-global-only");
+    let home = root.join("home");
+    let work = root.join("work");
+    let dist = root.join("dist");
+    fs::create_dir_all(&home).expect("create home");
+    fs::create_dir_all(&work).expect("create work");
+    fs::create_dir_all(&dist).expect("create dist");
+    write_file(
+        &dist.join("index.json"),
+        r#"[{"version":"v20.11.1","lts":"Iron","security":false}]"#,
+    );
+    create_node_archive(&dist, "20.11.1");
+
+    let output = run_avm_with_env(
+        &work,
+        &home,
+        &["node", "install", "20.11.1", "--global"],
+        &[("AVM_NODE_DIST_URL", dist.as_path())],
+    );
+    assert_success(&output);
+    assert!(stdout(&output).contains("global pin set"));
+
+    let global = fs::read_to_string(home.join(".avm.json")).expect("read global");
+    assert!(global.contains("20.11.1"), "global pin missing: {global}");
+    assert!(
+        !work.join(".avm.json").exists(),
+        "should not have created local config"
+    );
+}
+
+#[test]
+fn install_no_pin_flag_skips_pinning() {
+    let root = temp_root("install-no-pin");
+    let home = root.join("home");
+    let work = root.join("work");
+    let dist = root.join("dist");
+    fs::create_dir_all(&home).expect("create home");
+    fs::create_dir_all(&work).expect("create work");
+    fs::create_dir_all(&dist).expect("create dist");
+    write_file(
+        &dist.join("index.json"),
+        r#"[{"version":"v20.11.1","lts":"Iron","security":false}]"#,
+    );
+    create_node_archive(&dist, "20.11.1");
+
+    let output = run_avm_with_env(
+        &work,
+        &home,
+        &["node", "install", "20.11.1", "--no-pin"],
+        &[("AVM_NODE_DIST_URL", dist.as_path())],
+    );
+    assert_success(&output);
+    assert!(
+        !work.join(".avm.json").exists(),
+        "local config created despite --no-pin"
+    );
+    assert!(
+        !home.join(".avm.json").exists(),
+        "global config created despite --no-pin"
+    );
+}
+
+#[test]
+fn install_latest_resolves_and_pins() {
+    let root = temp_root("install-latest");
+    let home = root.join("home");
+    let work = root.join("work");
+    let dist = root.join("dist");
+    fs::create_dir_all(&home).expect("create home");
+    fs::create_dir_all(&work).expect("create work");
+    fs::create_dir_all(&dist).expect("create dist");
+    // Index has multiple versions; "latest" should pick the newest stable.
+    write_file(
+        &dist.join("index.json"),
+        r#"[
+  {"version":"v21.1.0","lts":false,"security":false},
+  {"version":"v20.11.1","lts":"Iron","security":false}
+]"#,
+    );
+    create_node_archive(&dist, "21.1.0");
+
+    let output = run_avm_with_env(
+        &work,
+        &home,
+        &["node", "install", "latest"],
+        &[("AVM_NODE_DIST_URL", dist.as_path())],
+    );
+    assert_success(&output);
+    let out = stdout(&output);
+    assert!(
+        out.contains("Resolved latest"),
+        "missing resolve banner: {out}"
+    );
+    assert!(out.contains("21.1.0"), "wrong version installed: {out}");
+    let global = fs::read_to_string(home.join(".avm.json")).expect("read global");
+    assert!(global.contains("21.1.0"));
+}
+
+#[test]
+fn install_existing_version_still_updates_pin() {
+    // Reinstalling the same version (already on disk) should still update
+    // the local pin. Catches a regression where short-circuiting "already
+    // installed" skips pinning too.
+    let root = temp_root("reinstall-pins");
+    let home = root.join("home");
+    let work = root.join("work");
+    let dist = root.join("dist");
+    fs::create_dir_all(&home).expect("create home");
+    fs::create_dir_all(&work).expect("create work");
+    fs::create_dir_all(&dist).expect("create dist");
+    write_file(
+        &dist.join("index.json"),
+        r#"[{"version":"v20.11.1","lts":"Iron","security":false}]"#,
+    );
+    create_node_archive(&dist, "20.11.1");
+
+    let first = run_avm_with_env(
+        &work,
+        &home,
+        &["node", "install", "20.11.1", "--no-pin"],
+        &[("AVM_NODE_DIST_URL", dist.as_path())],
+    );
+    assert_success(&first);
+
+    let second = run_avm_with_env(
+        &work,
+        &home,
+        &["node", "install", "20.11.1"],
+        &[("AVM_NODE_DIST_URL", dist.as_path())],
+    );
+    assert_success(&second);
+    let local = fs::read_to_string(work.join(".avm.json")).expect("read local");
+    assert!(
+        local.contains("20.11.1"),
+        "pin missing after reinstall: {local}"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Corrupt-config recovery: global scope
+// ---------------------------------------------------------------------------
+
+#[test]
+fn corrupt_global_config_is_backed_up_and_recovered() {
+    let root = temp_root("corrupt-global");
+    let home = root.join("home");
+    let work = root.join("work");
+    fs::create_dir_all(&home).expect("create home");
+    fs::create_dir_all(&work).expect("create work");
+    write_file(&home.join(".avm.json"), "not-json-at-all");
+
+    let output = run_avm(&work, &home, &["which", "anything"]);
+    assert_success(&output);
+    assert!(stderr(&output).contains("was malformed"));
+    let entries: Vec<_> = fs::read_dir(&home)
+        .expect("read home")
+        .filter_map(Result::ok)
+        .map(|e| e.file_name().to_string_lossy().to_string())
+        .collect();
+    assert!(
+        entries.iter().any(|n| n.starts_with(".avm.broken-")),
+        "no backup in: {entries:?}"
+    );
+}

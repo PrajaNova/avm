@@ -72,11 +72,6 @@ fn cmd_run(args: RunArgs) -> Result<()> {
             }
         }
     };
-    let command = build_alias_command(&alias.command, &args.args[1..])?;
-    if command.is_empty() {
-        return Err(anyhow!("alias '{}' resolved to empty command", args.args[0]));
-    }
-
     let mut env = std::env::vars().collect::<HashMap<String, String>>();
     if let Some(path_prefix) = resolved_tool_path_prefix(&cfg)? {
         env.insert("PATH".to_string(), path_prefix);
@@ -85,12 +80,167 @@ fn cmd_run(args: RunArgs) -> Result<()> {
         env.insert(key, value);
     }
 
-    let status = Command::new(&command[0])
-        .args(&command[1..])
-        .envs(env)
-        .status()
-        .context("failed to run alias")?;
+    let extra_args = &args.args[1..];
+    let status = if needs_shell(&alias.command) {
+        let script = build_shell_alias_string(&alias.command, extra_args)?;
+        let shell = pick_shell();
+        Command::new(&shell.0)
+            .args(&shell.1)
+            .arg(script)
+            .envs(env)
+            .status()
+            .with_context(|| format!("failed to run alias via {}", shell.0))?
+    } else {
+        let command = build_alias_command(&alias.command, extra_args)?;
+        if command.is_empty() {
+            return Err(anyhow!("alias '{}' resolved to empty command", args.args[0]));
+        }
+        Command::new(&command[0])
+            .args(&command[1..])
+            .envs(env)
+            .status()
+            .with_context(|| format!("failed to run alias '{}'", args.args[0]))?
+    };
     std::process::exit(status.code().unwrap_or(1));
+}
+
+/// Returns true when the alias body contains shell metacharacters that require
+/// a real shell to execute correctly (pipes, redirects, chained commands,
+/// command substitution, globs, env expansion, etc.).
+fn needs_shell(template: &str) -> bool {
+    // Inspect outside of quoted substrings to avoid false positives like
+    // `echo "a;b"`. We track single/double quote state and look at unquoted
+    // characters only.
+    let mut in_single = false;
+    let mut in_double = false;
+    let bytes = template.as_bytes();
+    let mut i = 0;
+    while i < bytes.len() {
+        let c = bytes[i] as char;
+        if in_single {
+            if c == '\'' {
+                in_single = false;
+            }
+            i += 1;
+            continue;
+        }
+        if in_double {
+            if c == '\\' && i + 1 < bytes.len() {
+                i += 2;
+                continue;
+            }
+            if c == '"' {
+                in_double = false;
+            }
+            i += 1;
+            continue;
+        }
+        match c {
+            '\'' => in_single = true,
+            '"' => in_double = true,
+            '|' | ';' | '&' | '>' | '<' | '`' | '*' | '?' => return true,
+            '$' => {
+                let next = bytes.get(i + 1).map(|b| *b as char);
+                // $VAR, ${...}, $(...) all require the shell. Numeric
+                // placeholders ($1, $2, ...) are handled internally.
+                if let Some(n) = next {
+                    if n == '(' || n == '{' || n.is_ascii_alphabetic() || n == '_' {
+                        return true;
+                    }
+                }
+            }
+            _ => {}
+        }
+        i += 1;
+    }
+    false
+}
+
+#[cfg(unix)]
+fn pick_shell() -> (String, Vec<String>) {
+    (
+        std::env::var("SHELL").unwrap_or_else(|_| "sh".to_string()),
+        vec!["-c".to_string()],
+    )
+}
+
+#[cfg(windows)]
+fn pick_shell() -> (String, Vec<String>) {
+    ("cmd".to_string(), vec!["/C".to_string()])
+}
+
+/// POSIX single-quote escaping: safe for any byte string.
+fn sh_quote(value: &str) -> String {
+    if value.is_empty() {
+        return "''".to_string();
+    }
+    if value
+        .bytes()
+        .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'_' | b'-' | b'.' | b'/' | b':' | b'='))
+    {
+        return value.to_string();
+    }
+    let mut out = String::with_capacity(value.len() + 2);
+    out.push('\'');
+    for ch in value.chars() {
+        if ch == '\'' {
+            out.push_str("'\\''");
+        } else {
+            out.push(ch);
+        }
+    }
+    out.push('\'');
+    out
+}
+
+/// Build a shell-mode alias string: expand `$1..$N` with sh-quoted args; if no
+/// positional placeholders were used, append extra args sh-quoted at the end.
+fn build_shell_alias_string(template: &str, args: &[String]) -> Result<String> {
+    let mut output = String::with_capacity(template.len());
+    let mut chars = template.chars().peekable();
+    let mut used_placeholder = false;
+
+    while let Some(ch) = chars.next() {
+        if ch != '$' {
+            output.push(ch);
+            continue;
+        }
+        // Only consume *numeric* placeholders here; leave $VAR / ${...} / $(...)
+        // for the shell to interpret.
+        let Some(&peek) = chars.peek() else {
+            output.push('$');
+            continue;
+        };
+        if !peek.is_ascii_digit() {
+            output.push('$');
+            continue;
+        }
+        let mut digits = String::new();
+        while let Some(&n) = chars.peek() {
+            if n.is_ascii_digit() {
+                digits.push(n);
+                chars.next();
+            } else {
+                break;
+            }
+        }
+        let index: usize = digits
+            .parse()
+            .with_context(|| format!("invalid placeholder ${digits}"))?;
+        if index == 0 || index > args.len() {
+            return Err(anyhow!("placeholder ${index} out of bounds"));
+        }
+        output.push_str(&sh_quote(&args[index - 1]));
+        used_placeholder = true;
+    }
+
+    if !used_placeholder {
+        for arg in args {
+            output.push(' ');
+            output.push_str(&sh_quote(arg));
+        }
+    }
+    Ok(output)
 }
 
 fn select_alias_suggestion(query: &str, suggestions: &[String]) -> Result<Option<String>> {

@@ -107,7 +107,31 @@ pub fn load_with_env(root: impl AsRef<Path>, local_file: &str) -> Result<ConfigL
     let file_path = root.join(local_file);
 
     match fs::read(&file_path) {
-        Ok(raw) => parse_config(&raw),
+        Ok(raw) => match parse_config(&raw) {
+            Ok(cfg) => Ok(cfg),
+            Err(err) => {
+                // Don't let a corrupt config block every avm command. Back the
+                // file up with a timestamped suffix and continue with an empty
+                // config. The user can copy values back from the .broken file.
+                let stamp = std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .map(|d| d.as_secs())
+                    .unwrap_or(0);
+                let backup = file_path.with_extension(format!("broken-{stamp}.json"));
+                let _ = fs::rename(&file_path, &backup);
+                eprintln!(
+                    "warning: {} was malformed ({err}); backed up to {} and continuing with an empty config.",
+                    file_path.display(),
+                    backup.display()
+                );
+                Ok(ConfigLoadResult {
+                    aliases: HashMap::new(),
+                    env: HashMap::new(),
+                    tools: HashMap::new(),
+                    is_structured: true,
+                })
+            }
+        },
         Err(err) if err.kind() == std::io::ErrorKind::NotFound => Ok(ConfigLoadResult {
             aliases: HashMap::new(),
             env: HashMap::new(),

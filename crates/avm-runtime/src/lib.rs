@@ -15,6 +15,42 @@ const PLUGIN_TIMEOUT_MS: u64 = 500;
 const GLOBAL_TIMEOUT_MS: u64 = 1000;
 const ASDF_LIST_TIMEOUT_MS: u64 = 20_000;
 const ASDF_INSTALL_TIMEOUT_MS: u64 = 120_000;
+const GIT_CLONE_TIMEOUT_MS: u64 = 120_000;
+const GIT_PULL_TIMEOUT_MS: u64 = 60_000;
+
+fn timeout_from_env(var: &str, default_ms: u64) -> u64 {
+    std::env::var(var)
+        .ok()
+        .and_then(|v| v.parse::<u64>().ok())
+        .map(|secs| secs.saturating_mul(1000))
+        .unwrap_or(default_ms)
+}
+
+/// Wait for an inherited-stdio child with a timeout. On timeout, the child is
+/// killed and a descriptive error is returned naming the env var that can
+/// override the deadline.
+fn status_with_timeout(
+    mut child: std::process::Child,
+    timeout_ms: u64,
+    label: &str,
+    env_override: &str,
+) -> Result<std::process::ExitStatus> {
+    let timeout = Duration::from_millis(timeout_ms);
+    match child
+        .wait_timeout(timeout)
+        .with_context(|| format!("failed while waiting for {label}"))?
+    {
+        Some(status) => Ok(status),
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            Err(anyhow!(
+                "{label} timed out after {}s — set {env_override}=<seconds> to extend",
+                timeout_ms / 1000
+            ))
+        }
+    }
+}
 
 #[derive(Debug)]
 pub struct PluginManager {
@@ -140,14 +176,18 @@ impl PluginManager {
         }
 
         let install_result = if is_remote {
-            let status = Command::new("git")
+            let child = Command::new("git")
                 .arg("clone")
+                .arg("--depth")
+                .arg("1")
                 .arg(source)
                 .arg(&target)
                 .env_clear()
                 .env("PATH", default_plugin_path_env())
-                .status()
-                .context("git clone failed")?;
+                .spawn()
+                .context("failed to start git clone")?;
+            let timeout = timeout_from_env("AVM_GIT_CLONE_TIMEOUT", GIT_CLONE_TIMEOUT_MS);
+            let status = status_with_timeout(child, timeout, "git clone", "AVM_GIT_CLONE_TIMEOUT")?;
             if !status.success() {
                 Err(anyhow!("git clone failed with status {}", status))
             } else {
@@ -199,14 +239,17 @@ impl PluginManager {
             return Ok(());
         }
 
-        let status = Command::new("git")
+        let child = Command::new("git")
             .arg("-C")
             .arg(&target)
             .arg("pull")
+            .arg("--ff-only")
             .env_clear()
             .env("PATH", default_plugin_path_env())
-            .status()
-            .context("git pull failed")?;
+            .spawn()
+            .context("failed to start git pull")?;
+        let timeout = timeout_from_env("AVM_GIT_PULL_TIMEOUT", GIT_PULL_TIMEOUT_MS);
+        let status = status_with_timeout(child, timeout, "git pull", "AVM_GIT_PULL_TIMEOUT")?;
         if !status.success() {
             return Err(anyhow!("plugin update failed with status {}", status));
         }

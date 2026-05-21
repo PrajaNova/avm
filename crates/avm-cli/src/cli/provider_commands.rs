@@ -40,10 +40,16 @@ fn cmd_provider_tool(
             use_provider_version(provider_name, provider.as_ref(), version, true)
         }
         [cmd, version] if cmd == "install" => {
-            provider.install(version)?;
-            install_shims()?;
-            println!("✓ Installed {provider_name} {version}");
-            Ok(())
+            let resolved = resolve_version_spec(provider.as_ref(), version)?;
+            install_and_pin(provider_name, provider.as_ref(), &resolved, PinScope::Auto)
+        }
+        [cmd, version, flag] if cmd == "install" && (flag == "--global" || flag == "-g") => {
+            let resolved = resolve_version_spec(provider.as_ref(), version)?;
+            install_and_pin(provider_name, provider.as_ref(), &resolved, PinScope::GlobalOnly)
+        }
+        [cmd, version, flag] if cmd == "install" && flag == "--no-pin" => {
+            let resolved = resolve_version_spec(provider.as_ref(), version)?;
+            install_and_pin(provider_name, provider.as_ref(), &resolved, PinScope::None)
         }
         [cmd, version] if cmd == "uninstall" => {
             provider.uninstall(version)?;
@@ -81,24 +87,105 @@ fn parse_version_filter(value: &str) -> Result<VersionFilter> {
     Ok(VersionFilter::Major(major))
 }
 
+#[derive(Clone, Copy)]
+enum PinScope {
+    /// Pin locally; also globally if no global pin exists for this tool yet.
+    Auto,
+    /// Pin globally only.
+    GlobalOnly,
+    /// Do not pin.
+    None,
+}
+
+fn install_and_pin(
+    provider_name: &str,
+    provider: &dyn ToolProvider,
+    version: &str,
+    scope: PinScope,
+) -> Result<()> {
+    if !provider.is_installed(version) {
+        provider.install(version)?;
+    }
+    install_shims()?;
+    match scope {
+        PinScope::None => {
+            println!("✓ Installed {provider_name} {version}");
+        }
+        PinScope::GlobalOnly => {
+            set_tool_version(provider_name, version, true)?;
+            println!("✓ Installed {provider_name} {version} (global pin set)");
+        }
+        PinScope::Auto => {
+            set_tool_version(provider_name, version, false)?;
+            if global_pin(provider_name)?.is_none() {
+                set_tool_version(provider_name, version, true)?;
+                println!(
+                    "✓ Installed {provider_name} {version} (local + global pin set)"
+                );
+            } else {
+                println!("✓ Installed {provider_name} {version} (local pin set)");
+            }
+        }
+    }
+    warn_if_shim_is_not_preferred(provider_name);
+    Ok(())
+}
+
+/// Translate a user-supplied version spec into a concrete version string.
+/// Supports `latest`, `<major>` (e.g. `20`), or a literal version like `20.11.0`.
+fn resolve_version_spec(provider: &dyn ToolProvider, spec: &str) -> Result<String> {
+    let trimmed = spec.trim();
+    if trimmed.is_empty() {
+        return Err(anyhow!("version required"));
+    }
+    if trimmed == "latest" {
+        let versions = provider
+            .available_versions(avm_plugin_api::ToolVersionQuery::Latest)
+            .context("failed to fetch latest version")?;
+        let pick = versions
+            .into_iter()
+            .next()
+            .ok_or_else(|| anyhow!("no remote versions available"))?;
+        println!("Resolved latest → {}", pick.version);
+        return Ok(pick.version);
+    }
+    // Bare major like "20"
+    if let Ok(major) = trimmed.trim_start_matches('v').parse::<u64>() {
+        let versions = provider
+            .available_versions(avm_plugin_api::ToolVersionQuery::Major(major))
+            .context("failed to fetch versions for major")?;
+        if let Some(pick) = versions.into_iter().next() {
+            println!("Resolved {trimmed} → {}", pick.version);
+            return Ok(pick.version);
+        }
+        // Fall through with the literal value so the provider can complain
+        // with its own error.
+    }
+    Ok(trimmed.to_string())
+}
+
+fn global_pin(tool: &str) -> Result<Option<String>> {
+    let root = home_dir()?;
+    let path = root.join(CONFIG_FILE);
+    if !path.exists() {
+        return Ok(None);
+    }
+    let parsed = load_config_for_root(&root)?;
+    Ok(parsed.tools.get(tool).cloned())
+}
+
 fn set_tool_version(tool: &str, version: &str, global: bool) -> Result<()> {
     let root = if global {
         home_dir()?
     } else {
         std::env::current_dir().context("failed to read current directory")?
     };
-    if !global {
-        let path = root.join(CONFIG_FILE);
-        if !path.exists() {
-            return Err(anyhow!(
-                "no {CONFIG_FILE} found in current directory. Run `avm init` first"
-            ));
-        }
-    } else {
-        let path = root.join(CONFIG_FILE);
-        if !path.exists() {
-            avm_core::write_default_config(root.as_path(), CONFIG_FILE)?;
-        }
+    // Auto-create the config on either scope. We used to bail with
+    // "run `avm init` first" for the local case, but that just added a step
+    // for users who clearly want the tool pinned in this directory.
+    let path = root.join(CONFIG_FILE);
+    if !path.exists() {
+        avm_core::write_default_config(root.as_path(), CONFIG_FILE)?;
     }
 
     let mut parsed = load_config_for_root(&root)?;
@@ -150,7 +237,9 @@ fn print_provider_help(provider_name: &str) {
     println!("  latest versions              Pick the latest available version");
     println!("  use <version> [-g|--global]  Set version locally or globally");
     println!("  set <version> [-g|--global]  Alias for use");
-    println!("  install <version>            Install version");
+    println!("  install <version|latest|N>   Install + auto-pin (local; global if unpinned)");
+    println!("  install <version> --global   Install + pin globally only");
+    println!("  install <version> --no-pin   Install without pinning");
     println!("  uninstall <version>          Remove managed version");
 }
 

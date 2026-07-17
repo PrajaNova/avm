@@ -79,23 +79,8 @@ jobs:
           files: dist/*.tar.gz
           generate_release_notes: true
 
-  npm:
-    needs: github-release
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-          registry-url: "https://registry.npmjs.org"
-
-      - name: Publish npm package
-        run: npm publish --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+  # npm is published manually from a maintainer machine (`npm publish`) because
+  # the account enforces MFA, which CI automation tokens can't satisfy here.
 
   homebrew:
     needs: github-release
@@ -114,7 +99,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: prajanova/homebrew-tap
-          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          token: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
           path: homebrew-tap
 
       - name: Update formula

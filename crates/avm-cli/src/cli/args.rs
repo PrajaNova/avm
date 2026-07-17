@@ -21,7 +21,11 @@ enum Commands {
     Remove(RemoveArgs),
     /// List aliases, env, selected versions, and plugin aliases.
     #[command(alias = "ls")]
-    List,
+    List {
+        /// Show only global config (skip local and plugin aliases).
+        #[arg(short = 'g', long)]
+        global: bool,
+    },
     /// Show where an alias or version selection comes from.
     Which {
         key: String,

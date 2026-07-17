@@ -89,7 +89,7 @@ fn run(cli: Cli) -> Result<()> {
         Commands::Init => cmd_init(),
         Commands::Add(args) => cmd_add(args),
         Commands::Remove(args) => cmd_remove(args),
-        Commands::List => cmd_list(),
+        Commands::List { global } => cmd_list(global),
         Commands::Which { key } => cmd_which(&key),
         Commands::Env(args) => cmd_env(args),
         Commands::Resolve(args) => cmd_resolve(args),

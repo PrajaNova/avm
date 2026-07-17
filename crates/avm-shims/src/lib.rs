@@ -100,7 +100,21 @@ fn is_executable_file(path: &Path) -> bool {
 pub fn activate_profiles() -> Result<Vec<PathBuf>> {
     let home = std::env::var("HOME").context("HOME not set")?;
     let home = PathBuf::from(home);
-    let block = "\n# >>> avm shims >>>\nexport PATH=\"$HOME/.avm/shims:$PATH\"\n# <<< avm shims <<<\n";
+
+    // Each shim execs `avm-bin`, so the sandbox also needs avm-bin's own dir on
+    // PATH — not just the shims dir. Add it unless it's already the shims dir.
+    let shims_dir = home.join(".avm").join("shims");
+    let exe_dir = std::env::current_exe()
+        .ok()
+        .and_then(|p| p.parent().map(Path::to_path_buf));
+    let path_line = match exe_dir {
+        Some(dir) if dir != shims_dir => format!(
+            "export PATH=\"$HOME/.avm/shims:{}:$PATH\"",
+            dir.display()
+        ),
+        _ => "export PATH=\"$HOME/.avm/shims:$PATH\"".to_string(),
+    };
+    let block = format!("\n# >>> avm shims >>>\n{path_line}\n# <<< avm shims <<<\n");
     let marker = "# >>> avm shims >>>";
 
     let mut written = Vec::new();

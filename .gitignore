@@ -31,3 +31,5 @@ node_modules/
 npm-debug.log*
 
 target/
+# local test config, not part of the tool
+.avm.json

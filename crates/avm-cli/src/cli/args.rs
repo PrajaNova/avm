@@ -105,6 +105,10 @@ enum PluginCommands {
 enum ShimsCommands {
     /// Install avm shims into ~/.avm/shims.
     Install,
+    /// Regenerate shims for all installed versions, including global package binaries.
+    Reshim,
+    /// Add ~/.avm/shims to PATH in shell startup files so it works everywhere, incl. closed envs.
+    Activate,
     /// Remove one shim.
     Remove {
         tool: String,

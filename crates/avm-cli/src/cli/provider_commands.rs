@@ -14,10 +14,7 @@ fn cmd_provider_tool(
     let provider = provider_by_name(provider_name)?;
 
     match parts {
-        [] => {
-            print_provider_status(provider_name, provider.as_ref(), cfg)?;
-            Ok(())
-        }
+        [] => interactive_provider_menu(provider_name, provider.as_ref(), cfg),
         [cmd] if cmd == "list" || cmd == "ls" => {
             print_provider_status(provider_name, provider.as_ref(), cfg)?;
             Ok(())
@@ -61,8 +58,79 @@ fn cmd_provider_tool(
             Ok(())
         }
         _ => Err(anyhow!(
-            "unknown {provider_name} command. Try `avm {provider_name} --help`"
+            "unknown {provider_name} command. Run `avm {provider_name}` for an interactive menu, or `avm {provider_name} --help`"
         )),
+    }
+}
+
+/// Bare `avm <plugin>` with no subcommand. In a TTY, show the next actions as a
+/// picker and chain into the chosen one by re-dispatching arg strings through
+/// the same parser — so this works identically for every plugin. Outside a TTY
+/// it falls back to the classic status printout.
+fn interactive_provider_menu(
+    provider_name: &str,
+    provider: &dyn ToolProvider,
+    cfg: &ResolvedConfig,
+) -> Result<()> {
+    if !ui::can_select() {
+        return print_provider_status(provider_name, provider, cfg);
+    }
+
+    // (label, subcommand to re-dispatch). "__uninstall" needs a version picker
+    // first, so it is handled inline rather than re-dispatched.
+    let actions: [(&str, &[&str]); 5] = [
+        ("Show selected & installed versions", &["list"]),
+        ("Browse & install a version", &["versions"]),
+        ("Install the latest version", &["install", "latest"]),
+        ("Uninstall an installed version", &["__uninstall"]),
+        ("Show all commands", &["help"]),
+    ];
+
+    let items: Vec<ui::SelectItem> = actions
+        .iter()
+        .map(|(label, _)| ui::SelectItem {
+            label: (*label).to_string(),
+        })
+        .collect();
+
+    let title = format!("avm {provider_name} — what next?");
+    let help = "Up/Down to move, Enter to select, q to cancel.";
+    let Some(idx) = ui::select(&title, help, &items, 10)? else {
+        println!("Cancelled.");
+        return Ok(());
+    };
+
+    let sub = actions[idx].1;
+    if sub.first() == Some(&"__uninstall") {
+        return interactive_uninstall(provider_name, provider);
+    }
+
+    let mut args = vec![provider_name.to_string()];
+    args.extend(sub.iter().map(|s| s.to_string()));
+    cmd_provider_tool(args, cfg)
+}
+
+fn interactive_uninstall(provider_name: &str, provider: &dyn ToolProvider) -> Result<()> {
+    let installed = provider.installed_versions()?;
+    if installed.is_empty() {
+        println!("No installed {provider_name} versions to remove.");
+        return Ok(());
+    }
+    let items: Vec<ui::SelectItem> = installed
+        .iter()
+        .map(|v| ui::SelectItem { label: v.clone() })
+        .collect();
+    let help = "Up/Down to move, Enter to select, q to cancel.";
+    match ui::select(&format!("Uninstall which {provider_name} version?"), help, &items, 10)? {
+        Some(i) => {
+            provider.uninstall(&installed[i])?;
+            println!("✓ Removed {provider_name} {}", installed[i]);
+            Ok(())
+        }
+        None => {
+            println!("Cancelled.");
+            Ok(())
+        }
     }
 }
 
@@ -106,7 +174,7 @@ fn install_and_pin(
     if !provider.is_installed(version) {
         provider.install(version)?;
     }
-    install_shims()?;
+    reshim()?;
     match scope {
         PinScope::None => {
             println!("✓ Installed {provider_name} {version}");
@@ -206,7 +274,7 @@ fn use_provider_version(
     global: bool,
 ) -> Result<()> {
     ensure_provider_version_installed(provider_name, provider, version)?;
-    install_shims()?;
+    reshim()?;
     set_tool_version(provider_name, version, global)?;
     warn_if_shim_is_not_preferred(provider_name);
     Ok(())

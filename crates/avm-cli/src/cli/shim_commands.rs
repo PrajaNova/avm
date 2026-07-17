@@ -1,8 +1,25 @@
 fn cmd_shims(command: ShimsCommands) -> Result<()> {
     match command {
         ShimsCommands::Install => {
-            install_shims()?;
+            reshim()?;
             println!("avm shims installed.");
+            Ok(())
+        }
+        ShimsCommands::Reshim => {
+            reshim()?;
+            println!("avm shims regenerated.");
+            Ok(())
+        }
+        ShimsCommands::Activate => {
+            let written = activate_profiles()?;
+            if written.is_empty() {
+                println!("avm shims already active in your shell startup files.");
+            } else {
+                for path in &written {
+                    println!("Added avm shims to {}", path.display());
+                }
+                println!("Open a new shell (or `source` the file) to apply.");
+            }
             Ok(())
         }
         ShimsCommands::Remove { tool } => {
@@ -19,32 +36,22 @@ fn cmd_shims(command: ShimsCommands) -> Result<()> {
 
 fn cmd_exec_shim(args: ExecShimArgs) -> Result<()> {
     let cfg = load_state()?;
-    let node = NodeProvider::new();
     let effective_tool = normalize_shim_tool(&args.tool);
-    let configured_version = cfg
-        .resolve_tool(effective_tool, &cfg)
-        .map(|(version, _)| version);
-    let selected = configured_version.as_deref().and_then(|version| {
-        match effective_tool {
-            "node" => node
-                .bin_path_for(version, &args.tool)
-                .ok()
-                .flatten()
-                .or_else(|| node.bin_path_for(version, "node").ok().flatten()),
-            _ => managed_tool_bin_path(effective_tool, version, &args.tool),
-        }
-    });
 
-    let executable = if let Some(executable) = selected {
-        executable
-    } else {
-        if let Some(version) = configured_version {
-            eprintln!(
-                "warning: managed {effective_tool} {version} is not installed; falling back to system {}",
-                args.tool
-            );
+    let executable = match resolve_managed_binary(&cfg, effective_tool, &args.tool) {
+        Some(executable) => executable,
+        None => {
+            // A pinned tool that isn't installed is worth warning about; an
+            // unknown binary (e.g. a global package) just falls through.
+            if let Some((version, _)) = cfg.resolve_tool(effective_tool, &cfg) {
+                eprintln!(
+                    "warning: managed {effective_tool} {version} is not installed; falling back to system {}",
+                    args.tool
+                );
+            }
+            which_in_path_excluding_shims(&args.tool)
+                .ok_or_else(|| anyhow!("command '{}' not found in PATH", args.tool))?
         }
-        which_in_path_excluding_shims(&args.tool).ok_or_else(|| anyhow!("command '{}' not found in PATH", args.tool))?
     };
 
     let mut env = std::env::vars().collect::<HashMap<String, String>>();
@@ -60,7 +67,62 @@ fn cmd_exec_shim(args: ExecShimArgs) -> Result<()> {
         .envs(env)
         .status()
         .context("failed to run shim target")?;
+
+    // A global package install adds new binaries to a version's bin dir. Reshim
+    // so `tsc`/`eslint`/etc. are runnable immediately, no manual step.
+    // ponytail: reshims on any pkg-manager install verb; prune stale shims later if it matters.
+    if status.success() && is_node_pkg_install(&args.tool, &args.args) {
+        let _ = reshim();
+    }
+
     std::process::exit(status.code().unwrap_or(1));
+}
+
+/// Find `binary` inside a managed version's bin dir. Search order: the pinned
+/// version of the tool the binary maps to (local pin first, then global), then
+/// every other managed tool. This resolves core tools *and* global-package
+/// binaries, and lets a package installed under the global version still run in
+/// a project pinned to a different version.
+fn resolve_managed_binary(
+    cfg: &ResolvedConfig,
+    effective_tool: &str,
+    binary: &str,
+) -> Option<PathBuf> {
+    let mut candidates: Vec<(String, String)> = Vec::new();
+    let push = |tool: &str, candidates: &mut Vec<(String, String)>| {
+        if let Some(v) = cfg.local_tools.get(tool) {
+            candidates.push((tool.to_string(), v.clone()));
+        }
+        if let Some(v) = cfg.global_tools.get(tool) {
+            candidates.push((tool.to_string(), v.clone()));
+        }
+    };
+
+    push(effective_tool, &mut candidates);
+    let mut others: Vec<&String> = cfg.local_tools.keys().chain(cfg.global_tools.keys()).collect();
+    others.sort_unstable();
+    others.dedup();
+    for tool in others {
+        if tool != effective_tool {
+            push(tool, &mut candidates);
+        }
+    }
+
+    candidates
+        .into_iter()
+        .find_map(|(tool, version)| managed_tool_bin_path(&tool, &version, binary))
+}
+
+fn is_node_pkg_install(tool: &str, args: &[String]) -> bool {
+    if !matches!(tool, "npm" | "npx" | "pnpm" | "yarn" | "bun") {
+        return false;
+    }
+    args.iter().any(|a| {
+        matches!(
+            a.as_str(),
+            "install" | "i" | "add" | "ci" | "remove" | "uninstall" | "rm" | "link" | "unlink"
+        )
+    })
 }
 
 fn merge_env(cfg: &ResolvedConfig) -> HashMap<String, String> {

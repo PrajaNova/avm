@@ -78,34 +78,42 @@ fn cmd_remove(args: RemoveArgs) -> Result<()> {
     Ok(())
 }
 
-fn cmd_list() -> Result<()> {
+fn cmd_list(global_only: bool) -> Result<()> {
     let cfg = load_state()?;
+    let show_local = !global_only;
     let mut printed = false;
 
-    if !cfg.local_aliases.is_empty() || !cfg.global_aliases.is_empty() {
+    if !cfg.global_aliases.is_empty() || (show_local && !cfg.local_aliases.is_empty()) {
         printed = true;
         println!("Aliases:");
-        let mut keys: Vec<&String> = cfg
-            .local_aliases
-            .keys()
-            .chain(cfg.global_aliases.keys())
-            .collect();
+        let mut keys: Vec<&String> = cfg.global_aliases.keys().collect();
+        if show_local {
+            keys.extend(cfg.local_aliases.keys());
+        }
         keys.sort_unstable();
         keys.dedup();
         for key in keys {
-            if let Some(value) = cfg.local_aliases.get(key) {
-                if cfg.global_aliases.contains_key(key) {
-                    println!("  {key} → {value} [override global]");
-                } else {
-                    println!("  {key} → {value}");
+            if show_local {
+                if let Some(value) = cfg.local_aliases.get(key) {
+                    if cfg.global_aliases.contains_key(key) {
+                        println!("  {key} → {value} [override global]");
+                    } else {
+                        println!("  {key} → {value}");
+                    }
+                    continue;
                 }
-            } else if let Some(value) = cfg.global_aliases.get(key) {
+            }
+            if let Some(value) = cfg.global_aliases.get(key) {
                 println!("  {key} → {value}");
             }
         }
     }
 
-    let merged_env = merge_env(&cfg);
+    let merged_env = if global_only {
+        cfg.global_env.clone()
+    } else {
+        merge_env(&cfg)
+    };
     if !merged_env.is_empty() {
         printed = true;
         println!("Environment:");
@@ -116,30 +124,34 @@ fn cmd_list() -> Result<()> {
         }
     }
 
-    if !cfg.local_tools.is_empty() || !cfg.global_tools.is_empty() {
+    if !cfg.global_tools.is_empty() || (show_local && !cfg.local_tools.is_empty()) {
         printed = true;
         println!("Tools:");
-        let mut keys: Vec<&String> = cfg
-            .local_tools
-            .keys()
-            .chain(cfg.global_tools.keys())
-            .collect();
+        let mut keys: Vec<&String> = cfg.global_tools.keys().collect();
+        if show_local {
+            keys.extend(cfg.local_tools.keys());
+        }
         keys.sort_unstable();
         keys.dedup();
         for key in keys {
-            if let Some(version) = cfg.local_tools.get(key) {
-                if cfg.global_tools.contains_key(key) {
-                    println!("  {key} = {version} [override global]");
-                } else {
-                    println!("  {key} = {version}");
+            if show_local {
+                if let Some(version) = cfg.local_tools.get(key) {
+                    if cfg.global_tools.contains_key(key) {
+                        println!("  {key} = {version} [override global]");
+                    } else {
+                        println!("  {key} = {version}");
+                    }
+                    continue;
                 }
-            } else if let Some(version) = cfg.global_tools.get(key) {
+            }
+            if let Some(version) = cfg.global_tools.get(key) {
                 println!("  {key} = {version}");
             }
         }
     }
 
-    if !cfg.plugin_aliases.is_empty() {
+    // Plugin aliases come from plugins, not local/global config — skip under -g.
+    if show_local && !cfg.plugin_aliases.is_empty() {
         printed = true;
         println!("Plugin aliases:");
         let mut section_map: HashMap<String, Vec<(String, String, String)>> = HashMap::new();

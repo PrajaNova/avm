@@ -50,14 +50,20 @@ impl From<(&str, AliasValue, &Manifest)> for ResolvedAlias {
                 command,
                 description: None,
                 plugin_name: plugin_name.to_string(),
-                section_name: manifest.section_label.clone().unwrap_or_else(|| plugin_name.to_string()),
+                section_name: manifest
+                    .section_label
+                    .clone()
+                    .unwrap_or_else(|| plugin_name.to_string()),
                 source: Some("script".to_string()),
             },
             AliasValue::Detailed(detail) => Self {
                 command: detail.command,
                 description: detail.description,
                 plugin_name: plugin_name.to_string(),
-                section_name: manifest.section_label.clone().unwrap_or_else(|| plugin_name.to_string()),
+                section_name: manifest
+                    .section_label
+                    .clone()
+                    .unwrap_or_else(|| plugin_name.to_string()),
                 source: detail.source,
             },
         }
@@ -70,10 +76,27 @@ pub struct ToolResolvedPath {
     pub version: String,
 }
 
+#[derive(Debug, Clone)]
+pub enum ToolVersionQuery {
+    Recent,
+    Latest,
+    Major(u64),
+}
+
+#[derive(Debug, Clone)]
+pub struct ToolVersion {
+    pub version: String,
+    pub label: String,
+    pub channel: Option<String>,
+    pub is_lts: bool,
+    pub is_security: bool,
+}
+
 pub trait ToolProvider: Send + Sync {
     fn name(&self) -> &str;
     fn is_installed(&self, version: &str) -> bool;
     fn installed_versions(&self) -> anyhow::Result<Vec<String>>;
+    fn available_versions(&self, query: ToolVersionQuery) -> anyhow::Result<Vec<ToolVersion>>;
     fn executable_path(&self, version: &str) -> anyhow::Result<Option<PathBuf>>;
     fn install(&self, version: &str) -> anyhow::Result<()>;
     fn uninstall(&self, version: &str) -> anyhow::Result<()>;

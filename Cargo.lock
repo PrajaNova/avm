@@ -98,6 +98,7 @@ dependencies = [
  "avm-plugin-api",
  "serde",
  "serde_json",
+ "wait-timeout",
 ]
 
 [[package]]

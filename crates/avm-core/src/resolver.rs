@@ -76,6 +76,15 @@ impl ResolvedConfig {
         }
         merged
     }
+
+    pub fn suggest_aliases(&self, query: &str) -> Vec<String> {
+        suggest_aliases_from_parts(
+            query,
+            self.local_aliases.keys(),
+            self.global_aliases.keys(),
+            self.plugin_aliases.keys(),
+        )
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -94,7 +103,10 @@ impl Resolver {
         }
     }
 
-    pub fn load(&self, plugin_aliases: HashMap<String, ResolvedAlias>) -> anyhow::Result<ResolvedConfig> {
+    pub fn load(
+        &self,
+        plugin_aliases: HashMap<String, ResolvedAlias>,
+    ) -> anyhow::Result<ResolvedConfig> {
         let local = crate::config::load_with_env(&self.cwd, &self.config_file)?;
         let global = crate::config::load_with_env(&self.home, &self.config_file)?;
 
@@ -109,99 +121,51 @@ impl Resolver {
         })
     }
 
-    pub fn resolve_alias(&self, key: &str, cfg: &ResolvedConfig) -> Option<ResolvedAliasLookup> {
-        if let Some(value) = cfg.local_aliases.get(key) {
-            return Some(ResolvedAliasLookup {
-                command: value.clone(),
-                source: AliasSource::Local,
-                plugin_name: None,
-            });
-        }
+}
 
-        if let Some(value) = cfg.global_aliases.get(key) {
-            return Some(ResolvedAliasLookup {
-                command: value.clone(),
-                source: AliasSource::Global,
-                plugin_name: None,
-            });
-        }
-
-        cfg.plugin_aliases.get(key).map(|a| ResolvedAliasLookup {
-            command: a.command.clone(),
-            source: AliasSource::Plugin,
-            plugin_name: Some(a.plugin_name.clone()),
-        })
+fn suggest_aliases_from_parts<'a>(
+    query: &str,
+    local: impl Iterator<Item = &'a String>,
+    global: impl Iterator<Item = &'a String>,
+    plugin: impl Iterator<Item = &'a String>,
+) -> Vec<String> {
+    let mut candidates = HashMap::new();
+    for key in local.chain(global).chain(plugin) {
+        candidates.insert(key.clone(), true);
     }
 
-    pub fn resolve_env(&self, cfg: &ResolvedConfig) -> HashMap<String, String> {
-        let mut merged = HashMap::new();
-        for (k, v) in &cfg.global_env {
-            merged.insert(k.clone(), v.clone());
+    let mut scored = Vec::new();
+    for key in candidates.keys() {
+        let score = alias_match_score(query, key);
+        if score >= 0.80 {
+            scored.push((key.clone(), score));
         }
-        for (k, v) in &cfg.local_env {
-            merged.insert(k.clone(), v.clone());
-        }
-        merged
     }
 
-    pub fn resolve_tools_with_source(&self, cfg: &ResolvedConfig) -> HashMap<String, (String, AliasSource)> {
-        let mut merged: HashMap<String, (String, AliasSource)> = HashMap::new();
-        for (tool, version) in &cfg.global_tools {
-            merged.insert(tool.clone(), (version.clone(), AliasSource::Global));
-        }
-        for (tool, version) in &cfg.local_tools {
-            merged.insert(tool.clone(), (version.clone(), AliasSource::Local));
-        }
-        merged
+    scored.sort_by(|a, b| {
+        b.1.partial_cmp(&a.1)
+            .unwrap_or(std::cmp::Ordering::Equal)
+            .then_with(|| a.0.cmp(&b.0))
+    });
+    scored.into_iter().map(|(key, _)| key).take(8).collect()
+}
+
+fn alias_match_score(query: &str, candidate: &str) -> f64 {
+    let query = normalize_for_comparison(query);
+    let candidate = normalize_for_comparison(candidate);
+    if query.is_empty() || candidate.is_empty() {
+        return 0.0;
+    }
+    if query == candidate {
+        return 1.0;
+    }
+    if query.contains(&candidate) || candidate.contains(&query) {
+        return 0.90;
     }
 
-    pub fn resolve_tool(&self, key: &str, cfg: &ResolvedConfig) -> Option<(String, AliasSource)> {
-        if let Some(version) = cfg.local_tools.get(key) {
-            return Some((version.clone(), AliasSource::Local));
-        }
-        if let Some(version) = cfg.global_tools.get(key) {
-            return Some((version.clone(), AliasSource::Global));
-        }
-        None
-    }
-
-    pub fn suggest_aliases(&self, query: &str, cfg: &ResolvedConfig) -> Vec<String> {
-        let mut suggestions = Vec::new();
-        let mut candidates = HashMap::new();
-
-        for key in cfg.local_aliases.keys() {
-            candidates.insert(key.clone(), true);
-        }
-        for key in cfg.global_aliases.keys() {
-            candidates.insert(key.clone(), true);
-        }
-        for key in cfg.plugin_aliases.keys() {
-            candidates.insert(key.clone(), true);
-        }
-
-        let normalized_query = normalize_for_comparison(query);
-        for key in candidates.keys() {
-            if levenshtein_distance(query, key) <= 2 {
-                suggestions.push(key.clone());
-                continue;
-            }
-
-            let normalized_key = normalize_for_comparison(key);
-            if normalized_query == normalized_key && !normalized_query.is_empty() {
-                suggestions.push(key.clone());
-                continue;
-            }
-
-            if (normalized_key.contains(&normalized_query) || normalized_query.contains(&normalized_key))
-                && (normalized_key.len() > 3 || normalized_query.len() > 3)
-            {
-                suggestions.push(key.clone());
-            }
-        }
-
-        suggestions.sort_unstable();
-        suggestions
-    }
+    let distance = levenshtein_distance(&query, &candidate);
+    let max_len = query.len().max(candidate.len()) as f64;
+    1.0 - (distance as f64 / max_len)
 }
 
 fn normalize_for_comparison(s: &str) -> String {
@@ -210,7 +174,7 @@ fn normalize_for_comparison(s: &str) -> String {
         .filter(|p| !p.is_empty())
         .collect();
     parts.sort_unstable();
-    parts.join("-")
+    parts.join("")
 }
 
 fn levenshtein_distance(s: &str, t: &str) -> usize {
@@ -230,7 +194,11 @@ fn levenshtein_distance(s: &str, t: &str) -> usize {
 
     for i in 1..=m {
         for j in 1..=n {
-            let cost = if s_bytes[i - 1] == t_bytes[j - 1] { 0 } else { 1 };
+            let cost = if s_bytes[i - 1] == t_bytes[j - 1] {
+                0
+            } else {
+                1
+            };
             dp[i][j] = std::cmp::min(
                 std::cmp::min(dp[i - 1][j] + 1, dp[i][j - 1] + 1),
                 dp[i - 1][j - 1] + cost,

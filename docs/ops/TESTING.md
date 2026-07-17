@@ -17,6 +17,7 @@ They cover:
 - local alias resolution
 - local/global precedence
 - Node `package.json` script discovery
+- plugin-first command routing with `avm node ...`
 - shim fallback when a managed Node version is missing
 
 ## Docker tests

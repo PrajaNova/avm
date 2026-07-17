@@ -1,9 +1,13 @@
-use anyhow::{anyhow, Context, Result};
-use avm_plugin_api::ToolProvider;
-use serde_json::Value;
-use std::collections::HashMap;
+mod aliases;
+mod install;
+mod versions;
+
+use anyhow::{anyhow, Context};
+use avm_plugin_api::{ToolProvider, ToolVersion, ToolVersionQuery};
 use std::fs;
 use std::path::{Path, PathBuf};
+
+pub use aliases::NodeAlias;
 
 #[derive(Debug)]
 pub struct NodeProvider;
@@ -13,45 +17,14 @@ impl NodeProvider {
         Self
     }
 
-    pub fn aliases_from_package_json(&self, cwd: &Path) -> Result<HashMap<String, NodeAlias>> {
-        let package_json = cwd.join("package.json");
-        if !package_json.exists() {
-            return Ok(HashMap::new());
-        }
-
-        let raw = fs::read_to_string(&package_json).context("failed to read package.json")?;
-        let parsed: Value = serde_json::from_str(&raw).context("failed to parse package.json")?;
-        let scripts = parsed
-            .get("scripts")
-            .and_then(|v| v.as_object())
-            .cloned()
-            .unwrap_or_default();
-
-        let run_prefix = detect_manager(cwd);
-
-        let mut aliases = HashMap::new();
-        for (name, value) in scripts {
-            let Some(cmd) = value.as_str() else {
-                continue;
-            };
-            let command = format!("{run_prefix} {name}");
-            aliases.insert(
-                name,
-                NodeAlias {
-                    command,
-                    description: Some(cmd.to_string()),
-                    manager: run_prefix.to_string(),
-                },
-            );
-        }
-        Ok(aliases)
+    pub fn aliases_from_package_json(
+        &self,
+        cwd: &Path,
+    ) -> anyhow::Result<std::collections::HashMap<String, NodeAlias>> {
+        aliases::aliases_from_package_json(cwd)
     }
 
-    pub fn bin_path_for(
-        &self,
-        version: &str,
-        binary: &str,
-    ) -> anyhow::Result<Option<PathBuf>> {
+    pub fn bin_path_for(&self, version: &str, binary: &str) -> anyhow::Result<Option<PathBuf>> {
         let root = self
             .install_root()
             .map(|home| home.join(".avm").join("tools").join("node").join(version));
@@ -114,20 +87,20 @@ impl ToolProvider for NodeProvider {
         Ok(versions)
     }
 
+    fn available_versions(&self, query: ToolVersionQuery) -> anyhow::Result<Vec<ToolVersion>> {
+        versions::available_versions(query)
+    }
+
     fn executable_path(&self, version: &str) -> anyhow::Result<Option<PathBuf>> {
         self.bin_path_for(version, "node")
     }
 
     fn install(&self, _version: &str) -> anyhow::Result<()> {
-        Err(anyhow!(
-            "node install is not supported in this baseline; avm will not auto-install while resolving binaries",
-        ))
+        install::install_node(_version)
     }
 
     fn uninstall(&self, version: &str) -> anyhow::Result<()> {
-        let root = self
-            .install_root()
-            .ok_or_else(|| anyhow!("HOME not set"))?;
+        let root = self.install_root().ok_or_else(|| anyhow!("HOME not set"))?;
         let path = root.join(".avm").join("tools").join("node").join(version);
         if path.exists() {
             fs::remove_dir_all(path).context("failed to remove managed node version")?;
@@ -136,30 +109,10 @@ impl ToolProvider for NodeProvider {
     }
 }
 
-#[derive(Debug, Clone)]
-pub struct NodeAlias {
-    pub command: String,
-    pub description: Option<String>,
-    pub manager: String,
-}
-
 fn binary_name(name: &str) -> String {
     if cfg!(windows) && !name.ends_with(".exe") {
         format!("{name}.exe")
     } else {
         name.to_string()
     }
-}
-
-fn detect_manager(cwd: &Path) -> String {
-    if cwd.join("bun.lockb").exists() || cwd.join("bun.lock").exists() {
-        return "bun run".to_string();
-    }
-    if cwd.join("pnpm-lock.yaml").exists() {
-        return "pnpm run".to_string();
-    }
-    if cwd.join("yarn.lock").exists() {
-        return "yarn".to_string();
-    }
-    "npm run".to_string()
 }

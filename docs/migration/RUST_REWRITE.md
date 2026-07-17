@@ -22,6 +22,7 @@
 | Alias/env/tool resolver | `crates/avm-core` |
 | Plugin manifest/types | `crates/avm-plugin-api` |
 | Plugin runtime | `crates/avm-runtime` |
+| asdf-compatible provider behavior | `crates/avm-runtime` |
 | Node plugin behavior | `crates/avm-plugin-node` |
 | Shell/binary interception | `crates/avm-shims` |
 
@@ -36,7 +37,8 @@
 | Local/global tools | Supported |
 | Node script aliases | Supported |
 | Shim fallback | Supported |
-| Node install/download | Planned |
+| Node install/download | Supported |
+| asdf plugin install/download | Supported through compatible plugin scripts |
 | External executable plugins | Compatibility adapter |
 
 ## Acceptance tests

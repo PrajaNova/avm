@@ -1,6 +1,6 @@
 {
   "name": "@prajanova/avm",
-  "version": "0.2.7",
+  "version": "0.2.8",
   "description": "Rust-native any version manager with aliases, shims, and provider plugins",
   "bin": {
     "avm": "bin/avm-bin.js",

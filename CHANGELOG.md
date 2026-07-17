@@ -6,6 +6,20 @@ The format follows Keep a Changelog style, and releases use semantic versioning.
 
 ## [Unreleased]
 
+## [0.2.8] - 2026-07-17
+
+### Added
+- `avm shims reshim` and automatic reshimming after `npm`/`yarn`/`pnpm`/`bun` install commands, so globally-installed package binaries (e.g. `tsc`, `eslint`) become runnable without a manual step.
+- `avm shims activate` to persist `~/.avm/shims` onto PATH in `.zshenv`/`.bashrc`/`.profile`, so directory-aware resolution works in closed environments that reset PATH.
+- Interactive next-action menu for bare `avm <plugin>` (e.g. `avm java`) that chains into the chosen action, uniform across every plugin.
+
+### Fixed
+- Shim dispatch now resolves any binary across managed versions (local pin → global pin → other tools), so a globally-installed tool runs regardless of the active project version.
+
+### Changed
+- `avm shims install` now also reshims installed versions.
+- Removed dead duplicated resolver methods.
+
 ## [0.2.7] - 2026-05-13
 
 ### Added

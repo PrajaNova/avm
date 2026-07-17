@@ -25,6 +25,11 @@ function getPlatform() {
   else if (arch === 'arm64') archName = 'arm64';
   else throw new Error(`Unsupported architecture: ${arch}`);
 
+  // macOS ships Apple Silicon builds only; Intel Macs are no longer supported.
+  if (osName === 'darwin' && archName === 'amd64') {
+    throw new Error('Intel macOS is not supported; avm provides Apple Silicon (arm64) macOS builds only');
+  }
+
   return { osName, archName };
 }
 

@@ -37,8 +37,6 @@ jobs:
             archive: avm_linux_amd64.tar.gz
           - os: ubuntu-24.04-arm
             archive: avm_linux_arm64.tar.gz
-          - os: macos-13
-            archive: avm_darwin_amd64.tar.gz
           - os: macos-latest
             archive: avm_darwin_arm64.tar.gz
     runs-on: ${{ matrix.os }}
@@ -127,7 +125,6 @@ jobs:
           base_url="https://github.com/prajanova/avm/releases/download/${GITHUB_REF_NAME}"
           linux_amd64_sha="$(sha256sum dist/avm_linux_amd64.tar.gz | awk '{print $1}')"
           linux_arm64_sha="$(sha256sum dist/avm_linux_arm64.tar.gz | awk '{print $1}')"
-          darwin_amd64_sha="$(sha256sum dist/avm_darwin_amd64.tar.gz | awk '{print $1}')"
           darwin_arm64_sha="$(sha256sum dist/avm_darwin_arm64.tar.gz | awk '{print $1}')"
 
           mkdir -p homebrew-tap/Formula
@@ -142,11 +139,6 @@ jobs:
               on_arm do
                 url "${base_url}/avm_darwin_arm64.tar.gz"
                 sha256 "${darwin_arm64_sha}"
-              end
-
-              on_intel do
-                url "${base_url}/avm_darwin_amd64.tar.gz"
-                sha256 "${darwin_amd64_sha}"
               end
             end
 

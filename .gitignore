@@ -31,3 +31,7 @@ node_modules/
 npm-debug.log*
 
 target/
+
+# Docker test scenarios share AVM_PLUGIN_DIR=/workspace/.avm/plugins,
+# which lands here on the host via the docker-compose volume mount.
+/.avm/

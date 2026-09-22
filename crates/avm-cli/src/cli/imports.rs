@@ -13,5 +13,3 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 const CONFIG_FILE: &str = ".avm.json";
-const BUILTIN_PLUGIN_DIR: &str = ".builtins";
-const BUILTIN_NODE_PLUGIN_MARKER: &str = "node";

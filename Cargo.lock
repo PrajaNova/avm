@@ -82,12 +82,33 @@ dependencies = [
 ]
 
 [[package]]
+name = "avm-plugin-android"
+version = "0.2.8"
+dependencies = [
+ "anyhow",
+ "avm-plugin-api",
+ "serde_json",
+ "wait-timeout",
+]
+
+[[package]]
 name = "avm-plugin-api"
 version = "0.2.8"
 dependencies = [
  "anyhow",
  "serde",
  "serde_json",
+]
+
+[[package]]
+name = "avm-plugin-java"
+version = "0.2.8"
+dependencies = [
+ "anyhow",
+ "avm-plugin-api",
+ "serde",
+ "serde_json",
+ "wait-timeout",
 ]
 
 [[package]]

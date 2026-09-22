@@ -269,6 +269,47 @@ impl PluginManager {
         }))
     }
 
+    /// Tier 2: a user-installed third-party plugin speaking the native
+    /// protocol (`docs/migration/PLUGIN_PROTOCOL.md`). Directory convention
+    /// mirrors the asdf one (`asdf-<name>` → tool `<name>`): a plugin
+    /// directory named `avm-plugin-<name>` with an executable `bin/avm-plugin`
+    /// is surfaced as tool `<name>`.
+    pub fn protocol_provider(&self, name: &str) -> Result<Option<PluginProcess>> {
+        let Some(plugin_path) = self.find_protocol_plugin(name)? else {
+            return Ok(None);
+        };
+        Ok(Some(PluginProcess::new(
+            name,
+            plugin_path.join("bin").join(binary_name("avm-plugin")),
+        )))
+    }
+
+    fn find_protocol_plugin(&self, name: &str) -> Result<Option<PathBuf>> {
+        if !self.plugin_dir.exists() {
+            return Ok(None);
+        }
+
+        let mut entries: Vec<_> = fs::read_dir(&self.plugin_dir)
+            .context("unable to read plugin directory")?
+            .filter_map(Result::ok)
+            .filter(|entry| entry.file_type().map(|ty| ty.is_dir()).unwrap_or(false))
+            .collect();
+        entries.sort_by_key(|entry| entry.file_name().to_string_lossy().to_ascii_lowercase());
+
+        for entry in entries {
+            let plugin_path = entry.path();
+            if !is_protocol_plugin_source(&plugin_path) {
+                continue;
+            }
+            let plugin_name = entry.file_name().to_string_lossy().to_string();
+            if protocol_tool_name(&plugin_name) == name {
+                return Ok(Some(plugin_path));
+            }
+        }
+
+        Ok(None)
+    }
+
     pub fn list_asdf_provider_names(&self) -> Result<Vec<String>> {
         if !self.plugin_dir.exists() {
             return Ok(Vec::new());
@@ -368,6 +409,38 @@ impl AsdfToolProvider {
         }
         run_with_timeout(cmd, timeout_ms)
     }
+
+    /// Run bash, optionally sourcing `exec_env` first, and return its resulting
+    /// environment as a map (NUL-delimited so values with newlines survive).
+    fn capture_env(
+        &self,
+        exec_env: Option<&Path>,
+        version: &str,
+        install_path: &Path,
+    ) -> Result<HashMap<String, String>> {
+        let script = match exec_env {
+            Some(path) => format!(". {} >/dev/null 2>&1; env -0", shell_single_quote(path)),
+            None => "env -0".to_string(),
+        };
+        let mut cmd = Command::new("bash");
+        cmd.arg("-c").arg(&script);
+        cmd.env("ASDF_INSTALL_VERSION", version);
+        cmd.env("ASDF_INSTALL_PATH", install_path);
+        cmd.env("ASDF_INSTALL_TYPE", "version");
+        let output = run_with_timeout(cmd, PLUGIN_TIMEOUT_MS * 4)?;
+
+        let mut map = HashMap::new();
+        for entry in output.split('\0') {
+            if let Some((key, value)) = entry.split_once('=') {
+                map.insert(key.to_string(), value.to_string());
+            }
+        }
+        Ok(map)
+    }
+}
+
+fn shell_single_quote(path: &Path) -> String {
+    format!("'{}'", path.to_string_lossy().replace('\'', "'\\''"))
 }
 
 impl ToolProvider for AsdfToolProvider {
@@ -434,6 +507,30 @@ impl ToolProvider for AsdfToolProvider {
         self.bin_path_for(version, &self.name)
     }
 
+    /// Env vars declared by the plugin's `bin/exec-env` (standard asdf contract:
+    /// the script is sourced and exports vars like `ANDROID_HOME`). Returns only
+    /// what the script adds or changes, by diffing against a control run.
+    fn env_vars(&self, version: &str) -> Result<HashMap<String, String>> {
+        let exec_env = self.plugin_path.join("bin").join("exec-env");
+        if !exec_env.exists() {
+            return Ok(HashMap::new());
+        }
+        let install_path = self.install_path(version)?;
+
+        // Baseline env (control) vs env after sourcing exec-env. Same injected
+        // ASDF_* vars in both so those cancel out in the diff.
+        let baseline = self.capture_env(None, version, &install_path)?;
+        let sourced = self.capture_env(Some(&exec_env), version, &install_path)?;
+
+        let mut out = HashMap::new();
+        for (key, value) in sourced {
+            if baseline.get(&key) != Some(&value) {
+                out.insert(key, value);
+            }
+        }
+        Ok(out)
+    }
+
     fn install(&self, version: &str) -> Result<()> {
         let install_path = self.install_path(version)?;
         if install_path
@@ -463,6 +560,153 @@ impl ToolProvider for AsdfToolProvider {
         }
         Ok(())
     }
+}
+
+/// Host-side runner for avm's native plugin protocol (see
+/// `docs/migration/PLUGIN_PROTOCOL.md`): a plugin is a standalone executable
+/// speaking a small JSON-on-stdout contract for "read" calls, and plain
+/// exit-code + inherited stdio for `install`/`uninstall` so progress streams
+/// live. This implements the same `ToolProvider` trait as `AsdfToolProvider`
+/// and the in-process builtins, so every existing call site in `avm-cli`
+/// works unchanged regardless of which tier resolved the provider.
+#[derive(Debug, Clone)]
+pub struct PluginProcess {
+    tool_name: String,
+    executable: PathBuf,
+}
+
+const PLUGIN_PROCESS_READ_TIMEOUT_MS: u64 = 30_000;
+const PLUGIN_PROCESS_INSTALL_TIMEOUT_MS: u64 = 1_800_000;
+
+impl PluginProcess {
+    pub fn new(tool_name: impl Into<String>, executable: PathBuf) -> Self {
+        Self {
+            tool_name: tool_name.into(),
+            executable,
+        }
+    }
+
+    fn call_json<T: serde::de::DeserializeOwned>(&self, args: &[&str]) -> Result<T> {
+        let mut cmd = Command::new(&self.executable);
+        cmd.args(args);
+        let timeout = timeout_from_env("AVM_PLUGIN_READ_TIMEOUT", PLUGIN_PROCESS_READ_TIMEOUT_MS);
+        let output = run_with_timeout(cmd, timeout).with_context(|| {
+            format!(
+                "plugin '{}' ({}) failed on `{}`",
+                self.tool_name,
+                self.executable.display(),
+                args.join(" ")
+            )
+        })?;
+        serde_json::from_str(output.trim()).with_context(|| {
+            format!(
+                "plugin '{}' ({}) returned malformed output for `{}`: {}",
+                self.tool_name,
+                self.executable.display(),
+                args.join(" "),
+                output.trim()
+            )
+        })
+    }
+
+    fn run_status(&self, args: &[&str]) -> Result<()> {
+        let child = Command::new(&self.executable)
+            .args(args)
+            .spawn()
+            .with_context(|| format!("failed to start plugin '{}'", self.tool_name))?;
+        let timeout = timeout_from_env(
+            "AVM_PLUGIN_INSTALL_TIMEOUT",
+            PLUGIN_PROCESS_INSTALL_TIMEOUT_MS,
+        );
+        let status = status_with_timeout(
+            child,
+            timeout,
+            &format!("plugin '{}' `{}`", self.tool_name, args.join(" ")),
+            "AVM_PLUGIN_INSTALL_TIMEOUT",
+        )?;
+        if !status.success() {
+            return Err(anyhow!(
+                "plugin '{}' `{}` failed: {}",
+                self.tool_name,
+                args.join(" "),
+                status
+            ));
+        }
+        Ok(())
+    }
+}
+
+impl ToolProvider for PluginProcess {
+    fn name(&self) -> &str {
+        &self.tool_name
+    }
+
+    fn is_installed(&self, version: &str) -> bool {
+        self.call_json::<avm_plugin_api::protocol::IsInstalledResponse>(&["is-installed", version])
+            .map(|r| r.installed)
+            .unwrap_or(false)
+    }
+
+    fn installed_versions(&self) -> Result<Vec<String>> {
+        Ok(self
+            .call_json::<avm_plugin_api::protocol::InstalledVersionsResponse>(&["installed-versions"])?
+            .versions)
+    }
+
+    fn available_versions(&self, query: ToolVersionQuery) -> Result<Vec<ToolVersion>> {
+        let query_arg = query.to_arg();
+        Ok(self
+            .call_json::<avm_plugin_api::protocol::VersionsResponse>(&["versions", "--query", &query_arg])?
+            .versions)
+    }
+
+    fn executable_path(&self, version: &str) -> Result<Option<PathBuf>> {
+        Ok(self
+            .call_json::<avm_plugin_api::protocol::ExecutablePathResponse>(&["executable-path", version])?
+            .path
+            .map(PathBuf::from))
+    }
+
+    fn env_vars(&self, version: &str) -> Result<HashMap<String, String>> {
+        Ok(self
+            .call_json::<avm_plugin_api::protocol::EnvVarsResponse>(&["env-vars", version])?
+            .env)
+    }
+
+    fn install(&self, version: &str) -> Result<()> {
+        self.run_status(&["install", version])
+    }
+
+    fn uninstall(&self, version: &str) -> Result<()> {
+        self.run_status(&["uninstall", version])
+    }
+}
+
+/// Directory the running `avm-bin` ships its bundled builtin plugin
+/// executables in: the same directory as `avm-bin` itself. This is
+/// deliberately flat (no `providers/` subdir) so it needs no packaging step
+/// beyond "put the binaries next to each other" — true for a plain `cargo
+/// build` (everything lands in one `target/{debug,release}` dir already)
+/// and for the npm/GitHub-release archive alike. Out-of-the-box
+/// node/java/android work with zero `avm plugin add`.
+pub fn builtins_dir() -> Result<PathBuf> {
+    let exe = std::env::current_exe().context("failed to resolve current executable path")?;
+    exe.parent()
+        .map(Path::to_path_buf)
+        .ok_or_else(|| anyhow!("executable path has no parent directory"))
+}
+
+fn plugin_executable_name(tool_name: &str) -> String {
+    binary_name(&format!("avm-plugin-{tool_name}"))
+}
+
+/// Tier 1: a plugin executable bundled next to `avm-bin` itself.
+pub fn builtin_plugin_process(tool_name: &str) -> Result<Option<PluginProcess>> {
+    let candidate = builtins_dir()?.join(plugin_executable_name(tool_name));
+    if candidate.exists() {
+        return Ok(Some(PluginProcess::new(tool_name, candidate)));
+    }
+    Ok(None)
 }
 
 fn default_plugin_dir() -> PathBuf {
@@ -522,6 +766,17 @@ fn is_avm_plugin_source(path: &Path) -> bool {
 
 fn is_asdf_plugin_source(path: &Path) -> bool {
     path.join("bin").join("list-all").exists() && path.join("bin").join("install").exists()
+}
+
+fn is_protocol_plugin_source(path: &Path) -> bool {
+    path.join("bin").join(binary_name("avm-plugin")).exists()
+}
+
+fn protocol_tool_name(plugin_name: &str) -> String {
+    plugin_name
+        .strip_prefix("avm-plugin-")
+        .unwrap_or(plugin_name)
+        .to_string()
 }
 
 fn asdf_manifest(path: &Path) -> Manifest {

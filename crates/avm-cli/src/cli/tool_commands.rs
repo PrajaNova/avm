@@ -1,10 +1,10 @@
 fn cmd_tool(cmd: Option<ToolCommands>) -> Result<()> {
     let cmd = cmd.unwrap_or(ToolCommands::List);
-    let node = NodeProvider::new();
     let cfg = load_state()?;
     match cmd {
         ToolCommands::List => {
-            print_tool_list(&cfg, &node)?;
+            let node = provider_by_name("node")?;
+            print_tool_list(&cfg, node.as_ref())?;
             Ok(())
         }
         ToolCommands::Use(args) => {
@@ -27,19 +27,32 @@ fn cmd_tool(cmd: Option<ToolCommands>) -> Result<()> {
     }
 }
 
+/// Every provider — builtin or third-party — speaks the same plugin
+/// protocol (see `docs/migration/PLUGIN_PROTOCOL.md`) and is discovered the
+/// same way, in tiers:
+///   1. bundled next to `avm-bin` itself (node/java/android ship here, so
+///      they work with zero `avm plugin add`)
+///   2. a user-installed third-party plugin under `~/.avm/plugins/<dir>`
+///   3. the legacy asdf-compatible adapter, kept for community asdf plugins
+///      that haven't adopted the native protocol (AGENTS.md: "legacy
+///      executable plugins remain supported until v1.1 parity is proven")
 fn provider_by_name(name: &str) -> Result<Box<dyn ToolProvider>> {
+    if let Some(provider) = avm_runtime::builtin_plugin_process(name)? {
+        return Ok(Box::new(provider));
+    }
+
     let plugin_manager = PluginManager::new(None)?;
+    if let Some(provider) = plugin_manager.protocol_provider(name)? {
+        return Ok(Box::new(provider));
+    }
     if let Some(provider) = plugin_manager.asdf_provider(name)? {
         return Ok(Box::new(provider));
     }
 
-    match name {
-        "node" => Ok(Box::new(NodeProvider::new())),
-        _ => Err(anyhow!("unknown plugin '{name}'")),
-    }
+    Err(anyhow!("unknown plugin '{name}'"))
 }
 
-fn print_tool_list(cfg: &ResolvedConfig, node: &NodeProvider) -> Result<()> {
+fn print_tool_list(cfg: &ResolvedConfig, node: &dyn ToolProvider) -> Result<()> {
     println!("Tool providers:");
     println!("  node");
     let plugin_manager = PluginManager::new(None)?;

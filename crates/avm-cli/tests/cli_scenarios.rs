@@ -96,24 +96,30 @@ fn create_node_archive(dist: &Path, version: &str) {
     assert!(status.success(), "tar fake node archive");
 }
 
-fn create_asdf_java_plugin(root: &Path) -> PathBuf {
-    let plugin = root.join("asdf-java");
+// Uses a tool name ("kotlin") that has no native avm-plugin-* crate, so this
+// exercises the generic asdf compatibility adapter itself rather than a
+// specific tool's provider — java and android are native now (see
+// docs/migration/NATIVE_PROVIDERS.md) and always take priority over an
+// asdf-<name> plugin of the same name, so a plugin named "asdf-java" here
+// would be silently shadowed and never actually get exercised.
+fn create_asdf_kotlin_plugin(root: &Path) -> PathBuf {
+    let plugin = root.join("asdf-kotlin");
     let bin = plugin.join("bin");
     fs::create_dir_all(&bin).expect("create asdf plugin bin");
     write_file(
         &bin.join("list-all"),
-        "#!/usr/bin/env sh\nprintf 'temurin-22.0.0+1 temurin-21.0.1+1\\n'\n",
+        "#!/usr/bin/env sh\nprintf 'kotlin-2.0.0 kotlin-1.9.20\\n'\n",
     );
     write_file(
         &bin.join("install"),
         r#"#!/usr/bin/env sh
 set -eu
 mkdir -p "$ASDF_INSTALL_PATH/bin"
-cat > "$ASDF_INSTALL_PATH/bin/java" <<'EOF'
+cat > "$ASDF_INSTALL_PATH/bin/kotlin" <<'EOF'
 #!/usr/bin/env sh
-echo asdf-java-runtime
+echo asdf-kotlin-runtime
 EOF
-chmod +x "$ASDF_INSTALL_PATH/bin/java"
+chmod +x "$ASDF_INSTALL_PATH/bin/kotlin"
 "#,
     );
     write_file(
@@ -372,8 +378,8 @@ fn dotenv_file_supplies_node_dist_url() {
 }
 
 #[test]
-fn asdf_java_plugin_can_be_installed_and_used_as_provider() {
-    let root = temp_root("asdf-java-provider");
+fn asdf_plugin_can_be_installed_and_used_as_provider() {
+    let root = temp_root("asdf-kotlin-provider");
     let home = root.join("home");
     let work = root.join("work");
     fs::create_dir_all(&home).expect("create home");
@@ -382,31 +388,31 @@ fn asdf_java_plugin_can_be_installed_and_used_as_provider() {
         &work.join(".avm.json"),
         r#"{"aliases":{},"env":{},"tools":{}}"#,
     );
-    let plugin = create_asdf_java_plugin(&root);
+    let plugin = create_asdf_kotlin_plugin(&root);
 
     let output = run_avm(&work, &home, &["plugin", "add", plugin.to_str().unwrap()]);
     assert_success(&output);
     assert!(stdout(&output).contains("✓ Installed plugin"));
 
-    let output = run_avm(&work, &home, &["java", "latest", "versions"]);
+    let output = run_avm(&work, &home, &["kotlin", "latest", "versions"]);
     assert_success(&output);
-    assert!(stdout(&output).contains("Available java versions:"));
-    assert!(stdout(&output).contains("temurin-22.0.0+1"));
-    assert!(!stdout(&output).contains("temurin-21.0.1+1"));
+    assert!(stdout(&output).contains("Available kotlin versions:"));
+    assert!(stdout(&output).contains("kotlin-2.0.0"));
+    assert!(!stdout(&output).contains("kotlin-1.9.20"));
 
-    let output = run_avm(&work, &home, &["java", "use", "temurin-21.0.1+1"]);
+    let output = run_avm(&work, &home, &["kotlin", "use", "kotlin-1.9.20"]);
     assert_success(&output);
-    assert!(stdout(&output).contains("Installing java temurin-21.0.1+1"));
-    assert!(stdout(&output).contains("✓ Installed java temurin-21.0.1+1"));
-    assert!(stdout(&output).contains("✓ Set local java version to temurin-21.0.1+1"));
+    assert!(stdout(&output).contains("Installing kotlin kotlin-1.9.20"));
+    assert!(stdout(&output).contains("✓ Installed kotlin kotlin-1.9.20"));
+    assert!(stdout(&output).contains("✓ Set local kotlin version to kotlin-1.9.20"));
     assert!(home
-        .join(".avm/tools/java/temurin-21.0.1+1/bin/java")
+        .join(".avm/tools/kotlin/kotlin-1.9.20/bin/kotlin")
         .exists());
 
     let output = run_avm(&work, &home, &["shims", "install"]);
     assert_success(&output);
     let shim_dir = home.join(".avm").join("shims");
-    let shim = shim_dir.join("java");
+    let shim = shim_dir.join("kotlin");
     let avm_dir = avm_bin().parent().expect("avm bin parent").to_path_buf();
     let path = std::env::join_paths([
         shim_dir.as_path(),
@@ -420,10 +426,10 @@ fn asdf_java_plugin_can_be_installed_and_used_as_provider() {
         .env("HOME", &home)
         .env("PATH", path)
         .output()
-        .expect("run java shim");
+        .expect("run kotlin shim");
 
     assert_success(&output);
-    assert!(stdout(&output).contains("asdf-java-runtime"));
+    assert!(stdout(&output).contains("asdf-kotlin-runtime"));
 }
 
 #[test]

@@ -3,7 +3,9 @@ resolver = "2"
 members = [
     "crates/avm-core",
     "crates/avm-cli",
+    "crates/avm-plugin-android",
     "crates/avm-plugin-api",
+    "crates/avm-plugin-java",
     "crates/avm-plugin-node",
     "crates/avm-runtime",
     "crates/avm-shims",

@@ -256,31 +256,64 @@ impl PluginManager {
         Ok(())
     }
 
+    /// Accepts either the literal plugin directory name or a tool name
+    /// (same resolution as `remove_plugin`/`provider_by_name`), and updates
+    /// it the way it was installed:
+    ///   - a marketplace install (`avm-plugin-<name>/bin/avm-plugin`, no
+    ///     `.git`) re-fetches the latest release from the marketplace —
+    ///     this used to silently no-op here, which is exactly the gap that
+    ///     left a real install stuck on an old release with no error.
+    ///   - a git-cloned plugin (asdf-style or otherwise) does `git pull`.
+    ///   - anything else (a local, non-git source) has nothing to update.
     pub fn update_plugin(&self, name: &str) -> Result<()> {
-        let target = self.plugin_dir.join(name);
-        if !target.exists() {
+        let literal = self.plugin_dir.join(name);
+        let (target, dir_name) = if literal.exists() {
+            (literal, name.to_string())
+        } else if let Some(dir) = self.find_protocol_plugin(name)? {
+            let dir_name = dir
+                .file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or(name)
+                .to_string();
+            (dir, dir_name)
+        } else if let Some((dir_name, dir)) = self.find_asdf_plugin(name)? {
+            (dir, dir_name)
+        } else {
             return Err(anyhow!("plugin '{}' not found", name));
-        }
+        };
 
-        if !target.join(".git").exists() {
+        if target.join(".git").exists() {
+            let child = Command::new("git")
+                .arg("-C")
+                .arg(&target)
+                .arg("pull")
+                .arg("--ff-only")
+                .env_clear()
+                .env("PATH", default_plugin_path_env())
+                .spawn()
+                .context("failed to start git pull")?;
+            let timeout = timeout_from_env("AVM_GIT_PULL_TIMEOUT", GIT_PULL_TIMEOUT_MS);
+            let status = status_with_timeout(child, timeout, "git pull", "AVM_GIT_PULL_TIMEOUT")?;
+            if !status.success() {
+                return Err(anyhow!("plugin update failed with status {}", status));
+            }
             return Ok(());
         }
 
-        let child = Command::new("git")
-            .arg("-C")
-            .arg(&target)
-            .arg("pull")
-            .arg("--ff-only")
-            .env_clear()
-            .env("PATH", default_plugin_path_env())
-            .spawn()
-            .context("failed to start git pull")?;
-        let timeout = timeout_from_env("AVM_GIT_PULL_TIMEOUT", GIT_PULL_TIMEOUT_MS);
-        let status = status_with_timeout(child, timeout, "git pull", "AVM_GIT_PULL_TIMEOUT")?;
-        if !status.success() {
-            return Err(anyhow!("plugin update failed with status {}", status));
+        if is_protocol_plugin_source(&target) {
+            let tool_name = protocol_tool_name(&dir_name);
+            let entry = marketplace_lookup(&tool_name)?.ok_or_else(|| {
+                anyhow!(
+                    "'{tool_name}' isn't in the marketplace (was it installed from a direct \
+                     URL instead of `avm plugin add {tool_name}`?) — nothing to update against"
+                )
+            })?;
+            install_from_marketplace(&tool_name, &entry.repo, &self.plugin_dir)?;
+            return Ok(());
         }
 
+        // Local, non-git source (e.g. `avm plugin add ./my-plugin-dir`) —
+        // there's nowhere to pull an update from.
         Ok(())
     }
 

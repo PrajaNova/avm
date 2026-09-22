@@ -6,7 +6,11 @@ edition = "2021"
 [dependencies]
 avm-core = { path = "../avm-core" }
 avm-plugin-api = { path = "../avm-plugin-api" }
-avm-plugin-node = { path = "../avm-plugin-node" }
+# Library-only dependency for package.json script parsing and a Windows
+# path fallback (outside the ToolProvider/plugin-protocol surface — see
+# avm-runtime::builtin_plugin_process for the executable avm-bin actually
+# drives node/java/android through at runtime).
+avm-plugin-node = { git = "https://github.com/PrajaNova/avm-plugin-node" }
 avm-runtime = { path = "../avm-runtime" }
 avm-shims = { path = "../avm-shims" }
 anyhow = { workspace = true }

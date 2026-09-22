@@ -64,7 +64,7 @@ version = "0.2.8"
 dependencies = [
  "anyhow",
  "avm-core",
- "avm-plugin-api",
+ "avm-plugin-api 0.2.8",
  "avm-plugin-node",
  "avm-runtime",
  "avm-shims",
@@ -76,19 +76,9 @@ name = "avm-core"
 version = "0.2.8"
 dependencies = [
  "anyhow",
- "avm-plugin-api",
+ "avm-plugin-api 0.2.8",
  "serde",
  "serde_json",
-]
-
-[[package]]
-name = "avm-plugin-android"
-version = "0.2.8"
-dependencies = [
- "anyhow",
- "avm-plugin-api",
- "serde_json",
- "wait-timeout",
 ]
 
 [[package]]
@@ -101,22 +91,22 @@ dependencies = [
 ]
 
 [[package]]
-name = "avm-plugin-java"
+name = "avm-plugin-api"
 version = "0.2.8"
+source = "git+https://github.com/PrajaNova/avm?branch=feat%2Fplugin-protocol-native-providers#3b35c93b1822d5a3969a2ddcfe767468bf80885d"
 dependencies = [
  "anyhow",
- "avm-plugin-api",
  "serde",
  "serde_json",
- "wait-timeout",
 ]
 
 [[package]]
 name = "avm-plugin-node"
 version = "0.2.8"
+source = "git+https://github.com/PrajaNova/avm-plugin-node#cc2494f89688b64ad90313ea4569c042d492043f"
 dependencies = [
  "anyhow",
- "avm-plugin-api",
+ "avm-plugin-api 0.2.8 (git+https://github.com/PrajaNova/avm?branch=feat%2Fplugin-protocol-native-providers)",
  "serde",
  "serde_json",
  "wait-timeout",
@@ -127,7 +117,7 @@ name = "avm-runtime"
 version = "0.2.8"
 dependencies = [
  "anyhow",
- "avm-plugin-api",
+ "avm-plugin-api 0.2.8",
  "serde",
  "serde_json",
  "wait-timeout",

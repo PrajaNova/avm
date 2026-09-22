@@ -55,6 +55,9 @@ fn cmd_exec_shim(args: ExecShimArgs) -> Result<()> {
     };
 
     let mut env = std::env::vars().collect::<HashMap<String, String>>();
+    for (key, value) in resolved_tool_env(&cfg)? {
+        env.insert(key, value);
+    }
     if let Some(path_prefix) = resolved_tool_path_prefix(&cfg)? {
         env.insert("PATH".to_string(), path_prefix);
     }
@@ -134,6 +137,22 @@ fn merge_env(cfg: &ResolvedConfig) -> HashMap<String, String> {
         merged.insert(key.clone(), value.clone());
     }
     merged
+}
+
+/// Env vars contributed by the selected tools' providers (e.g. `ANDROID_HOME`).
+/// These are provider defaults — callers must apply them *before* `merge_env`
+/// so user `.avm.json` `env` still wins.
+fn resolved_tool_env(cfg: &ResolvedConfig) -> Result<HashMap<String, String>> {
+    let mut env = HashMap::new();
+    for (tool, (version, _)) in cfg.resolve_tools_with_source(cfg) {
+        // Unknown/uninstalled providers just contribute nothing.
+        if let Ok(provider) = provider_by_name(&tool) {
+            if let Ok(vars) = provider.env_vars(&version) {
+                env.extend(vars);
+            }
+        }
+    }
+    Ok(env)
 }
 
 fn resolved_tool_path_prefix(cfg: &ResolvedConfig) -> Result<Option<String>> {

@@ -135,6 +135,20 @@ impl PluginManager {
             let name = entry.file_name().to_string_lossy().to_string();
             if let Ok(manifest) = read_manifest_path(&entry.path()) {
                 plugins.insert(name, manifest);
+            } else if is_protocol_plugin_source(&entry.path()) {
+                let tool_name = protocol_tool_name(&name);
+                let bin = entry.path().join("bin").join(binary_name("avm-plugin"));
+                let manifest = PluginProcess::new(tool_name.clone(), bin)
+                    .manifest()
+                    .unwrap_or_else(|_| Manifest {
+                        name: tool_name,
+                        version: "unknown".to_string(),
+                        api_version: None,
+                        description: Some("installed via marketplace".to_string()),
+                        section_label: None,
+                        homepage: None,
+                    });
+                plugins.insert(name, manifest);
             } else if is_asdf_plugin_source(&entry.path()) {
                 plugins.insert(name, asdf_manifest(&entry.path()));
             }
@@ -221,8 +235,21 @@ impl PluginManager {
         ))
     }
 
+    /// Accepts either the literal plugin directory name or a tool name that
+    /// resolves to one via the `avm-plugin-<name>` / `asdf-<name>`
+    /// conventions (`avm plugin remove node`, not just `avm plugin remove
+    /// avm-plugin-node`), matching how `provider_by_name` finds it.
     pub fn remove_plugin(&self, name: &str) -> Result<()> {
-        let target = self.plugin_dir.join(name);
+        let literal = self.plugin_dir.join(name);
+        let target = if literal.exists() {
+            literal
+        } else if let Some(dir) = self.find_protocol_plugin(name)? {
+            dir
+        } else if let Some((dir_name, _)) = self.find_asdf_plugin(name)? {
+            self.plugin_dir.join(dir_name)
+        } else {
+            literal
+        };
         if target.exists() {
             fs::remove_dir_all(target).context("remove plugin")?;
         }
@@ -267,6 +294,47 @@ impl PluginManager {
             plugin_name,
             plugin_path,
         }))
+    }
+
+    /// Tier 2: a user-installed third-party plugin speaking the native
+    /// protocol (`docs/migration/PLUGIN_PROTOCOL.md`). Directory convention
+    /// mirrors the asdf one (`asdf-<name>` → tool `<name>`): a plugin
+    /// directory named `avm-plugin-<name>` with an executable `bin/avm-plugin`
+    /// is surfaced as tool `<name>`.
+    pub fn protocol_provider(&self, name: &str) -> Result<Option<PluginProcess>> {
+        let Some(plugin_path) = self.find_protocol_plugin(name)? else {
+            return Ok(None);
+        };
+        Ok(Some(PluginProcess::new(
+            name,
+            plugin_path.join("bin").join(binary_name("avm-plugin")),
+        )))
+    }
+
+    fn find_protocol_plugin(&self, name: &str) -> Result<Option<PathBuf>> {
+        if !self.plugin_dir.exists() {
+            return Ok(None);
+        }
+
+        let mut entries: Vec<_> = fs::read_dir(&self.plugin_dir)
+            .context("unable to read plugin directory")?
+            .filter_map(Result::ok)
+            .filter(|entry| entry.file_type().map(|ty| ty.is_dir()).unwrap_or(false))
+            .collect();
+        entries.sort_by_key(|entry| entry.file_name().to_string_lossy().to_ascii_lowercase());
+
+        for entry in entries {
+            let plugin_path = entry.path();
+            if !is_protocol_plugin_source(&plugin_path) {
+                continue;
+            }
+            let plugin_name = entry.file_name().to_string_lossy().to_string();
+            if protocol_tool_name(&plugin_name) == name {
+                return Ok(Some(plugin_path));
+            }
+        }
+
+        Ok(None)
     }
 
     pub fn list_asdf_provider_names(&self) -> Result<Vec<String>> {
@@ -368,6 +436,38 @@ impl AsdfToolProvider {
         }
         run_with_timeout(cmd, timeout_ms)
     }
+
+    /// Run bash, optionally sourcing `exec_env` first, and return its resulting
+    /// environment as a map (NUL-delimited so values with newlines survive).
+    fn capture_env(
+        &self,
+        exec_env: Option<&Path>,
+        version: &str,
+        install_path: &Path,
+    ) -> Result<HashMap<String, String>> {
+        let script = match exec_env {
+            Some(path) => format!(". {} >/dev/null 2>&1; env -0", shell_single_quote(path)),
+            None => "env -0".to_string(),
+        };
+        let mut cmd = Command::new("bash");
+        cmd.arg("-c").arg(&script);
+        cmd.env("ASDF_INSTALL_VERSION", version);
+        cmd.env("ASDF_INSTALL_PATH", install_path);
+        cmd.env("ASDF_INSTALL_TYPE", "version");
+        let output = run_with_timeout(cmd, PLUGIN_TIMEOUT_MS * 4)?;
+
+        let mut map = HashMap::new();
+        for entry in output.split('\0') {
+            if let Some((key, value)) = entry.split_once('=') {
+                map.insert(key.to_string(), value.to_string());
+            }
+        }
+        Ok(map)
+    }
+}
+
+fn shell_single_quote(path: &Path) -> String {
+    format!("'{}'", path.to_string_lossy().replace('\'', "'\\''"))
 }
 
 impl ToolProvider for AsdfToolProvider {
@@ -434,6 +534,30 @@ impl ToolProvider for AsdfToolProvider {
         self.bin_path_for(version, &self.name)
     }
 
+    /// Env vars declared by the plugin's `bin/exec-env` (standard asdf contract:
+    /// the script is sourced and exports vars like `ANDROID_HOME`). Returns only
+    /// what the script adds or changes, by diffing against a control run.
+    fn env_vars(&self, version: &str) -> Result<HashMap<String, String>> {
+        let exec_env = self.plugin_path.join("bin").join("exec-env");
+        if !exec_env.exists() {
+            return Ok(HashMap::new());
+        }
+        let install_path = self.install_path(version)?;
+
+        // Baseline env (control) vs env after sourcing exec-env. Same injected
+        // ASDF_* vars in both so those cancel out in the diff.
+        let baseline = self.capture_env(None, version, &install_path)?;
+        let sourced = self.capture_env(Some(&exec_env), version, &install_path)?;
+
+        let mut out = HashMap::new();
+        for (key, value) in sourced {
+            if baseline.get(&key) != Some(&value) {
+                out.insert(key, value);
+            }
+        }
+        Ok(out)
+    }
+
     fn install(&self, version: &str) -> Result<()> {
         let install_path = self.install_path(version)?;
         if install_path
@@ -463,6 +587,312 @@ impl ToolProvider for AsdfToolProvider {
         }
         Ok(())
     }
+}
+
+/// Host-side runner for avm's native plugin protocol (see
+/// `docs/migration/PLUGIN_PROTOCOL.md`): a plugin is a standalone executable
+/// speaking a small JSON-on-stdout contract for "read" calls, and plain
+/// exit-code + inherited stdio for `install`/`uninstall` so progress streams
+/// live. This implements the same `ToolProvider` trait as `AsdfToolProvider`
+/// and the in-process builtins, so every existing call site in `avm-cli`
+/// works unchanged regardless of which tier resolved the provider.
+#[derive(Debug, Clone)]
+pub struct PluginProcess {
+    tool_name: String,
+    executable: PathBuf,
+}
+
+const PLUGIN_PROCESS_READ_TIMEOUT_MS: u64 = 30_000;
+const PLUGIN_PROCESS_INSTALL_TIMEOUT_MS: u64 = 1_800_000;
+
+impl PluginProcess {
+    pub fn new(tool_name: impl Into<String>, executable: PathBuf) -> Self {
+        Self {
+            tool_name: tool_name.into(),
+            executable,
+        }
+    }
+
+    /// Ask the plugin for its own manifest (name/version/description) — real
+    /// data from the installed executable, not guessed from disk layout.
+    pub fn manifest(&self) -> Result<Manifest> {
+        self.call_json(&["manifest"])
+    }
+
+    fn call_json<T: serde::de::DeserializeOwned>(&self, args: &[&str]) -> Result<T> {
+        let mut cmd = Command::new(&self.executable);
+        cmd.args(args);
+        let timeout = timeout_from_env("AVM_PLUGIN_READ_TIMEOUT", PLUGIN_PROCESS_READ_TIMEOUT_MS);
+        let output = run_with_timeout(cmd, timeout).with_context(|| {
+            format!(
+                "plugin '{}' ({}) failed on `{}`",
+                self.tool_name,
+                self.executable.display(),
+                args.join(" ")
+            )
+        })?;
+        serde_json::from_str(output.trim()).with_context(|| {
+            format!(
+                "plugin '{}' ({}) returned malformed output for `{}`: {}",
+                self.tool_name,
+                self.executable.display(),
+                args.join(" "),
+                output.trim()
+            )
+        })
+    }
+
+    fn run_status(&self, args: &[&str]) -> Result<()> {
+        let child = Command::new(&self.executable)
+            .args(args)
+            .spawn()
+            .with_context(|| format!("failed to start plugin '{}'", self.tool_name))?;
+        let timeout = timeout_from_env(
+            "AVM_PLUGIN_INSTALL_TIMEOUT",
+            PLUGIN_PROCESS_INSTALL_TIMEOUT_MS,
+        );
+        let status = status_with_timeout(
+            child,
+            timeout,
+            &format!("plugin '{}' `{}`", self.tool_name, args.join(" ")),
+            "AVM_PLUGIN_INSTALL_TIMEOUT",
+        )?;
+        if !status.success() {
+            return Err(anyhow!(
+                "plugin '{}' `{}` failed: {}",
+                self.tool_name,
+                args.join(" "),
+                status
+            ));
+        }
+        Ok(())
+    }
+}
+
+impl ToolProvider for PluginProcess {
+    fn name(&self) -> &str {
+        &self.tool_name
+    }
+
+    fn is_installed(&self, version: &str) -> bool {
+        self.call_json::<avm_plugin_api::protocol::IsInstalledResponse>(&["is-installed", version])
+            .map(|r| r.installed)
+            .unwrap_or(false)
+    }
+
+    fn installed_versions(&self) -> Result<Vec<String>> {
+        Ok(self
+            .call_json::<avm_plugin_api::protocol::InstalledVersionsResponse>(&["installed-versions"])?
+            .versions)
+    }
+
+    fn available_versions(&self, query: ToolVersionQuery) -> Result<Vec<ToolVersion>> {
+        let query_arg = query.to_arg();
+        Ok(self
+            .call_json::<avm_plugin_api::protocol::VersionsResponse>(&["versions", "--query", &query_arg])?
+            .versions)
+    }
+
+    fn executable_path(&self, version: &str) -> Result<Option<PathBuf>> {
+        Ok(self
+            .call_json::<avm_plugin_api::protocol::ExecutablePathResponse>(&["executable-path", version])?
+            .path
+            .map(PathBuf::from))
+    }
+
+    fn env_vars(&self, version: &str) -> Result<HashMap<String, String>> {
+        Ok(self
+            .call_json::<avm_plugin_api::protocol::EnvVarsResponse>(&["env-vars", version])?
+            .env)
+    }
+
+    fn install(&self, version: &str) -> Result<()> {
+        self.run_status(&["install", version])
+    }
+
+    fn uninstall(&self, version: &str) -> Result<()> {
+        self.run_status(&["uninstall", version])
+    }
+}
+
+const DEFAULT_MARKETPLACE_REGISTRY_URL: &str =
+    "https://raw.githubusercontent.com/PrajaNova/avm-marketplace/main/registry.json";
+const MARKETPLACE_TIMEOUT_MS: u64 = 20_000;
+const MARKETPLACE_INSTALL_TIMEOUT_MS: u64 = 300_000;
+
+#[derive(Debug, Clone, serde::Deserialize)]
+pub struct MarketplaceEntry {
+    pub name: String,
+    pub description: String,
+    #[serde(default)]
+    pub section_label: Option<String>,
+    /// `<owner>/<repo>` — its GitHub Releases are the actual install source.
+    /// Never fetched or built from source; only compiled release assets.
+    pub repo: String,
+}
+
+#[derive(Debug, serde::Deserialize)]
+struct RegistryFile {
+    plugins: Vec<MarketplaceEntry>,
+}
+
+fn marketplace_registry_url() -> String {
+    std::env::var("AVM_MARKETPLACE_URL").unwrap_or_else(|_| DEFAULT_MARKETPLACE_REGISTRY_URL.to_string())
+}
+
+/// Fetch and parse `registry.json` from the avm marketplace
+/// (github.com/PrajaNova/avm-marketplace) — the list of known plugin names,
+/// their descriptions, and the GitHub repo each resolves to. Override with
+/// `AVM_MARKETPLACE_URL` (a `raw.githubusercontent.com`-style URL, or a
+/// local file path for tests).
+pub fn marketplace_registry() -> Result<Vec<MarketplaceEntry>> {
+    let url = marketplace_registry_url();
+
+    let local = Path::new(&url);
+    let raw = if local.exists() {
+        fs::read_to_string(local)
+            .with_context(|| format!("failed to read marketplace registry from {}", local.display()))?
+    } else {
+        let mut cmd = Command::new("curl");
+        cmd.arg("-fsSL")
+            .arg("--connect-timeout")
+            .arg("10")
+            .arg("--max-time")
+            .arg((MARKETPLACE_TIMEOUT_MS / 1000).to_string())
+            .arg(&url);
+        run_with_timeout(cmd, MARKETPLACE_TIMEOUT_MS)
+            .with_context(|| format!("failed to fetch marketplace registry from {url}"))?
+    };
+
+    let parsed: RegistryFile =
+        serde_json::from_str(&raw).context("failed to parse marketplace registry.json")?;
+    Ok(parsed.plugins)
+}
+
+pub fn marketplace_lookup(name: &str) -> Result<Option<MarketplaceEntry>> {
+    Ok(marketplace_registry()?.into_iter().find(|e| e.name == name))
+}
+
+fn marketplace_platform() -> Result<(&'static str, &'static str)> {
+    let os = match std::env::consts::OS {
+        "macos" => "darwin",
+        "linux" => "linux",
+        other => return Err(anyhow!("unsupported platform for marketplace install: {other}")),
+    };
+    let arch = match std::env::consts::ARCH {
+        "aarch64" => "arm64",
+        "x86_64" => "amd64",
+        other => return Err(anyhow!("unsupported architecture for marketplace install: {other}")),
+    };
+    Ok((os, arch))
+}
+
+#[derive(Debug, serde::Deserialize)]
+struct GithubRelease {
+    tag_name: String,
+    assets: Vec<GithubAsset>,
+}
+
+#[derive(Debug, serde::Deserialize)]
+struct GithubAsset {
+    name: String,
+    browser_download_url: String,
+}
+
+/// Install a marketplace plugin by fetching its **compiled** latest GitHub
+/// Release for the current platform — never source, never built locally.
+/// `avm-plugin-<name>_<os>_<arch>.tar.gz` on `repo`'s latest release,
+/// containing exactly one file named `avm-plugin-<name>`, is the expected
+/// contract (documented in the avm-marketplace repo's README).
+pub fn install_from_marketplace(name: &str, repo: &str, plugin_dir: &Path) -> Result<String> {
+    let (os, arch) = marketplace_platform()?;
+    let release_api = format!("https://api.github.com/repos/{repo}/releases/latest");
+
+    let mut cmd = Command::new("curl");
+    cmd.arg("-fsSL")
+        .arg("-H")
+        .arg("Accept: application/vnd.github+json")
+        .arg("--connect-timeout")
+        .arg("10")
+        .arg("--max-time")
+        .arg((MARKETPLACE_TIMEOUT_MS / 1000).to_string())
+        .arg(&release_api);
+    let body = run_with_timeout(cmd, MARKETPLACE_TIMEOUT_MS)
+        .with_context(|| format!("failed to query latest release for {repo}"))?;
+    let release: GithubRelease =
+        serde_json::from_str(&body).with_context(|| format!("malformed release info for {repo}"))?;
+
+    let asset_name = format!("avm-plugin-{name}_{os}_{arch}.tar.gz");
+    let asset = release
+        .assets
+        .iter()
+        .find(|a| a.name == asset_name)
+        .ok_or_else(|| {
+            anyhow!(
+                "release {} of {repo} has no asset named '{asset_name}' (no build for {os}/{arch})",
+                release.tag_name
+            )
+        })?;
+
+    let target_dir = plugin_dir.join(format!("avm-plugin-{name}"));
+    let bin_dir = target_dir.join("bin");
+    fs::create_dir_all(&bin_dir).context("failed to create plugin bin dir")?;
+
+    let tmp = std::env::temp_dir().join(format!("avm-plugin-{name}-{}.tar.gz", std::process::id()));
+    let mut download = Command::new("curl");
+    download
+        .arg("-fL")
+        .arg("--connect-timeout")
+        .arg("10")
+        .arg("--max-time")
+        .arg((MARKETPLACE_INSTALL_TIMEOUT_MS / 1000).to_string())
+        .arg(&asset.browser_download_url)
+        .arg("-o")
+        .arg(&tmp);
+    let child = download.spawn().context("failed to start download")?;
+    let status = status_with_timeout(
+        child,
+        MARKETPLACE_INSTALL_TIMEOUT_MS,
+        &format!("downloading {asset_name}"),
+        "AVM_MARKETPLACE_INSTALL_TIMEOUT",
+    )?;
+    if !status.success() {
+        return Err(anyhow!("failed to download {}: {status}", asset.browser_download_url));
+    }
+
+    let extract_dir = std::env::temp_dir().join(format!("avm-plugin-{name}-extract-{}", std::process::id()));
+    fs::create_dir_all(&extract_dir).context("failed to create extraction temp dir")?;
+    let mut tar = Command::new("tar");
+    tar.arg("-xzf").arg(&tmp).arg("-C").arg(&extract_dir);
+    let status = tar.status().context("failed to run tar")?;
+    let _ = fs::remove_file(&tmp);
+    if !status.success() {
+        return Err(anyhow!("failed to extract {asset_name}"));
+    }
+
+    let extracted_bin = extract_dir.join(binary_name(&format!("avm-plugin-{name}")));
+    if !extracted_bin.exists() {
+        return Err(anyhow!(
+            "{asset_name} did not contain the expected file avm-plugin-{name}"
+        ));
+    }
+    let dest = bin_dir.join(binary_name("avm-plugin"));
+    // Not fs::rename: the extraction temp dir and ~/.avm/plugins can be on
+    // different filesystems/mounts (observed in Docker: /tmp is tmpfs, the
+    // home dir is on the container's overlay fs) — rename() fails EXDEV
+    // across devices, copy+remove works unconditionally.
+    fs::copy(&extracted_bin, &dest).context("failed to move plugin binary into place")?;
+    let _ = fs::remove_file(&extracted_bin);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mut perms = fs::metadata(&dest)?.permissions();
+        perms.set_mode(0o755);
+        fs::set_permissions(&dest, perms)?;
+    }
+    let _ = fs::remove_dir_all(&extract_dir);
+
+    Ok(release.tag_name)
 }
 
 fn default_plugin_dir() -> PathBuf {
@@ -522,6 +952,17 @@ fn is_avm_plugin_source(path: &Path) -> bool {
 
 fn is_asdf_plugin_source(path: &Path) -> bool {
     path.join("bin").join("list-all").exists() && path.join("bin").join("install").exists()
+}
+
+fn is_protocol_plugin_source(path: &Path) -> bool {
+    path.join("bin").join(binary_name("avm-plugin")).exists()
+}
+
+fn protocol_tool_name(plugin_name: &str) -> String {
+    plugin_name
+        .strip_prefix("avm-plugin-")
+        .unwrap_or(plugin_name)
+        .to_string()
 }
 
 fn asdf_manifest(path: &Path) -> Manifest {

@@ -96,6 +96,7 @@ fn run(cli: Cli) -> Result<()> {
         Commands::Run(args) => cmd_run(args),
         Commands::Tool { command } => cmd_tool(command),
         Commands::Plugin { command } => cmd_plugin(command),
+        Commands::Create(args) => cmd_create(args),
         Commands::ShellInit => {
             println!("{}", shell_init_script());
             Ok(())
@@ -139,9 +140,11 @@ fn print_grouped_help() {
     println!("  avm node latest versions         Show latest Node.js version");
     println!("  avm node use <version>           Set local Node.js version");
     println!("  avm node use <version> --global  Set global Node.js version");
-    println!("  avm java versions                Use after installing asdf-java");
-    println!("  avm java latest versions         Show latest asdf-java version");
+    println!("  avm java versions                Pick from recent OpenJDK (Temurin) versions");
+    println!("  avm java latest versions         Show latest OpenJDK version");
     println!("  avm java use <version>           Install if missing and set local Java version");
+    println!("  avm android versions             Pick from recent Android SDK versions");
+    println!("  avm android use <version>        Install if missing and set local Android SDK version");
     println!();
     println!("Shell and shims:");
     println!("  avm shell-init                   Print shell integration");

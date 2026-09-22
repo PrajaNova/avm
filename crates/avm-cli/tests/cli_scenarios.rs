@@ -1,6 +1,7 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
+use std::sync::OnceLock;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 fn avm_bin() -> PathBuf {
@@ -96,24 +97,77 @@ fn create_node_archive(dist: &Path, version: &str) {
     assert!(status.success(), "tar fake node archive");
 }
 
-fn create_asdf_java_plugin(root: &Path) -> PathBuf {
-    let plugin = root.join("asdf-java");
+/// Providers are no longer compiled into avm-bin (see the marketplace model
+/// in crates/avm-runtime — `avm plugin add <name>` fetches a **compiled**
+/// release from the plugin's own repo, built on GitHub's `ubuntu-latest`
+/// runners). That's proven working end-to-end separately (see
+/// docs/migration/PLUGIN_PROTOCOL.md) — for this test suite, fetching that
+/// same prebuilt binary would tie every CI environment's glibc to whatever
+/// GitHub's runners ship, which broke exactly this way in the
+/// `debian:bookworm`-based docker test image (GLIBC_2.39 not found). Build
+/// from source instead, once per test-binary run, guaranteed to match
+/// whatever glibc this environment actually has.
+fn cached_node_provider() -> &'static Path {
+    static BIN: OnceLock<PathBuf> = OnceLock::new();
+    BIN.get_or_init(|| {
+        let cache_dir = std::env::temp_dir().join("avm-test-avm-plugin-node-src");
+        if !cache_dir.join(".git").exists() {
+            let status = Command::new("git")
+                .args([
+                    "clone",
+                    "--depth",
+                    "1",
+                    "https://github.com/PrajaNova/avm-plugin-node.git",
+                ])
+                .arg(&cache_dir)
+                .status()
+                .expect("clone avm-plugin-node for tests");
+            assert!(status.success(), "failed to clone avm-plugin-node");
+        }
+        let status = Command::new("cargo")
+            .arg("build")
+            .arg("--manifest-path")
+            .arg(cache_dir.join("Cargo.toml"))
+            .status()
+            .expect("build avm-plugin-node for tests");
+        assert!(status.success(), "failed to build avm-plugin-node");
+        cache_dir.join("target").join("debug").join("avm-plugin-node")
+    })
+}
+
+fn install_test_node_provider(home: &Path) {
+    let bin_dir = home.join(".avm").join("plugins").join("avm-plugin-node").join("bin");
+    fs::create_dir_all(&bin_dir).expect("create test node provider bin dir");
+    let dest = bin_dir.join("avm-plugin");
+    let _ = fs::remove_file(&dest);
+    #[cfg(unix)]
+    std::os::unix::fs::symlink(cached_node_provider(), &dest).expect("symlink cached node provider");
+}
+
+// Uses a tool name ("kotlin") that has no native avm-plugin-* crate, so this
+// exercises the generic asdf compatibility adapter itself rather than a
+// specific tool's provider — java and android are native now (see
+// docs/migration/NATIVE_PROVIDERS.md) and always take priority over an
+// asdf-<name> plugin of the same name, so a plugin named "asdf-java" here
+// would be silently shadowed and never actually get exercised.
+fn create_asdf_kotlin_plugin(root: &Path) -> PathBuf {
+    let plugin = root.join("asdf-kotlin");
     let bin = plugin.join("bin");
     fs::create_dir_all(&bin).expect("create asdf plugin bin");
     write_file(
         &bin.join("list-all"),
-        "#!/usr/bin/env sh\nprintf 'temurin-22.0.0+1 temurin-21.0.1+1\\n'\n",
+        "#!/usr/bin/env sh\nprintf 'kotlin-2.0.0 kotlin-1.9.20\\n'\n",
     );
     write_file(
         &bin.join("install"),
         r#"#!/usr/bin/env sh
 set -eu
 mkdir -p "$ASDF_INSTALL_PATH/bin"
-cat > "$ASDF_INSTALL_PATH/bin/java" <<'EOF'
+cat > "$ASDF_INSTALL_PATH/bin/kotlin" <<'EOF'
 #!/usr/bin/env sh
-echo asdf-java-runtime
+echo asdf-kotlin-runtime
 EOF
-chmod +x "$ASDF_INSTALL_PATH/bin/java"
+chmod +x "$ASDF_INSTALL_PATH/bin/kotlin"
 "#,
     );
     write_file(
@@ -305,6 +359,7 @@ fn plugin_first_node_command_sets_and_lists_versions() {
     let work = root.join("work");
     let dist = root.join("dist");
     fs::create_dir_all(&home).expect("create home");
+    install_test_node_provider(&home);
     fs::create_dir_all(&work).expect("create work");
     fs::create_dir_all(&dist).expect("create dist");
     write_file(
@@ -353,6 +408,7 @@ fn dotenv_file_supplies_node_dist_url() {
     let work = root.join("work");
     let dist = root.join("dist");
     fs::create_dir_all(&home).expect("create home");
+    install_test_node_provider(&home);
     fs::create_dir_all(&work).expect("create work");
     fs::create_dir_all(&dist).expect("create dist");
     write_file(
@@ -372,8 +428,8 @@ fn dotenv_file_supplies_node_dist_url() {
 }
 
 #[test]
-fn asdf_java_plugin_can_be_installed_and_used_as_provider() {
-    let root = temp_root("asdf-java-provider");
+fn asdf_plugin_can_be_installed_and_used_as_provider() {
+    let root = temp_root("asdf-kotlin-provider");
     let home = root.join("home");
     let work = root.join("work");
     fs::create_dir_all(&home).expect("create home");
@@ -382,31 +438,31 @@ fn asdf_java_plugin_can_be_installed_and_used_as_provider() {
         &work.join(".avm.json"),
         r#"{"aliases":{},"env":{},"tools":{}}"#,
     );
-    let plugin = create_asdf_java_plugin(&root);
+    let plugin = create_asdf_kotlin_plugin(&root);
 
     let output = run_avm(&work, &home, &["plugin", "add", plugin.to_str().unwrap()]);
     assert_success(&output);
     assert!(stdout(&output).contains("✓ Installed plugin"));
 
-    let output = run_avm(&work, &home, &["java", "latest", "versions"]);
+    let output = run_avm(&work, &home, &["kotlin", "latest", "versions"]);
     assert_success(&output);
-    assert!(stdout(&output).contains("Available java versions:"));
-    assert!(stdout(&output).contains("temurin-22.0.0+1"));
-    assert!(!stdout(&output).contains("temurin-21.0.1+1"));
+    assert!(stdout(&output).contains("Available kotlin versions:"));
+    assert!(stdout(&output).contains("kotlin-2.0.0"));
+    assert!(!stdout(&output).contains("kotlin-1.9.20"));
 
-    let output = run_avm(&work, &home, &["java", "use", "temurin-21.0.1+1"]);
+    let output = run_avm(&work, &home, &["kotlin", "use", "kotlin-1.9.20"]);
     assert_success(&output);
-    assert!(stdout(&output).contains("Installing java temurin-21.0.1+1"));
-    assert!(stdout(&output).contains("✓ Installed java temurin-21.0.1+1"));
-    assert!(stdout(&output).contains("✓ Set local java version to temurin-21.0.1+1"));
+    assert!(stdout(&output).contains("Installing kotlin kotlin-1.9.20"));
+    assert!(stdout(&output).contains("✓ Installed kotlin kotlin-1.9.20"));
+    assert!(stdout(&output).contains("✓ Set local kotlin version to kotlin-1.9.20"));
     assert!(home
-        .join(".avm/tools/java/temurin-21.0.1+1/bin/java")
+        .join(".avm/tools/kotlin/kotlin-1.9.20/bin/kotlin")
         .exists());
 
     let output = run_avm(&work, &home, &["shims", "install"]);
     assert_success(&output);
     let shim_dir = home.join(".avm").join("shims");
-    let shim = shim_dir.join("java");
+    let shim = shim_dir.join("kotlin");
     let avm_dir = avm_bin().parent().expect("avm bin parent").to_path_buf();
     let path = std::env::join_paths([
         shim_dir.as_path(),
@@ -420,10 +476,10 @@ fn asdf_java_plugin_can_be_installed_and_used_as_provider() {
         .env("HOME", &home)
         .env("PATH", path)
         .output()
-        .expect("run java shim");
+        .expect("run kotlin shim");
 
     assert_success(&output);
-    assert!(stdout(&output).contains("asdf-java-runtime"));
+    assert!(stdout(&output).contains("asdf-kotlin-runtime"));
 }
 
 #[test]
@@ -545,6 +601,7 @@ fn install_auto_pins_local_and_global_when_no_global() {
     let work = root.join("work");
     let dist = root.join("dist");
     fs::create_dir_all(&home).expect("create home");
+    install_test_node_provider(&home);
     fs::create_dir_all(&work).expect("create work");
     fs::create_dir_all(&dist).expect("create dist");
     write_file(
@@ -579,6 +636,7 @@ fn install_keeps_existing_global_pin() {
     let work = root.join("work");
     let dist = root.join("dist");
     fs::create_dir_all(&home).expect("create home");
+    install_test_node_provider(&home);
     fs::create_dir_all(&work).expect("create work");
     fs::create_dir_all(&dist).expect("create dist");
     // Pre-existing global pin for node.
@@ -787,6 +845,7 @@ fn install_global_flag_pins_only_globally() {
     let work = root.join("work");
     let dist = root.join("dist");
     fs::create_dir_all(&home).expect("create home");
+    install_test_node_provider(&home);
     fs::create_dir_all(&work).expect("create work");
     fs::create_dir_all(&dist).expect("create dist");
     write_file(
@@ -819,6 +878,7 @@ fn install_no_pin_flag_skips_pinning() {
     let work = root.join("work");
     let dist = root.join("dist");
     fs::create_dir_all(&home).expect("create home");
+    install_test_node_provider(&home);
     fs::create_dir_all(&work).expect("create work");
     fs::create_dir_all(&dist).expect("create dist");
     write_file(
@@ -851,6 +911,7 @@ fn install_latest_resolves_and_pins() {
     let work = root.join("work");
     let dist = root.join("dist");
     fs::create_dir_all(&home).expect("create home");
+    install_test_node_provider(&home);
     fs::create_dir_all(&work).expect("create work");
     fs::create_dir_all(&dist).expect("create dist");
     // Index has multiple versions; "latest" should pick the newest stable.
@@ -890,6 +951,7 @@ fn install_existing_version_still_updates_pin() {
     let work = root.join("work");
     let dist = root.join("dist");
     fs::create_dir_all(&home).expect("create home");
+    install_test_node_provider(&home);
     fs::create_dir_all(&work).expect("create work");
     fs::create_dir_all(&dist).expect("create dist");
     write_file(

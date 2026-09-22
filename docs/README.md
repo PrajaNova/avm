@@ -1,9 +1,7 @@
 # avm Docs
 
-This folder contains the current Rust-first documentation for avm.
-
-- [Architecture](architecture/ARCHITECTURE.md)
-- [Runtime flow](architecture/FLOW.md)
-- [Docker and test workflow](ops/TESTING.md)
-- [Release and publishing](ops/RELEASE.md)
-- [Rust rewrite migration](migration/RUST_REWRITE.md)
+- [Architecture](architecture/ARCHITECTURE.md) — crates, the plugin
+  marketplace, the wire protocol, runtime boundaries.
+- [Creating a plugin](plugins/CREATING_A_PLUGIN.md) — `avm create`, the
+  `ToolProvider` trait, the wire protocol reference, testing, publishing,
+  and getting listed in the marketplace.

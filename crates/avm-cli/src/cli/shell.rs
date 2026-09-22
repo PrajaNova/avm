@@ -29,6 +29,13 @@ else
 fi
 rehash 2>/dev/null || hash -r 2>/dev/null || true
 
+# Apply provider/config env vars (ANDROID_HOME, JAVA_HOME, ...) to the live
+# shell. Safe to call repeatedly; only exports what `avm env` prints.
+_avm_apply_env() {
+  eval "$(command avm-bin env 2>/dev/null)" 2>/dev/null || true
+}
+_avm_apply_env
+
 avm() {
   if [ $# -eq 0 ]; then
     command avm-bin "$@"
@@ -36,23 +43,33 @@ avm() {
   fi
 
   local _avm_key="$1"
+  local _avm_rc
     case "$_avm_key" in
     init|add|list|ls|remove|rm|which|env|tool|tools|version|help|shell-init|plugin|completion|--help|-h|--version|-v|resolve|run|shims|exec-shim|node|java)
       command avm-bin "$@"
-      return $?
+      _avm_rc=$?
+      _avm_apply_env
+      return $_avm_rc
       ;;
   esac
 
   if command avm-bin resolve "$@" >/dev/null 2>&1; then
     command avm-bin run "$@"
-    return $?
+    _avm_rc=$?
+    _avm_apply_env
+    return $_avm_rc
   fi
 
   if command avm-bin "$_avm_key" --help >/dev/null 2>&1; then
     command avm-bin "$@"
-    return $?
+    _avm_rc=$?
+    _avm_apply_env
+    return $_avm_rc
   fi
   command avm-bin run "$@"
+  _avm_rc=$?
+  _avm_apply_env
+  return $_avm_rc
 }
 "#
     .to_string()

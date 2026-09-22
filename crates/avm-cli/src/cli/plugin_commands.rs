@@ -2,10 +2,19 @@ fn cmd_plugin(cmd: PluginCommands) -> Result<()> {
     let plugin_manager = PluginManager::new(None)?;
     match cmd {
         PluginCommands::Add { source } => {
-            if source == "node" {
-                install_builtin_node_plugin(&plugin_manager)?;
-                println!("✓ Installed built-in plugin node");
-                return Ok(());
+            // A bare name (no "/", no scheme) is looked up in the
+            // marketplace first — that's the common case ("avm plugin add
+            // node"). Anything else (an org/repo, a full URL) goes straight
+            // to the existing git-clone install path, which still works for
+            // asdf-style plugins or a third party building from source.
+            if !source.contains('/') {
+                if let Some(entry) = avm_runtime::marketplace_lookup(&source)? {
+                    println!("Fetching '{source}' from {}...", entry.repo);
+                    let version =
+                        avm_runtime::install_from_marketplace(&source, &entry.repo, &plugin_manager.plugin_dir())?;
+                    println!("✓ Installed {source} {version}");
+                    return Ok(());
+                }
             }
             println!("Installing plugin from {source}...");
             plugin_manager.install_plugin(&source)?;
@@ -13,40 +22,19 @@ fn cmd_plugin(cmd: PluginCommands) -> Result<()> {
             Ok(())
         }
         PluginCommands::List { all } => {
-            let installed = installed_plugins(&plugin_manager)?;
-            if installed.is_empty() {
-                println!("No plugins installed.");
-            } else {
-                println!("Installed plugins:");
-                let mut names: Vec<_> = installed.keys().collect();
-                names.sort();
-                for name in names {
-                    let manifest = &installed[name];
-                    println!(
-                        "  {} ({}) - {}",
-                        manifest.name,
-                        manifest.version,
-                        manifest.description.clone().unwrap_or_default()
-                    );
-                }
-            }
+            print_installed_plugins(&plugin_manager)?;
 
             if all {
                 println!();
-                print_available_plugins();
+                print_available_plugins()?;
             }
             Ok(())
         }
         PluginCommands::Available => {
-            print_available_plugins();
+            print_available_plugins()?;
             Ok(())
         }
         PluginCommands::Remove { name } => {
-            if name == "node" {
-                remove_builtin_node_plugin(&plugin_manager)?;
-                println!("Plugin 'node' removed.");
-                return Ok(());
-            }
             plugin_manager.remove_plugin(&name)?;
             println!("Plugin '{name}' removed.");
             Ok(())
@@ -70,65 +58,49 @@ fn cmd_plugin(cmd: PluginCommands) -> Result<()> {
         }
     }
 }
-fn installed_plugins(plugin_manager: &PluginManager) -> Result<HashMap<String, avm_plugin_api::Manifest>> {
-    let mut installed = plugin_manager.list_plugins()?;
-    if is_builtin_node_plugin_installed(plugin_manager) {
-        installed.insert("node".to_string(), builtin_node_manifest());
+/// Everything installed on disk — marketplace plugins (`avm-plugin-<name>`
+/// dirs), legacy asdf plugins, and legacy avm alias-only plugins alike.
+/// Nothing is compiled into `avm-bin`; this is a plain directory listing.
+fn print_installed_plugins(plugin_manager: &PluginManager) -> Result<()> {
+    let on_disk = plugin_manager.list_plugins()?;
+    let mut names: Vec<_> = on_disk.keys().collect();
+    names.sort();
+
+    if names.is_empty() {
+        println!("No plugins installed. Run `avm plugin available` to see the marketplace.");
+        return Ok(());
     }
-    Ok(installed)
-}
 
-fn install_builtin_node_plugin(plugin_manager: &PluginManager) -> Result<()> {
-    let dir = plugin_manager.plugin_dir().join(BUILTIN_PLUGIN_DIR);
-    fs::create_dir_all(&dir).with_context(|| {
-        format!(
-            "failed to create built-in plugin marker directory: {}",
-            dir.display()
-        )
-    })?;
-    fs::write(dir.join(BUILTIN_NODE_PLUGIN_MARKER), "builtin\n")
-        .context("failed to write built-in node plugin marker")?;
-    Ok(())
-}
-
-fn remove_builtin_node_plugin(plugin_manager: &PluginManager) -> Result<()> {
-    let marker = plugin_manager
-        .plugin_dir()
-        .join(BUILTIN_PLUGIN_DIR)
-        .join(BUILTIN_NODE_PLUGIN_MARKER);
-    if marker.exists() {
-        fs::remove_file(marker).context("failed to remove built-in node plugin marker")?;
+    println!("Installed plugins:");
+    for name in names {
+        let manifest = &on_disk[name];
+        println!(
+            "  {} ({}) - {}",
+            manifest.name,
+            manifest.version,
+            manifest.description.clone().unwrap_or_default()
+        );
     }
     Ok(())
 }
 
-fn is_builtin_node_plugin_installed(plugin_manager: &PluginManager) -> bool {
-    plugin_manager
-        .plugin_dir()
-        .join(BUILTIN_PLUGIN_DIR)
-        .join(BUILTIN_NODE_PLUGIN_MARKER)
-        .exists()
-}
-
-fn builtin_node_manifest() -> avm_plugin_api::Manifest {
-    avm_plugin_api::Manifest {
-        name: "node".to_string(),
-        version: env!("CARGO_PKG_VERSION").to_string(),
-        api_version: Some(1),
-        description: Some("Built-in Node.js provider for package.json scripts and node tool resolution".to_string()),
-        section_label: Some("Node Scripts".to_string()),
-        homepage: Some("https://github.com/prajanova/avm".to_string()),
+fn print_available_plugins() -> Result<()> {
+    println!("Marketplace (github.com/PrajaNova/avm-marketplace):");
+    match avm_runtime::marketplace_registry() {
+        Ok(mut entries) => {
+            entries.sort_by(|a, b| a.name.cmp(&b.name));
+            for entry in entries {
+                println!("  {} - {}", entry.name, entry.description);
+            }
+        }
+        Err(err) => println!("  (couldn't reach the marketplace: {err})"),
     }
-}
-
-fn print_available_plugins() {
-    println!("Available plugins:");
-    println!("  node - built-in Node.js provider for package.json scripts and node tool resolution");
     println!();
     println!("Install with:");
-    println!("  avm plugin add node");
+    println!("  avm plugin add <name>");
     println!();
-    println!("Install external AVM or compatible asdf plugins with:");
+    println!("Install anything else (asdf-style plugin, or a plugin not yet in the marketplace) with a direct source:");
     println!("  avm plugin add <path-or-url>");
-    println!("  avm plugin add https://github.com/halcyon/asdf-java.git");
+    println!("  avm plugin add https://github.com/asdf-community/asdf-kotlin.git");
+    Ok(())
 }

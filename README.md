@@ -15,7 +15,13 @@ It solves three practical problems:
 - runtime environment injection via `PATH` and explicit `env` values
 - Node package-script discovery from `package.json` (npm/yarn/pnpm/bun)
 - shim-based command interception (for `node`, `npm`, and future tool shims)
-- a plugin system with pluggable providers
+- a runtime plugin marketplace — `avm plugin add <name>` fetches a
+  compiled binary for your platform, on demand, from that plugin's own
+  GitHub repo (never bundled into avm itself, never built from source)
+- global packages installed under one version stay reachable even when a
+  different local version is active elsewhere (see
+  [Architecture](docs/architecture/ARCHITECTURE.md#global-packages-across-local-version-switches))
+- `avm create <name>` scaffolds a new plugin project, ready to build and publish
 - fallback behavior: if a managed version is not installed, avm uses the host/system command and warns
 
 For positioning versus popular alternatives, see [Comparison with asdf and vfox](#comparison-with-asdf-and-vfox).
@@ -26,11 +32,11 @@ For positioning versus popular alternatives, see [Comparison with asdf and vfox]
 | --- | --- | --- | --- |
 | Runtime model | Native Rust binary | Ruby/plugin ecosystem with Bash integrations | Rust shell-hook engine with plugin runtime |
 | Tool interception | PATH shims in `~/.avm/shims` | Shim generation + dispatch by plugin hooks | Shell hook updates PATH dynamically |
-| Plugin ecosystem | Provider-first + optional adapter layer | Bash-style plugins | Lua-style plugins |
-| Node support strategy | Merged Node provider (`package.json` + version resolver) | External Node plugin scripts | Provider-based Node integrations |
+| Plugin ecosystem | Runtime marketplace — compiled binaries fetched from each plugin's own GitHub repo, JSON-over-stdio protocol | Bash-style plugins | Lua-style plugins |
+| Node support strategy | Native plugin (`avm-plugin-node`): live version index + `package.json` script resolver | External Node plugin scripts | Provider-based Node integrations |
 | Fallback if requested node version missing | Uses system node with warning | Typically triggers plugin install flow | Typically triggers plugin install flow |
 | Configuration default | `.avm.json` with local/global + legacy compatibility | `.tool-versions` | `.tool-versions` |
-| Security / isolation | Rust host + plugin runtime boundary (WASM/exec adapters) | Shell scripts (higher host access) | In-process plugin runtime (less isolated than strict sandbox) |
+| Security / isolation | Plugins run as separate OS processes (never linked into `avm-bin`), a typed JSON contract instead of shared bash scripts | Shell scripts (higher host access) | In-process plugin runtime (less isolated than strict sandbox) |
 
 ## Quick start
 
@@ -87,8 +93,16 @@ Precedence rules:
 - `avm run <alias> [args...]` executes resolved command
 - `avm env` prints shell-safe `export` lines
 - `avm resolve <alias> [args...]` prints the expanded shell command
-- `avm plugin add|list|remove|update` manages plugins
-- `avm plugin add <asdf-plugin-url>` installs compatible asdf-style tool plugins
+- `avm plugin add <name>` installs a plugin — resolves `<name>` against the
+  [marketplace](https://github.com/PrajaNova/avm-marketplace) and fetches
+  a compiled release for your platform; an `org/repo` or full URL installs
+  from source instead (asdf-style plugins, or one not yet in the marketplace)
+- `avm plugin list` shows installed plugins; `avm plugin available` shows
+  the marketplace
+- `avm plugin remove <name>` / `avm plugin update <name>` manage installed plugins
+- `avm create <name>` scaffolds a new plugin project (`ToolProvider` skeleton,
+  protocol wiring, CI/release workflows) — see
+  [Creating a plugin](docs/plugins/CREATING_A_PLUGIN.md)
 - `avm <plugin> versions` lists installable versions, for example `avm node versions`
 - `avm <plugin> <major> versions` filters installable versions, for example `avm node 20 versions`
 - `avm <plugin> latest versions` shows the latest installable version
@@ -107,26 +121,32 @@ Precedence rules:
 This repository is organized as a Rust workspace:
 
 - `crates/avm-cli`
-  - Clap-based binary entrypoint and command routing
+  - Clap-based binary entrypoint, command routing, `avm create` scaffolding
 - `crates/avm-core`
   - config parsing, alias/tool/env resolution, and shared types
 - `crates/avm-shims`
   - shim generation and shim execution hooks
 - `crates/avm-plugin-api`
-  - host/plugin contract interfaces and manifest/schema model
-- `crates/avm-plugin-node`
-  - merged Node provider
-  - Node version management and package-script alias discovery
+  - the `ToolProvider` trait, the plugin wire protocol, and the `runner`
+    module every plugin's `main.rs` uses — the one crate a plugin depends on
 - `crates/avm-runtime`
-  - plugin runtime and external plugin execution abstraction
+  - plugin discovery, the protocol host runner, the marketplace installer,
+    and the legacy asdf compatibility adapter
 
-Architecture docs:
+node/java/android are **not** workspace crates — they're separate repos
+([avm-plugin-node](https://github.com/PrajaNova/avm-plugin-node),
+[avm-plugin-java](https://github.com/PrajaNova/avm-plugin-java),
+[avm-plugin-android](https://github.com/PrajaNova/avm-plugin-android)),
+fetched at runtime via `avm plugin add`, same as any third-party plugin.
+The one exception: `avm-cli` still links `avm-plugin-node` as a library for
+in-process `package.json` script parsing (unrelated to version management).
 
-- [Architecture](docs/architecture/ARCHITECTURE.md)
-- [Runtime flow](docs/architecture/FLOW.md)
-- [Docker and test workflow](docs/ops/TESTING.md)
-- [Release and publishing](docs/ops/RELEASE.md)
-- [Rust rewrite migration](docs/migration/RUST_REWRITE.md)
+Docs:
+
+- [Architecture](docs/architecture/ARCHITECTURE.md) — crates, the
+  marketplace, the wire protocol
+- [Creating a plugin](docs/plugins/CREATING_A_PLUGIN.md) — `avm create`,
+  the `ToolProvider` reference, testing, publishing, getting listed
 
 Agent and LLM docs:
 
@@ -183,22 +203,30 @@ Scenario files:
 
 ## Plugin behavior
 
-The Node provider currently powers:
+`avm plugin add <name>` is the only install path — nothing ships with
+`avm-bin`, not even node, java, or android. Every provider is a
+standalone executable speaking a small JSON-over-stdio protocol, resolved
+in two tiers:
 
-- project `package.json` alias extraction
-- version selection for `node` through `avm node ...`
-- automatic Node install when a selected version is missing
-- manager fallback to an existing system installation when managed version is missing
+1. **Marketplace-installed** (`~/.avm/plugins/avm-plugin-<name>/bin/avm-plugin`) —
+   `avm plugin add node` looks up `node` in the
+   [marketplace registry](https://github.com/PrajaNova/avm-marketplace),
+   fetches [avm-plugin-node](https://github.com/PrajaNova/avm-plugin-node)'s
+   latest GitHub Release for your platform (a compiled binary, never
+   source), and installs it there.
+2. **Legacy asdf adapter** — community asdf-style plugins
+   (`bin/list-all`, `bin/install`) that haven't adopted the native
+   protocol still work: `avm plugin add https://github.com/halcyon/asdf-java.git`
+   exposes the provider as `java` and `avm java ...` drives the plugin
+   scripts. This tier is permanent, not a migration shim.
 
-Java support is provided through the generic asdf compatibility adapter, not a built-in Java crate. External asdf-style tool plugins are supported when they provide `bin/list-all` and `bin/install`. For example, installing `https://github.com/halcyon/asdf-java.git` exposes the provider as `java` and lets `avm java ...` use the plugin scripts.
+Both tiers power the same command surface — version selection, automatic
+install when a selected version is missing, env var export, and shim
+routing through `~/.avm/tools/<tool>/<version>/bin`.
 
-The generic asdf adapter powers:
-
-- version selection through `avm <tool> ...`
-- automatic install when a selected version is missing
-- shim routing through managed installs under `~/.avm/tools/<tool>/<version>/bin`
-
-The architecture is plugin-first, so additional providers can be added without changing the CLI flow.
+Want to add support for another tool? `avm create <name>` scaffolds a new
+plugin in the same shape as node/java/android — see
+[Creating a plugin](docs/plugins/CREATING_A_PLUGIN.md).
 
 ## Notes for contributors
 

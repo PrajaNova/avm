@@ -4,10 +4,15 @@ members = [
     "crates/avm-core",
     "crates/avm-cli",
     "crates/avm-plugin-api",
-    "crates/avm-plugin-node",
     "crates/avm-runtime",
     "crates/avm-shims",
 ]
+
+# node/java/android providers now live in their own repos:
+# github.com/PrajaNova/avm-plugin-{node,java,android}. They're discovered
+# at runtime as executables (avm_runtime::builtin_plugin_process), not
+# linked in here. Fetch their binaries for local dev with
+# scripts/fetch-providers.sh.
 
 [workspace.dependencies]
 anyhow = "1.0"

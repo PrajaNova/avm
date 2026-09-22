@@ -26,7 +26,10 @@ fn cmd_env(args: EnvArgs) -> Result<()> {
     }
 
     let cfg = load_state()?;
-    let mut env = merge_env(&cfg);
+    let mut env = resolved_tool_env(&cfg)?;
+    for (key, value) in merge_env(&cfg) {
+        env.insert(key, value);
+    }
     if let Some(path_prefix) = resolved_tool_path_prefix(&cfg)? {
         env.insert("PATH".to_string(), path_prefix);
     }
@@ -73,6 +76,9 @@ fn cmd_run(args: RunArgs) -> Result<()> {
         }
     };
     let mut env = std::env::vars().collect::<HashMap<String, String>>();
+    for (key, value) in resolved_tool_env(&cfg)? {
+        env.insert(key, value);
+    }
     if let Some(path_prefix) = resolved_tool_path_prefix(&cfg)? {
         env.insert("PATH".to_string(), path_prefix);
     }

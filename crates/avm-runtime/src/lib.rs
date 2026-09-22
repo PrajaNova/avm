@@ -1118,6 +1118,29 @@ fn run_with_timeout(mut cmd: Command, timeout_ms: u64) -> Result<String> {
         .spawn()
         .context("failed to start plugin command")?;
 
+    // Pipes have a small OS buffer (~64KB). Waiting for the child to exit
+    // before reading them deadlocks the moment output exceeds that: the
+    // child blocks mid-write with nobody draining the pipe, so it never
+    // exits, so wait_timeout never returns Some — it just times out. Drain
+    // both pipes on their own threads *while* waiting, so arbitrarily
+    // large output never blocks the child.
+    let stdout_pipe = child.stdout.take();
+    let stderr_pipe = child.stderr.take();
+    let stdout_reader = std::thread::spawn(move || {
+        let mut buf = String::new();
+        if let Some(mut pipe) = stdout_pipe {
+            let _ = pipe.read_to_string(&mut buf);
+        }
+        buf
+    });
+    let stderr_reader = std::thread::spawn(move || {
+        let mut buf = String::new();
+        if let Some(mut pipe) = stderr_pipe {
+            let _ = pipe.read_to_string(&mut buf);
+        }
+        buf
+    });
+
     let timeout = Duration::from_millis(timeout_ms);
     let status = child
         .wait_timeout(timeout)
@@ -1127,18 +1150,14 @@ fn run_with_timeout(mut cmd: Command, timeout_ms: u64) -> Result<String> {
         None => {
             let _ = child.kill();
             let _ = child.wait();
+            let _ = stdout_reader.join();
+            let _ = stderr_reader.join();
             return Err(anyhow!("plugin command timed out"));
         }
     };
 
-    let mut out = String::new();
-    let mut err = String::new();
-    if let Some(mut stdout) = child.stdout.take() {
-        let _ = stdout.read_to_string(&mut out);
-    }
-    if let Some(mut stderr) = child.stderr.take() {
-        let _ = stderr.read_to_string(&mut err);
-    }
+    let out = stdout_reader.join().unwrap_or_default();
+    let err = stderr_reader.join().unwrap_or_default();
 
     if !status.success() {
         if !err.trim().is_empty() {

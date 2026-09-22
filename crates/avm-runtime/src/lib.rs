@@ -135,6 +135,20 @@ impl PluginManager {
             let name = entry.file_name().to_string_lossy().to_string();
             if let Ok(manifest) = read_manifest_path(&entry.path()) {
                 plugins.insert(name, manifest);
+            } else if is_protocol_plugin_source(&entry.path()) {
+                let tool_name = protocol_tool_name(&name);
+                let bin = entry.path().join("bin").join(binary_name("avm-plugin"));
+                let manifest = PluginProcess::new(tool_name.clone(), bin)
+                    .manifest()
+                    .unwrap_or_else(|_| Manifest {
+                        name: tool_name,
+                        version: "unknown".to_string(),
+                        api_version: None,
+                        description: Some("installed via marketplace".to_string()),
+                        section_label: None,
+                        homepage: None,
+                    });
+                plugins.insert(name, manifest);
             } else if is_asdf_plugin_source(&entry.path()) {
                 plugins.insert(name, asdf_manifest(&entry.path()));
             }
@@ -221,8 +235,21 @@ impl PluginManager {
         ))
     }
 
+    /// Accepts either the literal plugin directory name or a tool name that
+    /// resolves to one via the `avm-plugin-<name>` / `asdf-<name>`
+    /// conventions (`avm plugin remove node`, not just `avm plugin remove
+    /// avm-plugin-node`), matching how `provider_by_name` finds it.
     pub fn remove_plugin(&self, name: &str) -> Result<()> {
-        let target = self.plugin_dir.join(name);
+        let literal = self.plugin_dir.join(name);
+        let target = if literal.exists() {
+            literal
+        } else if let Some(dir) = self.find_protocol_plugin(name)? {
+            dir
+        } else if let Some((dir_name, _)) = self.find_asdf_plugin(name)? {
+            self.plugin_dir.join(dir_name)
+        } else {
+            literal
+        };
         if target.exists() {
             fs::remove_dir_all(target).context("remove plugin")?;
         }
@@ -586,6 +613,12 @@ impl PluginProcess {
         }
     }
 
+    /// Ask the plugin for its own manifest (name/version/description) — real
+    /// data from the installed executable, not guessed from disk layout.
+    pub fn manifest(&self) -> Result<Manifest> {
+        self.call_json(&["manifest"])
+    }
+
     fn call_json<T: serde::de::DeserializeOwned>(&self, args: &[&str]) -> Result<T> {
         let mut cmd = Command::new(&self.executable);
         cmd.args(args);
@@ -682,31 +715,179 @@ impl ToolProvider for PluginProcess {
     }
 }
 
-/// Directory the running `avm-bin` ships its bundled builtin plugin
-/// executables in: the same directory as `avm-bin` itself. This is
-/// deliberately flat (no `providers/` subdir) so it needs no packaging step
-/// beyond "put the binaries next to each other" — true for a plain `cargo
-/// build` (everything lands in one `target/{debug,release}` dir already)
-/// and for the npm/GitHub-release archive alike. Out-of-the-box
-/// node/java/android work with zero `avm plugin add`.
-pub fn builtins_dir() -> Result<PathBuf> {
-    let exe = std::env::current_exe().context("failed to resolve current executable path")?;
-    exe.parent()
-        .map(Path::to_path_buf)
-        .ok_or_else(|| anyhow!("executable path has no parent directory"))
+const DEFAULT_MARKETPLACE_REGISTRY_URL: &str =
+    "https://raw.githubusercontent.com/PrajaNova/avm-marketplace/main/registry.json";
+const MARKETPLACE_TIMEOUT_MS: u64 = 20_000;
+const MARKETPLACE_INSTALL_TIMEOUT_MS: u64 = 300_000;
+
+#[derive(Debug, Clone, serde::Deserialize)]
+pub struct MarketplaceEntry {
+    pub name: String,
+    pub description: String,
+    #[serde(default)]
+    pub section_label: Option<String>,
+    /// `<owner>/<repo>` — its GitHub Releases are the actual install source.
+    /// Never fetched or built from source; only compiled release assets.
+    pub repo: String,
 }
 
-fn plugin_executable_name(tool_name: &str) -> String {
-    binary_name(&format!("avm-plugin-{tool_name}"))
+#[derive(Debug, serde::Deserialize)]
+struct RegistryFile {
+    plugins: Vec<MarketplaceEntry>,
 }
 
-/// Tier 1: a plugin executable bundled next to `avm-bin` itself.
-pub fn builtin_plugin_process(tool_name: &str) -> Result<Option<PluginProcess>> {
-    let candidate = builtins_dir()?.join(plugin_executable_name(tool_name));
-    if candidate.exists() {
-        return Ok(Some(PluginProcess::new(tool_name, candidate)));
+fn marketplace_registry_url() -> String {
+    std::env::var("AVM_MARKETPLACE_URL").unwrap_or_else(|_| DEFAULT_MARKETPLACE_REGISTRY_URL.to_string())
+}
+
+/// Fetch and parse `registry.json` from the avm marketplace
+/// (github.com/PrajaNova/avm-marketplace) — the list of known plugin names,
+/// their descriptions, and the GitHub repo each resolves to. Override with
+/// `AVM_MARKETPLACE_URL` (a `raw.githubusercontent.com`-style URL, or a
+/// local file path for tests).
+pub fn marketplace_registry() -> Result<Vec<MarketplaceEntry>> {
+    let url = marketplace_registry_url();
+
+    let local = Path::new(&url);
+    let raw = if local.exists() {
+        fs::read_to_string(local)
+            .with_context(|| format!("failed to read marketplace registry from {}", local.display()))?
+    } else {
+        let mut cmd = Command::new("curl");
+        cmd.arg("-fsSL")
+            .arg("--connect-timeout")
+            .arg("10")
+            .arg("--max-time")
+            .arg((MARKETPLACE_TIMEOUT_MS / 1000).to_string())
+            .arg(&url);
+        run_with_timeout(cmd, MARKETPLACE_TIMEOUT_MS)
+            .with_context(|| format!("failed to fetch marketplace registry from {url}"))?
+    };
+
+    let parsed: RegistryFile =
+        serde_json::from_str(&raw).context("failed to parse marketplace registry.json")?;
+    Ok(parsed.plugins)
+}
+
+pub fn marketplace_lookup(name: &str) -> Result<Option<MarketplaceEntry>> {
+    Ok(marketplace_registry()?.into_iter().find(|e| e.name == name))
+}
+
+fn marketplace_platform() -> Result<(&'static str, &'static str)> {
+    let os = match std::env::consts::OS {
+        "macos" => "darwin",
+        "linux" => "linux",
+        other => return Err(anyhow!("unsupported platform for marketplace install: {other}")),
+    };
+    let arch = match std::env::consts::ARCH {
+        "aarch64" => "arm64",
+        "x86_64" => "amd64",
+        other => return Err(anyhow!("unsupported architecture for marketplace install: {other}")),
+    };
+    Ok((os, arch))
+}
+
+#[derive(Debug, serde::Deserialize)]
+struct GithubRelease {
+    tag_name: String,
+    assets: Vec<GithubAsset>,
+}
+
+#[derive(Debug, serde::Deserialize)]
+struct GithubAsset {
+    name: String,
+    browser_download_url: String,
+}
+
+/// Install a marketplace plugin by fetching its **compiled** latest GitHub
+/// Release for the current platform — never source, never built locally.
+/// `avm-plugin-<name>_<os>_<arch>.tar.gz` on `repo`'s latest release,
+/// containing exactly one file named `avm-plugin-<name>`, is the expected
+/// contract (documented in the avm-marketplace repo's README).
+pub fn install_from_marketplace(name: &str, repo: &str, plugin_dir: &Path) -> Result<String> {
+    let (os, arch) = marketplace_platform()?;
+    let release_api = format!("https://api.github.com/repos/{repo}/releases/latest");
+
+    let mut cmd = Command::new("curl");
+    cmd.arg("-fsSL")
+        .arg("-H")
+        .arg("Accept: application/vnd.github+json")
+        .arg("--connect-timeout")
+        .arg("10")
+        .arg("--max-time")
+        .arg((MARKETPLACE_TIMEOUT_MS / 1000).to_string())
+        .arg(&release_api);
+    let body = run_with_timeout(cmd, MARKETPLACE_TIMEOUT_MS)
+        .with_context(|| format!("failed to query latest release for {repo}"))?;
+    let release: GithubRelease =
+        serde_json::from_str(&body).with_context(|| format!("malformed release info for {repo}"))?;
+
+    let asset_name = format!("avm-plugin-{name}_{os}_{arch}.tar.gz");
+    let asset = release
+        .assets
+        .iter()
+        .find(|a| a.name == asset_name)
+        .ok_or_else(|| {
+            anyhow!(
+                "release {} of {repo} has no asset named '{asset_name}' (no build for {os}/{arch})",
+                release.tag_name
+            )
+        })?;
+
+    let target_dir = plugin_dir.join(format!("avm-plugin-{name}"));
+    let bin_dir = target_dir.join("bin");
+    fs::create_dir_all(&bin_dir).context("failed to create plugin bin dir")?;
+
+    let tmp = std::env::temp_dir().join(format!("avm-plugin-{name}-{}.tar.gz", std::process::id()));
+    let mut download = Command::new("curl");
+    download
+        .arg("-fL")
+        .arg("--connect-timeout")
+        .arg("10")
+        .arg("--max-time")
+        .arg((MARKETPLACE_INSTALL_TIMEOUT_MS / 1000).to_string())
+        .arg(&asset.browser_download_url)
+        .arg("-o")
+        .arg(&tmp);
+    let child = download.spawn().context("failed to start download")?;
+    let status = status_with_timeout(
+        child,
+        MARKETPLACE_INSTALL_TIMEOUT_MS,
+        &format!("downloading {asset_name}"),
+        "AVM_MARKETPLACE_INSTALL_TIMEOUT",
+    )?;
+    if !status.success() {
+        return Err(anyhow!("failed to download {}: {status}", asset.browser_download_url));
     }
-    Ok(None)
+
+    let extract_dir = std::env::temp_dir().join(format!("avm-plugin-{name}-extract-{}", std::process::id()));
+    fs::create_dir_all(&extract_dir).context("failed to create extraction temp dir")?;
+    let mut tar = Command::new("tar");
+    tar.arg("-xzf").arg(&tmp).arg("-C").arg(&extract_dir);
+    let status = tar.status().context("failed to run tar")?;
+    let _ = fs::remove_file(&tmp);
+    if !status.success() {
+        return Err(anyhow!("failed to extract {asset_name}"));
+    }
+
+    let extracted_bin = extract_dir.join(binary_name(&format!("avm-plugin-{name}")));
+    if !extracted_bin.exists() {
+        return Err(anyhow!(
+            "{asset_name} did not contain the expected file avm-plugin-{name}"
+        ));
+    }
+    let dest = bin_dir.join(binary_name("avm-plugin"));
+    fs::rename(&extracted_bin, &dest).context("failed to move plugin binary into place")?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mut perms = fs::metadata(&dest)?.permissions();
+        perms.set_mode(0o755);
+        fs::set_permissions(&dest, perms)?;
+    }
+    let _ = fs::remove_dir_all(&extract_dir);
+
+    Ok(release.tag_name)
 }
 
 fn default_plugin_dir() -> PathBuf {

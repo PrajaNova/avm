@@ -19,9 +19,6 @@ jobs:
       - name: Build workspace
         run: cargo build --workspace
 
-      - name: Build providers (node/java/android — now separate repos)
-        run: bash scripts/fetch-providers.sh debug
-
       - name: Run Rust tests
         run: cargo test --workspace
 

@@ -84,16 +84,6 @@ async function main() {
     }
 
     fs.chmodSync(finalBinary, 0o755);
-
-    // Providers (node/java/android) ship in the same archive, next to
-    // avm-bin — avm-bin discovers them by looking in its own directory.
-    for (const provider of ['avm-plugin-node', 'avm-plugin-java', 'avm-plugin-android']) {
-      const providerPath = path.join(binDir, provider);
-      if (fs.existsSync(providerPath)) {
-        fs.chmodSync(providerPath, 0o755);
-      }
-    }
-
     fs.unlinkSync(tarPath);
 
     // Create ~/.avm.json if missing

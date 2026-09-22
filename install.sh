@@ -69,37 +69,23 @@ if [ ! -f "$extracted_binary" ]; then
     exit 1
 fi
 
-# Providers (node/java/android) ship in the same archive, next to avm-bin —
-# avm-bin discovers them by looking in its own directory, so they must land
-# in the same install dir, not be left behind in the discarded temp dir.
-providers=()
-for provider in avm-plugin-node avm-plugin-java avm-plugin-android; do
-    [ -f "$provider" ] && providers+=("$provider")
-done
-
 if [ -w "/usr/local/bin" ]; then
-    chmod +x "$extracted_binary" "${providers[@]}" 2>/dev/null || true
+    chmod +x "$extracted_binary"
     mv "$extracted_binary" /usr/local/bin/avm-bin
-    for provider in "${providers[@]}"; do mv "$provider" "/usr/local/bin/$provider"; done
     INSTALL_PATH="/usr/local/bin/avm-bin"
 elif sudo -n true 2>/dev/null; then
-    chmod +x "$extracted_binary" "${providers[@]}" 2>/dev/null || true
+    chmod +x "$extracted_binary"
     sudo mv "$extracted_binary" /usr/local/bin/avm-bin
-    for provider in "${providers[@]}"; do sudo mv "$provider" "/usr/local/bin/$provider"; done
     INSTALL_PATH="/usr/local/bin/avm-bin"
 else
     mkdir -p "$HOME/.local/bin"
-    chmod +x "$extracted_binary" "${providers[@]}" 2>/dev/null || true
+    chmod +x "$extracted_binary"
     mv "$extracted_binary" "$HOME/.local/bin/avm-bin"
-    for provider in "${providers[@]}"; do mv "$provider" "$HOME/.local/bin/$provider"; done
     INSTALL_PATH="$HOME/.local/bin/avm-bin"
     NEED_PATH_UPDATE=1
 fi
 
 echo "✓ Installed avm-bin to $INSTALL_PATH"
-if [ "${#providers[@]}" -gt 0 ]; then
-    echo "✓ Installed providers: ${providers[*]}"
-fi
 
 # Detect shell and add setup to config
 CURRENT_SHELL=$(basename "${SHELL:-bash}")

@@ -50,18 +50,12 @@ jobs:
       - name: Build release binary
         run: cargo build --release --package avm-cli --bin avm-bin
 
-      - name: Build providers (node/java/android — now separate repos)
-        run: bash scripts/fetch-providers.sh release
-
       - name: Create release archive
         shell: bash
         run: |
           mkdir -p dist
           cp target/release/avm-bin dist/avm-bin
-          cp target/release/avm-plugin-node dist/avm-plugin-node
-          cp target/release/avm-plugin-java dist/avm-plugin-java
-          cp target/release/avm-plugin-android dist/avm-plugin-android
-          tar -C dist -czf "${{ matrix.archive }}" avm-bin avm-plugin-node avm-plugin-java avm-plugin-android
+          tar -C dist -czf "${{ matrix.archive }}" avm-bin
 
       - name: Upload archive
         uses: actions/upload-artifact@v4
@@ -162,9 +156,6 @@ jobs:
 
             def install
               bin.install "avm-bin"
-              bin.install "avm-plugin-node"
-              bin.install "avm-plugin-java"
-              bin.install "avm-plugin-android"
             end
 
             test do

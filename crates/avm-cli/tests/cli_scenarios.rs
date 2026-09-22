@@ -1,6 +1,7 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
+use std::sync::OnceLock;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 fn avm_bin() -> PathBuf {
@@ -94,6 +95,42 @@ fn create_node_archive(dist: &Path, version: &str) {
         .status()
         .expect("create fake node archive");
     assert!(status.success(), "tar fake node archive");
+}
+
+/// Providers are no longer compiled into avm-bin (see the marketplace model
+/// in crates/avm-runtime — `avm plugin add <name>` fetches a compiled
+/// release from the plugin's own repo). Tests that need a working `node`
+/// provider fetch it once via the real marketplace (github.com/PrajaNova
+/// /avm-marketplace -> avm-plugin-node's GitHub Releases) into a shared
+/// scratch home, cached for the lifetime of this test binary, then symlink
+/// that single download into each test's own isolated home. Only the one
+/// download hits the network; per-test `avm node install <version>` calls
+/// still resolve against the local AVM_NODE_DIST_URL override below, not
+/// real npm/node.org traffic.
+fn cached_node_provider() -> &'static Path {
+    static BIN: OnceLock<PathBuf> = OnceLock::new();
+    BIN.get_or_init(|| {
+        let cache_home = temp_root("node-provider-cache");
+        let output = run_avm(&cache_home, &cache_home, &["plugin", "add", "node"]);
+        assert_success(&output);
+        let bin = cache_home
+            .join(".avm")
+            .join("plugins")
+            .join("avm-plugin-node")
+            .join("bin")
+            .join("avm-plugin");
+        assert!(bin.exists(), "expected marketplace install to produce {}", bin.display());
+        bin
+    })
+}
+
+fn install_test_node_provider(home: &Path) {
+    let bin_dir = home.join(".avm").join("plugins").join("avm-plugin-node").join("bin");
+    fs::create_dir_all(&bin_dir).expect("create test node provider bin dir");
+    let dest = bin_dir.join("avm-plugin");
+    let _ = fs::remove_file(&dest);
+    #[cfg(unix)]
+    std::os::unix::fs::symlink(cached_node_provider(), &dest).expect("symlink cached node provider");
 }
 
 // Uses a tool name ("kotlin") that has no native avm-plugin-* crate, so this
@@ -311,6 +348,7 @@ fn plugin_first_node_command_sets_and_lists_versions() {
     let work = root.join("work");
     let dist = root.join("dist");
     fs::create_dir_all(&home).expect("create home");
+    install_test_node_provider(&home);
     fs::create_dir_all(&work).expect("create work");
     fs::create_dir_all(&dist).expect("create dist");
     write_file(
@@ -359,6 +397,7 @@ fn dotenv_file_supplies_node_dist_url() {
     let work = root.join("work");
     let dist = root.join("dist");
     fs::create_dir_all(&home).expect("create home");
+    install_test_node_provider(&home);
     fs::create_dir_all(&work).expect("create work");
     fs::create_dir_all(&dist).expect("create dist");
     write_file(
@@ -551,6 +590,7 @@ fn install_auto_pins_local_and_global_when_no_global() {
     let work = root.join("work");
     let dist = root.join("dist");
     fs::create_dir_all(&home).expect("create home");
+    install_test_node_provider(&home);
     fs::create_dir_all(&work).expect("create work");
     fs::create_dir_all(&dist).expect("create dist");
     write_file(
@@ -585,6 +625,7 @@ fn install_keeps_existing_global_pin() {
     let work = root.join("work");
     let dist = root.join("dist");
     fs::create_dir_all(&home).expect("create home");
+    install_test_node_provider(&home);
     fs::create_dir_all(&work).expect("create work");
     fs::create_dir_all(&dist).expect("create dist");
     // Pre-existing global pin for node.
@@ -793,6 +834,7 @@ fn install_global_flag_pins_only_globally() {
     let work = root.join("work");
     let dist = root.join("dist");
     fs::create_dir_all(&home).expect("create home");
+    install_test_node_provider(&home);
     fs::create_dir_all(&work).expect("create work");
     fs::create_dir_all(&dist).expect("create dist");
     write_file(
@@ -825,6 +867,7 @@ fn install_no_pin_flag_skips_pinning() {
     let work = root.join("work");
     let dist = root.join("dist");
     fs::create_dir_all(&home).expect("create home");
+    install_test_node_provider(&home);
     fs::create_dir_all(&work).expect("create work");
     fs::create_dir_all(&dist).expect("create dist");
     write_file(
@@ -857,6 +900,7 @@ fn install_latest_resolves_and_pins() {
     let work = root.join("work");
     let dist = root.join("dist");
     fs::create_dir_all(&home).expect("create home");
+    install_test_node_provider(&home);
     fs::create_dir_all(&work).expect("create work");
     fs::create_dir_all(&dist).expect("create dist");
     // Index has multiple versions; "latest" should pick the newest stable.
@@ -896,6 +940,7 @@ fn install_existing_version_still_updates_pin() {
     let work = root.join("work");
     let dist = root.join("dist");
     fs::create_dir_all(&home).expect("create home");
+    install_test_node_provider(&home);
     fs::create_dir_all(&work).expect("create work");
     fs::create_dir_all(&dist).expect("create dist");
     write_file(

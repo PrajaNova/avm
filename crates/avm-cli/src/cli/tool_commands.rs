@@ -27,20 +27,17 @@ fn cmd_tool(cmd: Option<ToolCommands>) -> Result<()> {
     }
 }
 
-/// Every provider — builtin or third-party — speaks the same plugin
-/// protocol (see `docs/migration/PLUGIN_PROTOCOL.md`) and is discovered the
-/// same way, in tiers:
-///   1. bundled next to `avm-bin` itself (node/java/android ship here, so
-///      they work with zero `avm plugin add`)
-///   2. a user-installed third-party plugin under `~/.avm/plugins/<dir>`
-///   3. the legacy asdf-compatible adapter, kept for community asdf plugins
+/// Every provider — first-party or third-party — speaks the same plugin
+/// protocol and is discovered the same way, no exceptions and nothing
+/// compiled into `avm-bin`:
+///   1. installed via the marketplace (`avm plugin add <name>` fetched a
+///      compiled release into `~/.avm/plugins/avm-plugin-<name>`)
+///   2. the legacy asdf-compatible adapter, kept for community asdf plugins
 ///      that haven't adopted the native protocol (AGENTS.md: "legacy
 ///      executable plugins remain supported until v1.1 parity is proven")
+/// Nothing is available out of the box — `avm plugin add node` (etc.) is
+/// required, same as `brew install` or a Claude Code marketplace install.
 fn provider_by_name(name: &str) -> Result<Box<dyn ToolProvider>> {
-    if let Some(provider) = avm_runtime::builtin_plugin_process(name)? {
-        return Ok(Box::new(provider));
-    }
-
     let plugin_manager = PluginManager::new(None)?;
     if let Some(provider) = plugin_manager.protocol_provider(name)? {
         return Ok(Box::new(provider));
@@ -49,6 +46,12 @@ fn provider_by_name(name: &str) -> Result<Box<dyn ToolProvider>> {
         return Ok(Box::new(provider));
     }
 
+    if let Ok(Some(entry)) = avm_runtime::marketplace_lookup(name) {
+        return Err(anyhow!(
+            "'{name}' is available in the marketplace but not installed — run `avm plugin add {name}` ({})",
+            entry.description
+        ));
+    }
     Err(anyhow!("unknown plugin '{name}'"))
 }
 

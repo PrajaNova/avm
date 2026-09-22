@@ -139,6 +139,30 @@ fn cmd_list() -> Result<()> {
         }
     }
 
+    if let Ok(plugin_manager) = PluginManager::new(None) {
+        if let Ok(plugins) = plugin_manager.list_plugins() {
+            let mut names: Vec<_> = plugins.keys().cloned().collect();
+            names.sort();
+            let mut lines = Vec::new();
+            for name in &names {
+                if let Ok(provider) = provider_by_name(name) {
+                    if let Ok(versions) = provider.installed_versions() {
+                        if !versions.is_empty() {
+                            lines.push((name.clone(), versions));
+                        }
+                    }
+                }
+            }
+            if !lines.is_empty() {
+                printed = true;
+                println!("Installed versions:");
+                for (name, versions) in lines {
+                    println!("  {name}: {}", versions.join(", "));
+                }
+            }
+        }
+    }
+
     if !cfg.plugin_aliases.is_empty() {
         printed = true;
         println!("Plugin aliases:");

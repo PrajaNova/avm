@@ -141,8 +141,12 @@ fn cmd_list() -> Result<()> {
 
     if let Ok(plugin_manager) = PluginManager::new(None) {
         if let Ok(plugins) = plugin_manager.list_plugins() {
-            let mut names: Vec<_> = plugins.keys().cloned().collect();
+            // list_plugins() keys are plugin *directory* names
+            // (e.g. "avm-plugin-android"); the short tool name
+            // provider_by_name expects lives on the manifest value.
+            let mut names: Vec<_> = plugins.values().map(|m| m.name.clone()).collect();
             names.sort();
+            names.dedup();
             let mut lines = Vec::new();
             for name in &names {
                 if let Ok(provider) = provider_by_name(name) {

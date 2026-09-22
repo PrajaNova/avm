@@ -11,7 +11,12 @@ fn select_tool_version(
         .collect::<Vec<_>>();
 
     let title = format!("Available {provider_name} versions");
-    match ui::select(&title, "Use Up/Down to move, Enter to select, q to cancel.", &items, 10)? {
+    match ui::select(
+        &title,
+        "Type to search, Up/Down to move, Enter to select, Ctrl+C to cancel.",
+        &items,
+        10,
+    )? {
         Some(selected) => {
             confirm_tool_version_selection(provider_name, provider, &versions[selected].version)
         }

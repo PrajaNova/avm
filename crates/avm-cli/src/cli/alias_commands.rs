@@ -30,10 +30,14 @@ fn cmd_env(args: EnvArgs) -> Result<()> {
     for (key, value) in merge_env(&cfg) {
         env.insert(key, value);
     }
-    if let Some(path_prefix) = resolved_tool_path_prefix(&cfg)? {
-        env.insert("PATH".to_string(), path_prefix);
-    }
-
+    // No PATH here: this output is `eval`'d straight into the interactive
+    // shell on every `avm` invocation (see shell-init's `_avm_apply_env`).
+    // Exporting a resolved-tool PATH prefix here would re-clobber the
+    // shims-first ordering shell-init just set up, on every single call —
+    // shims already resolve the right managed version per directory, so
+    // there's nothing this needs to add for shell use. The equivalent
+    // PATH prefix is still applied for real, scoped only to that one
+    // subprocess, in `exec-shim`.
     let mut keys: Vec<_> = env.keys().collect();
     keys.sort();
     for key in keys {
@@ -263,7 +267,7 @@ fn select_alias_suggestion(query: &str, suggestions: &[String]) -> Result<Option
 
     match ui::select(
         &format!("Alias '{query}' not found"),
-        "Use Up/Down to choose a suggestion, Enter to run, q to cancel.",
+        "Type to search, Up/Down to choose a suggestion, Enter to run, Ctrl+C to cancel.",
         &items,
         8,
     )? {

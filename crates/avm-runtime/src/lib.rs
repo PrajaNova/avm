@@ -256,31 +256,64 @@ impl PluginManager {
         Ok(())
     }
 
+    /// Accepts either the literal plugin directory name or a tool name
+    /// (same resolution as `remove_plugin`/`provider_by_name`), and updates
+    /// it the way it was installed:
+    ///   - a marketplace install (`avm-plugin-<name>/bin/avm-plugin`, no
+    ///     `.git`) re-fetches the latest release from the marketplace —
+    ///     this used to silently no-op here, which is exactly the gap that
+    ///     left a real install stuck on an old release with no error.
+    ///   - a git-cloned plugin (asdf-style or otherwise) does `git pull`.
+    ///   - anything else (a local, non-git source) has nothing to update.
     pub fn update_plugin(&self, name: &str) -> Result<()> {
-        let target = self.plugin_dir.join(name);
-        if !target.exists() {
+        let literal = self.plugin_dir.join(name);
+        let (target, dir_name) = if literal.exists() {
+            (literal, name.to_string())
+        } else if let Some(dir) = self.find_protocol_plugin(name)? {
+            let dir_name = dir
+                .file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or(name)
+                .to_string();
+            (dir, dir_name)
+        } else if let Some((dir_name, dir)) = self.find_asdf_plugin(name)? {
+            (dir, dir_name)
+        } else {
             return Err(anyhow!("plugin '{}' not found", name));
-        }
+        };
 
-        if !target.join(".git").exists() {
+        if target.join(".git").exists() {
+            let child = Command::new("git")
+                .arg("-C")
+                .arg(&target)
+                .arg("pull")
+                .arg("--ff-only")
+                .env_clear()
+                .env("PATH", default_plugin_path_env())
+                .spawn()
+                .context("failed to start git pull")?;
+            let timeout = timeout_from_env("AVM_GIT_PULL_TIMEOUT", GIT_PULL_TIMEOUT_MS);
+            let status = status_with_timeout(child, timeout, "git pull", "AVM_GIT_PULL_TIMEOUT")?;
+            if !status.success() {
+                return Err(anyhow!("plugin update failed with status {}", status));
+            }
             return Ok(());
         }
 
-        let child = Command::new("git")
-            .arg("-C")
-            .arg(&target)
-            .arg("pull")
-            .arg("--ff-only")
-            .env_clear()
-            .env("PATH", default_plugin_path_env())
-            .spawn()
-            .context("failed to start git pull")?;
-        let timeout = timeout_from_env("AVM_GIT_PULL_TIMEOUT", GIT_PULL_TIMEOUT_MS);
-        let status = status_with_timeout(child, timeout, "git pull", "AVM_GIT_PULL_TIMEOUT")?;
-        if !status.success() {
-            return Err(anyhow!("plugin update failed with status {}", status));
+        if is_protocol_plugin_source(&target) {
+            let tool_name = protocol_tool_name(&dir_name);
+            let entry = marketplace_lookup(&tool_name)?.ok_or_else(|| {
+                anyhow!(
+                    "'{tool_name}' isn't in the marketplace (was it installed from a direct \
+                     URL instead of `avm plugin add {tool_name}`?) — nothing to update against"
+                )
+            })?;
+            install_from_marketplace(&tool_name, &entry.repo, &self.plugin_dir)?;
+            return Ok(());
         }
 
+        // Local, non-git source (e.g. `avm plugin add ./my-plugin-dir`) —
+        // there's nowhere to pull an update from.
         Ok(())
     }
 
@@ -1118,6 +1151,29 @@ fn run_with_timeout(mut cmd: Command, timeout_ms: u64) -> Result<String> {
         .spawn()
         .context("failed to start plugin command")?;
 
+    // Pipes have a small OS buffer (~64KB). Waiting for the child to exit
+    // before reading them deadlocks the moment output exceeds that: the
+    // child blocks mid-write with nobody draining the pipe, so it never
+    // exits, so wait_timeout never returns Some — it just times out. Drain
+    // both pipes on their own threads *while* waiting, so arbitrarily
+    // large output never blocks the child.
+    let stdout_pipe = child.stdout.take();
+    let stderr_pipe = child.stderr.take();
+    let stdout_reader = std::thread::spawn(move || {
+        let mut buf = String::new();
+        if let Some(mut pipe) = stdout_pipe {
+            let _ = pipe.read_to_string(&mut buf);
+        }
+        buf
+    });
+    let stderr_reader = std::thread::spawn(move || {
+        let mut buf = String::new();
+        if let Some(mut pipe) = stderr_pipe {
+            let _ = pipe.read_to_string(&mut buf);
+        }
+        buf
+    });
+
     let timeout = Duration::from_millis(timeout_ms);
     let status = child
         .wait_timeout(timeout)
@@ -1127,18 +1183,14 @@ fn run_with_timeout(mut cmd: Command, timeout_ms: u64) -> Result<String> {
         None => {
             let _ = child.kill();
             let _ = child.wait();
+            let _ = stdout_reader.join();
+            let _ = stderr_reader.join();
             return Err(anyhow!("plugin command timed out"));
         }
     };
 
-    let mut out = String::new();
-    let mut err = String::new();
-    if let Some(mut stdout) = child.stdout.take() {
-        let _ = stdout.read_to_string(&mut out);
-    }
-    if let Some(mut stderr) = child.stderr.take() {
-        let _ = stderr.read_to_string(&mut err);
-    }
+    let out = stdout_reader.join().unwrap_or_default();
+    let err = stderr_reader.join().unwrap_or_default();
 
     if !status.success() {
         if !err.trim().is_empty() {

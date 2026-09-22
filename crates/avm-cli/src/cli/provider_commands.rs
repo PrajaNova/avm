@@ -94,7 +94,7 @@ fn interactive_provider_menu(
         .collect();
 
     let title = format!("avm {provider_name} — what next?");
-    let help = "Up/Down to move, Enter to select, q to cancel.";
+    let help = "Type to search, Up/Down to move, Enter to select, Ctrl+C to cancel.";
     let Some(idx) = ui::select(&title, help, &items, 10)? else {
         println!("Cancelled.");
         return Ok(());
@@ -120,7 +120,7 @@ fn interactive_uninstall(provider_name: &str, provider: &dyn ToolProvider) -> Re
         .iter()
         .map(|v| ui::SelectItem { label: v.clone() })
         .collect();
-    let help = "Up/Down to move, Enter to select, q to cancel.";
+    let help = "Type to search, Up/Down to move, Enter to select, Ctrl+C to cancel.";
     match ui::select(&format!("Uninstall which {provider_name} version?"), help, &items, 10)? {
         Some(i) => {
             provider.uninstall(&installed[i])?;

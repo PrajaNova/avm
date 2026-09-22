@@ -652,6 +652,14 @@ impl PluginProcess {
         self.call_json(&["manifest"])
     }
 
+    /// The plugin's own executable, for callers that need to invoke a
+    /// command outside the fixed `ToolProvider` protocol surface (e.g. a
+    /// plugin-specific subcommand like `avm android avd list`) rather than
+    /// one of the standard `manifest`/`versions`/`install`/... calls.
+    pub fn executable(&self) -> &Path {
+        &self.executable
+    }
+
     fn call_json<T: serde::de::DeserializeOwned>(&self, args: &[&str]) -> Result<T> {
         let mut cmd = Command::new(&self.executable);
         cmd.args(args);

@@ -57,10 +57,41 @@ fn cmd_provider_tool(
             print_provider_help(provider_name);
             Ok(())
         }
-        _ => Err(anyhow!(
-            "unknown {provider_name} command. Run `avm {provider_name}` for an interactive menu, or `avm {provider_name} --help`"
-        )),
+        _ => plugin_passthrough(provider_name, parts, cfg),
     }
+}
+
+/// Anything that isn't one of the fixed protocol verbs above (list/versions/
+/// use/install/uninstall) gets forwarded straight to the plugin's own
+/// executable as raw argv, stdio inherited — this is what lets a plugin add
+/// bespoke subcommands (e.g. `avm android avd list`) without avm-cli's core
+/// ever needing to know they exist. Only protocol (marketplace) plugins have
+/// a real executable to forward to; asdf-compat providers fall through to
+/// the same "unknown command" error as before.
+///
+/// The resolved (pinned) version is passed via `AVM_RESOLVED_VERSION` so a
+/// plugin's custom subcommands can act on "whichever version avm would use
+/// here" without needing avm-core's resolution logic (local pin walking up
+/// from cwd, then global) duplicated inside every plugin.
+fn plugin_passthrough(provider_name: &str, parts: &[String], cfg: &ResolvedConfig) -> Result<()> {
+    let plugin_manager = PluginManager::new(None)?;
+    if let Some(process) = plugin_manager.protocol_provider(provider_name)? {
+        let mut cmd = std::process::Command::new(process.executable());
+        cmd.args(parts);
+        if let Some((version, _)) = cfg.resolve_tool(provider_name, cfg) {
+            cmd.env("AVM_RESOLVED_VERSION", version);
+        }
+        let status = cmd
+            .status()
+            .with_context(|| format!("failed to run `avm {provider_name} {}`", parts.join(" ")))?;
+        if !status.success() {
+            std::process::exit(status.code().unwrap_or(1));
+        }
+        return Ok(());
+    }
+    Err(anyhow!(
+        "unknown {provider_name} command. Run `avm {provider_name}` for an interactive menu, or `avm {provider_name} --help`"
+    ))
 }
 
 /// Bare `avm <plugin>` with no subcommand. In a TTY, show the next actions as a

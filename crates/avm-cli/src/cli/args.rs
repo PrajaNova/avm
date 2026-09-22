@@ -149,16 +149,26 @@ struct EnvArgs {
     format: String,
 }
 
+// `disable_help_flag`: these forward trailing args verbatim to whatever the
+// key resolves to, which can legitimately include `--help`/`-h` meant for
+// the *target* (an alias command, or `avm <tool> --help`) — without this,
+// clap's auto-inserted `--help` intercepts it here instead, always exiting
+// 0 regardless of whether `key` is valid. The shell wrapper's `avm` function
+// relies on `resolve`'s exit code to tell a real alias from a plugin/tool
+// subcommand name, so a `--help` anywhere in the args must not silently
+// force that check to succeed.
 #[derive(Args)]
+#[command(disable_help_flag = true)]
 struct ResolveArgs {
     key: String,
-    #[arg(trailing_var_arg = true)]
+    #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
     args: Vec<String>,
 }
 
 #[derive(Args)]
+#[command(disable_help_flag = true)]
 struct RunArgs {
-    #[arg(required = true, trailing_var_arg = true)]
+    #[arg(required = true, trailing_var_arg = true, allow_hyphen_values = true)]
     args: Vec<String>,
 }
 

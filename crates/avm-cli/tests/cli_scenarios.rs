@@ -98,29 +98,40 @@ fn create_node_archive(dist: &Path, version: &str) {
 }
 
 /// Providers are no longer compiled into avm-bin (see the marketplace model
-/// in crates/avm-runtime — `avm plugin add <name>` fetches a compiled
-/// release from the plugin's own repo). Tests that need a working `node`
-/// provider fetch it once via the real marketplace (github.com/PrajaNova
-/// /avm-marketplace -> avm-plugin-node's GitHub Releases) into a shared
-/// scratch home, cached for the lifetime of this test binary, then symlink
-/// that single download into each test's own isolated home. Only the one
-/// download hits the network; per-test `avm node install <version>` calls
-/// still resolve against the local AVM_NODE_DIST_URL override below, not
-/// real npm/node.org traffic.
+/// in crates/avm-runtime — `avm plugin add <name>` fetches a **compiled**
+/// release from the plugin's own repo, built on GitHub's `ubuntu-latest`
+/// runners). That's proven working end-to-end separately (see
+/// docs/migration/PLUGIN_PROTOCOL.md) — for this test suite, fetching that
+/// same prebuilt binary would tie every CI environment's glibc to whatever
+/// GitHub's runners ship, which broke exactly this way in the
+/// `debian:bookworm`-based docker test image (GLIBC_2.39 not found). Build
+/// from source instead, once per test-binary run, guaranteed to match
+/// whatever glibc this environment actually has.
 fn cached_node_provider() -> &'static Path {
     static BIN: OnceLock<PathBuf> = OnceLock::new();
     BIN.get_or_init(|| {
-        let cache_home = temp_root("node-provider-cache");
-        let output = run_avm(&cache_home, &cache_home, &["plugin", "add", "node"]);
-        assert_success(&output);
-        let bin = cache_home
-            .join(".avm")
-            .join("plugins")
-            .join("avm-plugin-node")
-            .join("bin")
-            .join("avm-plugin");
-        assert!(bin.exists(), "expected marketplace install to produce {}", bin.display());
-        bin
+        let cache_dir = std::env::temp_dir().join("avm-test-avm-plugin-node-src");
+        if !cache_dir.join(".git").exists() {
+            let status = Command::new("git")
+                .args([
+                    "clone",
+                    "--depth",
+                    "1",
+                    "https://github.com/PrajaNova/avm-plugin-node.git",
+                ])
+                .arg(&cache_dir)
+                .status()
+                .expect("clone avm-plugin-node for tests");
+            assert!(status.success(), "failed to clone avm-plugin-node");
+        }
+        let status = Command::new("cargo")
+            .arg("build")
+            .arg("--manifest-path")
+            .arg(cache_dir.join("Cargo.toml"))
+            .status()
+            .expect("build avm-plugin-node for tests");
+        assert!(status.success(), "failed to build avm-plugin-node");
+        cache_dir.join("target").join("debug").join("avm-plugin-node")
     })
 }
 

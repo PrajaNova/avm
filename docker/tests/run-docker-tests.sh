@@ -17,6 +17,29 @@ docker compose -f "$DOCKER_COMPOSE_FILE" build avm-rust-dev
 log "Running Rust workspace tests"
 docker compose -f "$DOCKER_COMPOSE_FILE" run --rm avm-rust-dev bash -lc "export PATH=/usr/local/cargo/bin:\$PATH && cd /workspace && cargo test --workspace && cargo build --package avm-cli --bin avm-bin"
 
+# node is no longer compiled into avm-bin — it's fetched at runtime via the
+# marketplace (avm plugin add node), which downloads a compiled release
+# built on GitHub's ubuntu-latest runners. That release's glibc requirement
+# is newer than this container's base image (rust:1-bookworm), so build it
+# from source here instead — this is a test-environment constraint, not a
+# marketplace bug (see crates/avm-cli/tests/cli_scenarios.rs for the same
+# fix, and docs/migration/PLUGIN_PROTOCOL.md for the real fetch path, which
+# is exercised separately against a real host). Scenarios share this via
+# the AVM_PLUGIN_DIR=/workspace/.avm/plugins bind mount.
+log "Building node provider from source for scenario tests"
+docker compose -f "$DOCKER_COMPOSE_FILE" run --rm avm-rust-dev bash -lc '
+  set -euo pipefail
+  export PATH=/usr/local/cargo/bin:$PATH
+  src=/tmp/avm-plugin-node-src
+  if [ ! -d "$src/.git" ]; then
+    git clone --depth 1 https://github.com/PrajaNova/avm-plugin-node.git "$src"
+  fi
+  cargo build --manifest-path "$src/Cargo.toml"
+  mkdir -p /workspace/.avm/plugins/avm-plugin-node/bin
+  cp "$src/target/debug/avm-plugin-node" /workspace/.avm/plugins/avm-plugin-node/bin/avm-plugin
+  chmod +x /workspace/.avm/plugins/avm-plugin-node/bin/avm-plugin
+'
+
 run_one() {
   local scenario_file="$1"
   local name

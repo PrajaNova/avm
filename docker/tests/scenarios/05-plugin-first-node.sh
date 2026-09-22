@@ -33,11 +33,10 @@ EOF
 chmod +x "$DISTDIR/v20.11.1/node-v20.11.1-$NODE_PLATFORM/bin/node"
 tar -C "$DISTDIR/v20.11.1" -czf "$DISTDIR/v20.11.1/node-v20.11.1-$NODE_PLATFORM.tar.gz" "node-v20.11.1-$NODE_PLATFORM"
 
-# node is no longer bundled with avm-bin — fetch it from the real
-# marketplace (github.com/PrajaNova/avm-marketplace -> avm-plugin-node's
-# GitHub Releases) before exercising any node commands.
-run_avm "$WORKDIR" plugin add node >/dev/null
-
+# node is no longer bundled with avm-bin; run-docker-tests.sh builds it
+# from source into the shared AVM_PLUGIN_DIR before any scenario runs (see
+# that script for why — a real marketplace fetch works fine on a real
+# host, just not against this container's older glibc).
 out="$(AVM_NODE_DIST_URL="$DISTDIR" run_avm "$WORKDIR" node use 20.11.1)"
 assert_contains "$out" "Installing node 20.11.1" "node plugin use should auto-install missing version"
 assert_contains "$out" "Installed node 20.11.1" "node plugin use should install selected version"

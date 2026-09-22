@@ -44,6 +44,8 @@ enum Commands {
         #[command(subcommand)]
         command: PluginCommands,
     },
+    /// Scaffold a new avm plugin project, ready to build and publish.
+    Create(CreateArgs),
     /// Print shell setup for avm aliases and shims.
     ShellInit,
     /// Manage executable shims used for plain commands like node and java.
@@ -130,6 +132,15 @@ struct RemoveArgs {
     key: String,
     #[arg(short = 'g', long)]
     global: bool,
+}
+
+#[derive(Args)]
+struct CreateArgs {
+    /// Tool name, e.g. "kotlin" — scaffolds ./avm-plugin-kotlin
+    name: String,
+    /// Directory to create the plugin project in (default: current directory)
+    #[arg(long)]
+    path: Option<PathBuf>,
 }
 
 #[derive(Args)]

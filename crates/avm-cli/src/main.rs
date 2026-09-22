@@ -12,5 +12,6 @@ include!("cli/provider_commands.rs");
 include!("cli/provider_versions.rs");
 include!("cli/provider_selection.rs");
 include!("cli/plugin_commands.rs");
+include!("cli/create_commands.rs");
 include!("cli/shim_commands.rs");
 include!("cli/shell.rs");

@@ -96,6 +96,7 @@ fn run(cli: Cli) -> Result<()> {
         Commands::Run(args) => cmd_run(args),
         Commands::Tool { command } => cmd_tool(command),
         Commands::Plugin { command } => cmd_plugin(command),
+        Commands::Create(args) => cmd_create(args),
         Commands::ShellInit => {
             println!("{}", shell_init_script());
             Ok(())

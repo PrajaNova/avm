@@ -263,7 +263,7 @@ fn select_alias_suggestion(query: &str, suggestions: &[String]) -> Result<Option
 
     match ui::select(
         &format!("Alias '{query}' not found"),
-        "Use Up/Down to choose a suggestion, Enter to run, q to cancel.",
+        "Type to search, Up/Down to choose a suggestion, Enter to run, Ctrl+C to cancel.",
         &items,
         8,
     )? {

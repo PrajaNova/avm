@@ -877,7 +877,12 @@ pub fn install_from_marketplace(name: &str, repo: &str, plugin_dir: &Path) -> Re
         ));
     }
     let dest = bin_dir.join(binary_name("avm-plugin"));
-    fs::rename(&extracted_bin, &dest).context("failed to move plugin binary into place")?;
+    // Not fs::rename: the extraction temp dir and ~/.avm/plugins can be on
+    // different filesystems/mounts (observed in Docker: /tmp is tmpfs, the
+    // home dir is on the container's overlay fs) — rename() fails EXDEV
+    // across devices, copy+remove works unconditionally.
+    fs::copy(&extracted_bin, &dest).context("failed to move plugin binary into place")?;
+    let _ = fs::remove_file(&extracted_bin);
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;

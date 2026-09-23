@@ -86,14 +86,18 @@ Precedence rules:
 ## Commands
 
 - `avm init` initializes `.avm.json` in the current directory
-- `avm add [--global] <alias> <command>` adds an alias
-- `avm remove [--global] <alias>` removes an alias
+- `avm alias add [--global] <alias> <command>` adds an alias (short: `avm aa ...`;
+  `avm add ...` also still works, unchanged)
+- `avm alias remove [--global] <alias>` removes an alias (`avm remove ...` still works too)
+- `avm alias list` lists configured aliases
 - `avm list` shows merged aliases, env, tools, and plugin aliases
 - `avm which <alias-or-tool>` prints the origin and resolved value
 - `avm run <alias> [args...]` executes resolved command
-- `avm env` prints shell-safe `export` lines
+- `avm env` prints shell-safe `export` lines (this is what shell-init evals on every command)
+- `avm env add [--global] <KEY> <value>` adds a custom env var to `.avm.json` (short: `avm ea ...`)
+- `avm env remove [--global] <KEY>` removes one; `avm env list` lists configured ones
 - `avm resolve <alias> [args...]` prints the expanded shell command
-- `avm plugin add <name>` installs a plugin — resolves `<name>` against the
+- `avm plugin add <name>` installs a plugin (short: `avm pa <name>`) — resolves `<name>` against the
   [marketplace](https://github.com/PrajaNova/avm-marketplace) and fetches
   a compiled release for your platform; an `org/repo` or full URL installs
   from source instead (asdf-style plugins, or one not yet in the marketplace)

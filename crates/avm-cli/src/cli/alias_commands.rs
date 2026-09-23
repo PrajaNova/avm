@@ -20,9 +20,18 @@ fn cmd_which(key: &str) -> Result<()> {
     println!("No mapping found for '{key}'.");
     Ok(())
 }
-fn cmd_env(args: EnvArgs) -> Result<()> {
-    if args.format != "export" {
-        return Err(anyhow!("unknown env format: {}", args.format));
+fn cmd_env(command: Option<EnvCommands>, format: String) -> Result<()> {
+    match command {
+        None => cmd_env_print(&format),
+        Some(EnvCommands::Add { key, value, global }) => cmd_env_add(key, value, global),
+        Some(EnvCommands::Remove { key, global }) => cmd_env_remove(key, global),
+        Some(EnvCommands::List) => cmd_env_list(),
+    }
+}
+
+fn cmd_env_print(format: &str) -> Result<()> {
+    if format != "export" {
+        return Err(anyhow!("unknown env format: {format}"));
     }
 
     let cfg = load_state()?;

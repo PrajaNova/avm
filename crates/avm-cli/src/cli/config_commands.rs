@@ -42,9 +42,15 @@ fn cmd_add(args: AddArgs) -> Result<()> {
 
     let parsed = load_config_for_root(&root)?;
     let mut aliases = parsed.aliases;
-    aliases.insert(args.key, args.value.join(" "));
+    aliases.insert(args.key.clone(), args.value.join(" "));
 
-    save_config_for_root(&root, &aliases, &parsed.env, &parsed.tools, parsed.is_structured)
+    save_config_for_root(&root, &aliases, &parsed.env, &parsed.tools, parsed.is_structured)?;
+    if args.global {
+        println!("✓ Added global alias '{}'", args.key);
+    } else {
+        println!("✓ Added local alias '{}'", args.key);
+    }
+    Ok(())
 }
 fn cmd_remove(args: RemoveArgs) -> Result<()> {
     let root = if args.global {
@@ -74,6 +80,125 @@ fn cmd_remove(args: RemoveArgs) -> Result<()> {
         println!("✓ Removed global alias '{}'", args.key);
     } else {
         println!("✓ Removed local alias '{}'", args.key);
+    }
+    Ok(())
+}
+
+/// `avm alias add/remove/list` — same shape as `avm plugin`. `add`/`remove`
+/// reuse the exact same handlers as the still-working top-level `avm add`/
+/// `avm remove` shortcuts; only `list` is new here.
+fn cmd_alias(command: AliasCommands) -> Result<()> {
+    match command {
+        AliasCommands::Add(args) => cmd_add(args),
+        AliasCommands::Remove(args) => cmd_remove(args),
+        AliasCommands::List => cmd_alias_list(),
+    }
+}
+
+fn cmd_alias_list() -> Result<()> {
+    let cfg = load_state()?;
+    if cfg.local_aliases.is_empty() && cfg.global_aliases.is_empty() {
+        println!("No aliases configured.");
+        return Ok(());
+    }
+    let mut keys: Vec<&String> = cfg
+        .local_aliases
+        .keys()
+        .chain(cfg.global_aliases.keys())
+        .collect();
+    keys.sort_unstable();
+    keys.dedup();
+    for key in keys {
+        if let Some(value) = cfg.local_aliases.get(key) {
+            if cfg.global_aliases.contains_key(key) {
+                println!("{key} → {value} [override global]");
+            } else {
+                println!("{key} → {value}");
+            }
+        } else if let Some(value) = cfg.global_aliases.get(key) {
+            println!("{key} → {value}");
+        }
+    }
+    Ok(())
+}
+
+/// `avm env add/remove/list` — same shape as `avm plugin`, targeting the
+/// custom `env` map in `.avm.json` rather than `aliases`. Previously the
+/// only way to set a custom env var was hand-editing the file directly.
+fn cmd_env_add(key: String, value: String, global: bool) -> Result<()> {
+    let root = if global {
+        home_dir()?
+    } else {
+        std::env::current_dir().context("failed to read current directory")?
+    };
+
+    let path = root.join(CONFIG_FILE);
+    if !path.exists() {
+        if global {
+            avm_core::write_default_config(root.as_path(), CONFIG_FILE)?;
+        } else {
+            return Err(anyhow!(
+                "no {CONFIG_FILE} found in current directory. Run `avm init` first"
+            ));
+        }
+    }
+
+    let parsed = load_config_for_root(&root)?;
+    let mut env = parsed.env;
+    env.insert(key.clone(), value.clone());
+
+    save_config_for_root(&root, &parsed.aliases, &env, &parsed.tools, parsed.is_structured)?;
+    if global {
+        println!("✓ Added global env var '{key}={value}'");
+    } else {
+        println!("✓ Added local env var '{key}={value}'");
+    }
+    Ok(())
+}
+
+fn cmd_env_remove(key: String, global: bool) -> Result<()> {
+    let root = if global {
+        home_dir()?
+    } else {
+        std::env::current_dir().context("failed to read current directory")?
+    };
+    let path = root.join(CONFIG_FILE);
+    if !path.exists() {
+        return Err(anyhow!("no {CONFIG_FILE} found"));
+    }
+
+    let mut parsed = load_config_for_root(&root)?;
+    let existing = parsed.env.remove(&key);
+    if existing.is_none() {
+        return Err(anyhow!("env var '{key}' not found"));
+    }
+    save_config_for_root(
+        &root,
+        &parsed.aliases,
+        &parsed.env,
+        &parsed.tools,
+        parsed.is_structured,
+    )?;
+
+    if global {
+        println!("✓ Removed global env var '{key}'");
+    } else {
+        println!("✓ Removed local env var '{key}'");
+    }
+    Ok(())
+}
+
+fn cmd_env_list() -> Result<()> {
+    let cfg = load_state()?;
+    let merged = merge_env(&cfg);
+    if merged.is_empty() {
+        println!("No env vars configured.");
+        return Ok(());
+    }
+    let mut keys: Vec<_> = merged.keys().collect();
+    keys.sort();
+    for key in keys {
+        println!("{key}={}", merged[key]);
     }
     Ok(())
 }

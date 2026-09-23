@@ -15,6 +15,7 @@ enum Commands {
     /// Create a local .avm.json config file.
     Init,
     /// Add an alias command to local or global config.
+    #[command(alias = "aa")]
     Add(AddArgs),
     /// Remove an alias command from local or global config.
     #[command(alias = "rm")]
@@ -26,8 +27,20 @@ enum Commands {
     Which {
         key: String,
     },
-    /// Print shell export statements for merged env and PATH.
-    Env(EnvArgs),
+    /// Manage alias commands — same shape as `avm plugin` (add/remove/list).
+    /// `avm add`/`avm remove` above still work too, unchanged.
+    Alias {
+        #[command(subcommand)]
+        command: AliasCommands,
+    },
+    /// Print shell export statements for merged env and PATH (default), or
+    /// manage custom env vars — same shape as `avm plugin` (add/remove/list).
+    Env {
+        #[command(subcommand)]
+        command: Option<EnvCommands>,
+        #[arg(short, long, default_value = "export")]
+        format: String,
+    },
     /// Print the command that an alias expands to.
     Resolve(ResolveArgs),
     /// Run an alias with optional arguments.
@@ -61,6 +74,19 @@ enum Commands {
     Version,
     /// Show grouped command help.
     All,
+    /// Shortcut for `avm plugin add <source>`.
+    #[command(hide = true)]
+    Pa {
+        source: String,
+    },
+    /// Shortcut for `avm env add <key> <value>`.
+    #[command(hide = true)]
+    Ea {
+        key: String,
+        value: String,
+        #[arg(short = 'g', long)]
+        global: bool,
+    },
     /// Run an installed plugin command, for example `avm node versions` or `avm java versions`.
     #[command(external_subcommand)]
     PluginCommand(Vec<String>),
@@ -134,6 +160,40 @@ struct RemoveArgs {
     global: bool,
 }
 
+#[derive(Subcommand)]
+enum AliasCommands {
+    /// Add an alias command to local or global config.
+    Add(AddArgs),
+    /// Remove an alias command from local or global config.
+    #[command(alias = "rm")]
+    Remove(RemoveArgs),
+    /// List configured aliases.
+    #[command(alias = "ls")]
+    List,
+}
+
+#[derive(Subcommand)]
+enum EnvCommands {
+    /// Add a custom env var to local or global config.
+    Add {
+        key: String,
+        value: String,
+        #[arg(short = 'g', long)]
+        global: bool,
+    },
+    /// Remove a custom env var from local or global config.
+    #[command(alias = "rm")]
+    Remove {
+        key: String,
+        #[arg(short = 'g', long)]
+        global: bool,
+    },
+    /// List configured (merged) env vars — not provider-contributed ones
+    /// like `ANDROID_HOME`; use bare `avm env` for the full export list.
+    #[command(alias = "ls")]
+    List,
+}
+
 #[derive(Args)]
 struct CreateArgs {
     /// Tool name, e.g. "kotlin" — scaffolds ./avm-plugin-kotlin
@@ -141,12 +201,6 @@ struct CreateArgs {
     /// Directory to create the plugin project in (default: current directory)
     #[arg(long)]
     path: Option<PathBuf>,
-}
-
-#[derive(Args)]
-struct EnvArgs {
-    #[arg(short, long, default_value = "export")]
-    format: String,
 }
 
 // `disable_help_flag`: these forward trailing args verbatim to whatever the

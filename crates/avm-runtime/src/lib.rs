@@ -918,10 +918,18 @@ pub fn install_from_marketplace(name: &str, repo: &str, plugin_dir: &Path) -> Re
         ));
     }
     let dest = bin_dir.join(binary_name("avm-plugin"));
-    // Not fs::rename: the extraction temp dir and ~/.avm/plugins can be on
-    // different filesystems/mounts (observed in Docker: /tmp is tmpfs, the
-    // home dir is on the container's overlay fs) — rename() fails EXDEV
-    // across devices, copy+remove works unconditionally.
+    // On macOS, overwriting an existing binary at `dest` in place (as
+    // `fs::copy` alone does) and then executing it shortly after — exactly
+    // what `avm plugin update` does — can race the OS's Gatekeeper
+    // "provenance sandbox" tracking and get the process SIGKILLed (exit
+    // 137) on its first run or two. Removing the old file first, so the new
+    // one lands on a fresh inode instead of overwriting in place, avoids it.
+    // (Not fs::rename for the copy itself: the extraction temp dir and
+    // ~/.avm/plugins can be on different filesystems/mounts — observed in
+    // Docker, /tmp is tmpfs and the home dir is on the container's overlay
+    // fs — rename() fails EXDEV across devices, copy+remove works
+    // unconditionally.)
+    let _ = fs::remove_file(&dest);
     fs::copy(&extracted_bin, &dest).context("failed to move plugin binary into place")?;
     let _ = fs::remove_file(&extracted_bin);
     #[cfg(unix)]

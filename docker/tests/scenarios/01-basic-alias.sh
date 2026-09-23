@@ -25,12 +25,12 @@ out="$(run_avm "$WORKDIR" run dev world)"
 assert_contains "$out" "basic-start:world" "basic dev alias run"
 
 out="$(run_avm "$WORKDIR" resolve dev world)"
-assert_equals "$out" "'echo' 'basic-start:world'" "resolve should expand placeholders"
+assert_equals "$out" "echo basic-start:world" "resolve should expand placeholders"
 
 out="$(run_avm "$WORKDIR" which dev)"
 assert_contains "$out" "local alias 'dev'" "alias source should be local"
 
 out="$(run_avm "$WORKDIR" env)"
-assert_contains "$out" "export ENV_SCOPE='local'" "local env should be merged and exported"
+assert_contains "$out" "export ENV_SCOPE=local" "local env should be merged and exported"
 
 log "Scenario 01 passed"

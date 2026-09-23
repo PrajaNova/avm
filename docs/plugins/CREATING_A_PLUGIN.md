@@ -9,14 +9,15 @@ exactly the same way a third-party one does.
 ## Quick start
 
 ```bash
-avm create kotlin
+gh repo create avm-plugin-kotlin --template PrajaNova/avm-plugin-template --public --clone
 cd avm-plugin-kotlin
 ```
 
-This scaffolds a working (if unimplemented) plugin: `Cargo.toml`, a
-`ToolProvider` skeleton in `src/lib.rs` with `TODO`s, a `main.rs` wired to
-the protocol runner, a `README.md`, and `.github/workflows/{ci,release}.yml`
-that build and publish it on a tag push. It builds and runs immediately —
+(`avm create kotlin` prints this command.) The template is a working (if
+unimplemented) plugin: `Cargo.toml`, a `ToolProvider` skeleton in
+`src/lib.rs` with `TODO`s, a `main.rs` wired to the protocol runner, and CI
+and release workflows that build and publish it on a tag push. It builds
+and runs immediately —
 `cargo build && ./target/debug/avm-plugin-kotlin manifest` prints a valid
 (if placeholder) manifest before you've written a line of logic.
 
@@ -178,6 +179,6 @@ should always compute the value from the version string, never read
 today's environment to decide what to report.
 
 The legacy asdf adapter (`bin/list-all`, `bin/install`, ...) still exists
-in `avm-runtime` as a fallback tier for community plugins that haven't
+in `avm-cli/src/runtime.rs` as a fallback tier for community plugins that haven't
 adopted this protocol — it's not going away, just no longer what avm's own
 first-party tools use.

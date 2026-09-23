@@ -2,10 +2,8 @@ use anyhow::{anyhow, Context, Result};
 use std::io::{self, IsTerminal, Read, Write};
 use std::process::Command;
 
-#[derive(Debug, Clone)]
-pub struct SelectItem {
-    pub label: String,
-}
+const HELP: &str = "Type to search, Up/Down to move, Enter to select, Ctrl+C to cancel.";
+const PAGE_SIZE: usize = 10;
 
 pub fn can_select() -> bool {
     io::stdin().is_terminal() && io::stdout().is_terminal()
@@ -16,12 +14,7 @@ pub fn can_select() -> bool {
 /// eats every printable key (including "q"), so cancel is Ctrl+C — the one
 /// key that can't collide with something a user might want to type into
 /// the search box.
-pub fn select(
-    title: &str,
-    help: &str,
-    items: &[SelectItem],
-    page_size: usize,
-) -> Result<Option<usize>> {
+pub fn select(title: &str, items: &[String]) -> Result<Option<usize>> {
     if items.is_empty() {
         return Ok(None);
     }
@@ -31,10 +24,10 @@ pub fn select(
     let mut filtered = filter_items(items, &query);
     let mut selected = 0usize;
     let mut offset = 0usize;
-    let page_size = page_size.max(1);
+    let page_size = PAGE_SIZE;
 
     loop {
-        render(title, help, items, &filtered, selected, offset, page_size, &query)?;
+        render(title, items, &filtered, selected, offset, &query)?;
 
         let mut byte = [0u8; 1];
         io::stdin().read_exact(&mut byte)?;
@@ -70,11 +63,7 @@ pub fn select(
                 if io::stdin().read_exact(&mut seq).is_ok() && seq[0] == b'[' {
                     match seq[1] {
                         b'A' => selected = selected.saturating_sub(1),
-                        b'B' => {
-                            if selected + 1 < filtered.len() {
-                                selected += 1;
-                            }
-                        }
+                        b'B' if selected + 1 < filtered.len() => selected += 1,
                         _ => {}
                     }
                 }
@@ -99,7 +88,7 @@ pub fn select(
     }
 }
 
-fn filter_items(items: &[SelectItem], query: &str) -> Vec<usize> {
+fn filter_items(items: &[String], query: &str) -> Vec<usize> {
     if query.is_empty() {
         return (0..items.len()).collect();
     }
@@ -107,26 +96,24 @@ fn filter_items(items: &[SelectItem], query: &str) -> Vec<usize> {
     items
         .iter()
         .enumerate()
-        .filter(|(_, item)| item.label.to_ascii_lowercase().contains(&query))
+        .filter(|(_, item)| item.to_ascii_lowercase().contains(&query))
         .map(|(index, _)| index)
         .collect()
 }
 
-#[allow(clippy::too_many_arguments)]
 fn render(
     title: &str,
-    help: &str,
-    items: &[SelectItem],
+    items: &[String],
     filtered: &[usize],
     selected: usize,
     offset: usize,
-    page_size: usize,
     query: &str,
 ) -> Result<()> {
+    let page_size = PAGE_SIZE;
     let mut stdout = io::stdout();
     write!(stdout, "\x1b[?25l\x1b[2J\x1b[H")?;
     write!(stdout, "{title}\r\n")?;
-    write!(stdout, "{help}\r\n")?;
+    write!(stdout, "{HELP}\r\n")?;
     write!(stdout, "Search: {query}\u{2588}\r\n\r\n")?;
 
     if filtered.is_empty() {
@@ -134,7 +121,7 @@ fn render(
     } else {
         for (row, &item_index) in filtered.iter().enumerate().skip(offset).take(page_size) {
             let marker = if row == selected { ">" } else { " " };
-            write!(stdout, "{marker} {}\r\n", items[item_index].label)?;
+            write!(stdout, "{marker} {}\r\n", items[item_index])?;
         }
     }
 

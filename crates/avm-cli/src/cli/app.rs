@@ -1,4 +1,6 @@
-fn main() {
+use super::*;
+
+pub fn main() {
     if let Err(err) = load_dotenv_env() {
         eprintln!("avm: failed to load .env: {err}");
         std::process::exit(1);
@@ -14,7 +16,8 @@ fn load_dotenv_env() -> Result<()> {
     let cwd = std::env::current_dir().context("failed to read current directory")?;
     let protected: HashSet<String> = std::env::vars().map(|(key, _)| key).collect();
 
-    for dir in ancestor_dirs(&cwd).into_iter().rev() {
+    let dirs: Vec<&Path> = cwd.ancestors().collect();
+    for dir in dirs.into_iter().rev() {
         let env_file = dir.join(".env");
         if env_file.exists() {
             load_env_file(&env_file, &protected)?;
@@ -22,16 +25,6 @@ fn load_dotenv_env() -> Result<()> {
     }
 
     Ok(())
-}
-
-fn ancestor_dirs(start: &Path) -> Vec<PathBuf> {
-    let mut dirs = Vec::new();
-    let mut current = Some(start.to_path_buf());
-    while let Some(dir) = current {
-        dirs.push(dir.clone());
-        current = dir.parent().map(Path::to_path_buf);
-    }
-    dirs
 }
 
 fn load_env_file(path: &Path, protected: &HashSet<String>) -> Result<()> {
@@ -92,72 +85,23 @@ fn run(cli: Cli) -> Result<()> {
         Commands::List => cmd_list(),
         Commands::Which { key } => cmd_which(&key),
         Commands::Alias { command } => cmd_alias(command),
-        Commands::Env { command, format } => cmd_env(command, format),
+        Commands::Env { command } => cmd_env(command),
         Commands::Resolve(args) => cmd_resolve(args),
         Commands::Run(args) => cmd_run(args),
-        Commands::Tool { command } => cmd_tool(command),
         Commands::Plugin { command } => cmd_plugin(command),
-        Commands::Create(args) => cmd_create(args),
+        Commands::Create { name } => {
+            println!("Start a new plugin from the template repo:");
+            println!("  gh repo create avm-plugin-{name} --template PrajaNova/avm-plugin-template --public --clone");
+            Ok(())
+        }
         Commands::ShellInit => {
             println!("{}", shell_init_script());
             Ok(())
         }
         Commands::Shims { command } => cmd_shims(command),
         Commands::ExecShim(args) => cmd_exec_shim(args),
-        Commands::Version => {
-            println!("{}", env!("CARGO_PKG_VERSION"));
-            Ok(())
-        }
-        Commands::All => {
-            print_grouped_help();
-            Ok(())
-        }
         Commands::PluginCommand(args) => cmd_plugin_command(args),
         Commands::Pa { source } => cmd_plugin(PluginCommands::Add { source }),
         Commands::Ea { key, value, global } => cmd_env_add(key, value, global),
     }
-}
-
-fn print_grouped_help() {
-    println!("avm command groups");
-    println!();
-    println!("Aliases:");
-    println!("  avm init                         Create .avm.json");
-    println!("  avm alias add <name> <command>   Add alias (short: avm aa ...)");
-    println!("  avm alias remove <name>          Remove alias");
-    println!("  avm alias list                   List aliases");
-    println!("  avm list                         List config and aliases");
-    println!("  avm run <name> [args...]         Run alias");
-    println!("  avm resolve <name> [args...]     Print expanded alias command");
-    println!("  avm which <name>                 Show alias/plugin origin");
-    println!();
-    println!("Env vars:");
-    println!("  avm env                          Print export statements (used by shell-init)");
-    println!("  avm env add <KEY> <value>        Add a custom env var (short: avm ea ...)");
-    println!("  avm env remove <KEY>             Remove a custom env var");
-    println!("  avm env list                     List configured env vars");
-    println!();
-    println!("Plugins:");
-    println!("  avm plugin available             Show installable plugins");
-    println!("  avm plugin add node              Install built-in node plugin (short: avm pa node)");
-    println!("  avm plugin add <path-or-url>     Install AVM or compatible asdf plugin");
-    println!("  avm plugin list --all            List installed and available plugins");
-    println!("  avm plugin remove <name>         Remove plugin");
-    println!();
-    println!("Plugin commands:");
-    println!("  avm node versions                Pick from recent Node.js versions");
-    println!("  avm node <major> versions        Pick from one major version line");
-    println!("  avm node latest versions         Show latest Node.js version");
-    println!("  avm node use <version>           Set local Node.js version");
-    println!("  avm node use <version> --global  Set global Node.js version");
-    println!("  avm java versions                Pick from recent OpenJDK (Temurin) versions");
-    println!("  avm java latest versions         Show latest OpenJDK version");
-    println!("  avm java use <version>           Install if missing and set local Java version");
-    println!("  avm android versions             Pick from recent Android SDK versions");
-    println!("  avm android use <version>        Install if missing and set local Android SDK version");
-    println!();
-    println!("Shell and shims:");
-    println!("  avm shell-init                   Print shell integration");
-    println!("  avm shims install                Install shims");
-    println!("  avm shims path                   Print shim directory");
 }

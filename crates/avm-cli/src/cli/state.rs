@@ -1,57 +1,51 @@
-fn load_state() -> Result<ResolvedConfig> {
+use super::*;
+
+pub fn load_state() -> Result<ResolvedConfig> {
     let cwd = std::env::current_dir().context("failed to read current directory")?;
-    let home = home_dir()?;
-    let mut plugin_aliases = load_runtime_aliases(&cwd)?;
-    for (name, alias) in load_node_aliases(&cwd)? {
-        plugin_aliases.entry(name).or_insert(alias);
+    let plugin_aliases = package_json_aliases(&cwd)?;
+    crate::resolver::load(&cwd, &home_dir()?, plugin_aliases)
+}
+
+pub fn home_dir() -> Result<PathBuf> {
+    std::env::var("HOME")
+        .map(PathBuf::from)
+        .map_err(|_| anyhow!("HOME not set"))
+}
+
+/// `package.json` scripts as plugin aliases, run through whichever package
+/// manager the lockfile points at.
+fn package_json_aliases(cwd: &Path) -> Result<HashMap<String, ResolvedAlias>> {
+    let package_json = cwd.join("package.json");
+    if !package_json.exists() {
+        return Ok(HashMap::new());
     }
-    let resolver = Resolver::new(cwd, home);
-    resolver.load(plugin_aliases)
-}
+    let raw = fs::read_to_string(&package_json).context("failed to read package.json")?;
+    let parsed: serde_json::Value =
+        serde_json::from_str(&raw).context("failed to parse package.json")?;
 
-fn home_dir() -> Result<PathBuf> {
-    if let Ok(home) = std::env::var("HOME") {
-        return Ok(PathBuf::from(home));
-    }
-    if let Ok(home) = std::env::var("USERPROFILE") {
-        return Ok(PathBuf::from(home));
-    }
-    Err(anyhow!("HOME not set"))
-}
-
-fn load_config_for_root(root: &Path) -> Result<ConfigLoadResult> {
-    load_with_env(root, CONFIG_FILE)
-}
-
-fn load_runtime_aliases(cwd: &Path) -> Result<HashMap<String, ResolvedAlias>> {
-    let plugin_manager = PluginManager::new(None)?;
-    plugin_manager.list_aliases(cwd)
-}
-
-fn load_node_aliases(cwd: &Path) -> Result<HashMap<String, ResolvedAlias>> {
-    let node = NodeProvider::new();
-    let aliases = node.aliases_from_package_json(cwd)?;
-    let mut resolved = HashMap::new();
-    for (name, alias) in aliases {
-        resolved.insert(
-            name,
-            resolve_node_alias(alias),
-        );
-    }
-    Ok(resolved)
-}
-
-fn resolve_node_alias(alias: NodeAlias) -> ResolvedAlias {
-    let manager = if alias.manager.is_empty() {
-        "npm".to_string()
+    let manager = if cwd.join("bun.lockb").exists() || cwd.join("bun.lock").exists() {
+        "bun run"
+    } else if cwd.join("pnpm-lock.yaml").exists() {
+        "pnpm run"
+    } else if cwd.join("yarn.lock").exists() {
+        "yarn"
     } else {
-        alias.manager.clone()
+        "npm run"
     };
-    ResolvedAlias {
-        command: alias.command,
-        description: alias.description,
-        plugin_name: "node".to_string(),
-        section_name: "Node Scripts".to_string(),
-        source: Some(manager),
-    }
+
+    let scripts = parsed.get("scripts").and_then(|v| v.as_object());
+    Ok(scripts
+        .into_iter()
+        .flatten()
+        .filter_map(|(name, script)| {
+            let alias = ResolvedAlias {
+                command: format!("{manager} {name}"),
+                description: Some(script.as_str()?.to_string()),
+                plugin_name: "node".to_string(),
+                section_name: "Node Scripts".to_string(),
+                source: Some(manager.to_string()),
+            };
+            Some((name.clone(), alias))
+        })
+        .collect())
 }

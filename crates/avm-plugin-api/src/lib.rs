@@ -12,26 +12,17 @@ pub struct Manifest {
     pub homepage: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct AliasDetail {
-    pub command: String,
-    #[serde(default)]
-    pub description: Option<String>,
-    #[serde(default)]
-    pub source: Option<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(untagged)]
-pub enum AliasValue {
-    Simple(String),
-    Detailed(AliasDetail),
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ExportResponse {
-    pub api_version: Option<u32>,
-    pub aliases: HashMap<String, AliasValue>,
+impl Manifest {
+    pub fn new(name: &str, version: &str, description: &str, section_label: &str) -> Self {
+        Self {
+            name: name.to_string(),
+            version: version.to_string(),
+            api_version: Some(1),
+            description: Some(description.to_string()),
+            section_label: Some(section_label.to_string()),
+            homepage: Some(format!("https://github.com/PrajaNova/avm-plugin-{name}")),
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -41,39 +32,6 @@ pub struct ResolvedAlias {
     pub plugin_name: String,
     pub section_name: String,
     pub source: Option<String>,
-}
-
-impl From<(&str, AliasValue, &Manifest)> for ResolvedAlias {
-    fn from((plugin_name, value, manifest): (&str, AliasValue, &Manifest)) -> Self {
-        match value {
-            AliasValue::Simple(command) => Self {
-                command,
-                description: None,
-                plugin_name: plugin_name.to_string(),
-                section_name: manifest
-                    .section_label
-                    .clone()
-                    .unwrap_or_else(|| plugin_name.to_string()),
-                source: Some("script".to_string()),
-            },
-            AliasValue::Detailed(detail) => Self {
-                command: detail.command,
-                description: detail.description,
-                plugin_name: plugin_name.to_string(),
-                section_name: manifest
-                    .section_label
-                    .clone()
-                    .unwrap_or_else(|| plugin_name.to_string()),
-                source: detail.source,
-            },
-        }
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct ToolResolvedPath {
-    pub path: PathBuf,
-    pub version: String,
 }
 
 #[derive(Debug, Clone)]
@@ -93,6 +51,15 @@ impl ToolVersionQuery {
             ToolVersionQuery::Recent => "recent".to_string(),
             ToolVersionQuery::Latest => "latest".to_string(),
             ToolVersionQuery::Major(major) => format!("major:{major}"),
+        }
+    }
+
+    /// Apply the query to a newest-first list; `major` extracts each item's major version.
+    pub fn filter<T>(&self, items: Vec<T>, major: impl Fn(&T) -> u64) -> Vec<T> {
+        match self {
+            ToolVersionQuery::Recent => items,
+            ToolVersionQuery::Latest => items.into_iter().take(1).collect(),
+            ToolVersionQuery::Major(m) => items.into_iter().filter(|i| major(i) == *m).collect(),
         }
     }
 
@@ -119,6 +86,90 @@ pub struct ToolVersion {
     pub channel: Option<String>,
     pub is_lts: bool,
     pub is_security: bool,
+}
+
+/// `~/.avm/tools/<tool>` — where every provider keeps `<version>/` dirs.
+pub fn tool_dir(tool: &str) -> anyhow::Result<PathBuf> {
+    let home = std::env::var_os("HOME").ok_or_else(|| anyhow::anyhow!("HOME not set"))?;
+    Ok(PathBuf::from(home).join(".avm").join("tools").join(tool))
+}
+
+/// Sorted version dirs under `tool_dir(tool)` that pass `is_installed`.
+pub fn list_installed(tool: &str, is_installed: impl Fn(&str) -> bool) -> anyhow::Result<Vec<String>> {
+    let entries = match std::fs::read_dir(tool_dir(tool)?) {
+        Ok(entries) => entries,
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
+        Err(err) => return Err(anyhow::Error::new(err).context(format!("failed to read {tool} tools dir"))),
+    };
+    let mut versions: Vec<String> = entries
+        .flatten()
+        .filter(|e| e.path().is_dir())
+        .filter_map(|e| e.file_name().into_string().ok())
+        .filter(|v| is_installed(v))
+        .collect();
+    versions.sort_unstable();
+    Ok(versions)
+}
+
+pub fn remove_version(tool: &str, version: &str) -> anyhow::Result<()> {
+    let target = tool_dir(tool)?.join(version);
+    if target.exists() {
+        std::fs::remove_dir_all(&target)
+            .map_err(|e| anyhow::anyhow!("failed to remove managed {tool} {version}: {e}"))?;
+    }
+    Ok(())
+}
+
+/// Wait for `child` up to `ms`; kills it and returns `None` on timeout.
+pub fn wait_deadline(child: &mut std::process::Child, ms: u64) -> std::io::Result<Option<std::process::ExitStatus>> {
+    let deadline = std::time::Instant::now() + std::time::Duration::from_millis(ms);
+    loop {
+        if let Some(status) = child.try_wait()? {
+            return Ok(Some(status));
+        }
+        if std::time::Instant::now() >= deadline {
+            let _ = child.kill();
+            let _ = child.wait();
+            return Ok(None);
+        }
+        std::thread::sleep(std::time::Duration::from_millis(50));
+    }
+}
+
+/// `$env_var` (seconds) overrides `default_ms`.
+pub fn env_timeout_ms(env_var: &str, default_ms: u64) -> u64 {
+    std::env::var(env_var)
+        .ok()
+        .and_then(|v| v.parse::<u64>().ok())
+        .map(|secs| secs.saturating_mul(1000))
+        .unwrap_or(default_ms)
+}
+
+/// Spawn `cmd`, fail on non-zero exit or on timeout (`$env_var` seconds, else `default_ms`).
+pub fn run_timed(mut cmd: std::process::Command, default_ms: u64, label: &str, env_var: &str) -> anyhow::Result<()> {
+    let ms = env_timeout_ms(env_var, default_ms);
+    let mut child = cmd.spawn().map_err(|e| anyhow::anyhow!("failed to spawn {label}: {e}"))?;
+    match wait_deadline(&mut child, ms).map_err(|e| anyhow::anyhow!("failed while waiting for {label}: {e}"))? {
+        None => Err(anyhow::anyhow!("{label} timed out after {}s — set {env_var}=<seconds> to extend", ms / 1000)),
+        Some(status) if !status.success() => Err(anyhow::anyhow!("{label} failed: {status}")),
+        Some(_) => Ok(()),
+    }
+}
+
+/// Read `url_or_path` from disk if it exists (tests / offline mirrors), else `curl` it.
+pub fn fetch(url_or_path: &str, max_time_secs: u32) -> anyhow::Result<Vec<u8>> {
+    let local = std::path::Path::new(url_or_path);
+    if local.exists() {
+        return std::fs::read(local).map_err(|e| anyhow::anyhow!("failed to read {}: {e}", local.display()));
+    }
+    let output = std::process::Command::new("curl")
+        .args(["-fsSL", "--connect-timeout", "10", "--max-time", &max_time_secs.to_string(), url_or_path])
+        .output()
+        .map_err(|e| anyhow::anyhow!("failed to fetch {url_or_path}: {e}"))?;
+    if !output.status.success() {
+        anyhow::bail!("failed to fetch {url_or_path}: curl exited with {}", output.status);
+    }
+    Ok(output.stdout)
 }
 
 /// Wire responses a plugin process prints as one JSON document on stdout for
@@ -248,5 +299,27 @@ pub mod runner {
     fn print_json<T: Serialize>(value: &T) -> anyhow::Result<()> {
         println!("{}", serde_json::to_string(value)?);
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn query_filter() {
+        let v = vec![22u64, 21, 20, 22];
+        assert_eq!(ToolVersionQuery::Recent.filter(v.clone(), |x| *x), v);
+        assert_eq!(ToolVersionQuery::Latest.filter(v.clone(), |x| *x), vec![22]);
+        assert_eq!(ToolVersionQuery::Major(22).filter(v, |x| *x), vec![22, 22]);
+    }
+
+    #[test]
+    fn run_timed_reports_timeout_and_failure() {
+        let mut sleep = std::process::Command::new("sleep");
+        sleep.arg("5");
+        assert!(run_timed(sleep, 100, "sleep", "AVM_TEST_UNSET").unwrap_err().to_string().contains("timed out"));
+        assert!(run_timed(std::process::Command::new("false"), 5_000, "false", "AVM_TEST_UNSET").is_err());
+        assert!(run_timed(std::process::Command::new("true"), 5_000, "true", "AVM_TEST_UNSET").is_ok());
     }
 }

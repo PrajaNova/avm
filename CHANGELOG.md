@@ -6,6 +6,18 @@ The format follows Keep a Changelog style, and releases use semantic versioning.
 
 ## [Unreleased]
 
+### Changed
+- Aliases always run via `sh -c`; `avm resolve` prints the expanded shell command.
+- `avm env` quotes values only when needed.
+- `avm create <name>` now prints the `gh repo create --template PrajaNova/avm-plugin-template` command instead of scaffolding files.
+- `avm shims reshim` is an alias of `avm shims install`.
+- `avm-core`, `avm-shims`, and `avm-runtime` folded into `avm-cli` as modules; `avm-cli` no longer links `avm-plugin-node`.
+
+### Removed
+- Hidden `avm tool` compatibility command (use `avm <plugin> ...`), `avm all`, `avm version` (use `avm --version`), and `avm env --format`.
+- Legacy alias-only plugins (`plugin.json` + `bin/export-aliases`).
+- Installers no longer create an empty `~/.avm.json`; a missing global config is treated as empty.
+
 ## [0.3.0] - 2026-09-23
 
 ### Added

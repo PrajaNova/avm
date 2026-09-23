@@ -63,30 +63,8 @@ name = "avm-cli"
 version = "0.3.0"
 dependencies = [
  "anyhow",
- "avm-core",
- "avm-plugin-api 0.3.0",
- "avm-plugin-node",
- "avm-runtime",
- "avm-shims",
+ "avm-plugin-api",
  "clap",
-]
-
-[[package]]
-name = "avm-core"
-version = "0.3.0"
-dependencies = [
- "anyhow",
- "avm-plugin-api 0.3.0",
- "serde",
- "serde_json",
-]
-
-[[package]]
-name = "avm-plugin-api"
-version = "0.2.8"
-source = "git+https://github.com/PrajaNova/avm#1359fa4fa29d409e29292548fcf1f7659b9ff9f1"
-dependencies = [
- "anyhow",
  "serde",
  "serde_json",
 ]
@@ -98,36 +76,6 @@ dependencies = [
  "anyhow",
  "serde",
  "serde_json",
-]
-
-[[package]]
-name = "avm-plugin-node"
-version = "0.2.8"
-source = "git+https://github.com/PrajaNova/avm-plugin-node#45c134955d0aa21b9d785ba127a65679ac1e115e"
-dependencies = [
- "anyhow",
- "avm-plugin-api 0.2.8",
- "serde",
- "serde_json",
- "wait-timeout",
-]
-
-[[package]]
-name = "avm-runtime"
-version = "0.3.0"
-dependencies = [
- "anyhow",
- "avm-plugin-api 0.3.0",
- "serde",
- "serde_json",
- "wait-timeout",
-]
-
-[[package]]
-name = "avm-shims"
-version = "0.3.0"
-dependencies = [
- "anyhow",
 ]
 
 [[package]]
@@ -193,12 +141,6 @@ name = "itoa"
 version = "1.0.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8f42a60cbdf9a97f5d2305f08a87dc4e09308d1276d28c869c684d7777685682"
-
-[[package]]
-name = "libc"
-version = "0.2.186"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "68ab91017fe16c622486840e4c83c9a37afeff978bd239b5293d61ece587de66"
 
 [[package]]
 name = "memchr"
@@ -301,15 +243,6 @@ name = "utf8parse"
 version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "06abde3611657adf66d383f00b093d7faecc7fa57071cce2578660c9f1010821"
-
-[[package]]
-name = "wait-timeout"
-version = "0.2.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "09ac3b126d3914f9849036f826e054cbabdc8519970b8998ddaf3b5bd3c65f11"
-dependencies = [
- "libc",
-]
 
 [[package]]
 name = "windows-link"

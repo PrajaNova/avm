@@ -7,11 +7,8 @@ shims, and a runtime plugin marketplace.
 
 | Crate | Responsibility |
 | --- | --- |
-| `crates/avm-cli` | Binary entrypoint (`avm-bin`), command routing, shell protocol, `avm create` scaffolding. |
-| `crates/avm-core` | `.avm.json` parsing, local/global merge rules, alias/env/tool resolution. |
-| `crates/avm-shims` | Shim directory management and executable shim generation. |
+| `crates/avm-cli` | The `avm-bin` binary. Modules: `cli/` (command routing, shell protocol), `config`/`resolver` (`.avm.json` parsing, local/global merge rules, alias/env/tool resolution), `shims` (shim generation, PATH lookup), `runtime` (plugin discovery, the protocol host runner `PluginProcess`, the marketplace installer, the legacy asdf compatibility adapter). |
 | `crates/avm-plugin-api` | The `ToolProvider` trait, the plugin wire-protocol types (`protocol` module), and the `runner` module every plugin's `main.rs` calls. This is the one crate a plugin repo depends on. |
-| `crates/avm-runtime` | Plugin discovery, the protocol host runner (`PluginProcess`), the marketplace installer, and the legacy asdf compatibility adapter. |
 
 **Nothing else is compiled into `avm-bin`.** node, java, and android are
 not workspace members — they're separate repos
@@ -78,7 +75,7 @@ speaking one JSON-over-stdio contract:
 "read" command (`manifest`, `versions`, `is-installed`,
 `installed-versions`, `executable-path`, `env-vars`); `install`/`uninstall`
 instead inherit stdio (so progress streams live) and signal success via
-exit code alone. `PluginProcess` (`avm-runtime`) is the host-side runner:
+exit code alone. `PluginProcess` (`avm-cli/src/runtime.rs`) is the host-side runner:
 it spawns the executable, enforces a timeout, and parses the JSON —
 malformed output is a normal `Err`, never a panic.
 
@@ -87,21 +84,15 @@ Full protocol reference and a build-your-own-plugin walkthrough:
 
 ## Runtime boundaries
 
-- CLI commands stay in `avm-cli`.
-- Config and resolver logic stays in `avm-core`.
+- CLI commands stay in `avm-cli/src/cli`.
+- Config and resolver logic stays in `avm-cli/src/{config,resolver}.rs`.
 - Provider contracts and the wire protocol stay in `avm-plugin-api`.
 - Plugin discovery, the protocol host runner, the marketplace installer,
-  and the asdf adapter stay in `avm-runtime`.
-- Shim creation and PATH handling stay in `avm-shims`.
+  and the asdf adapter stay in `avm-cli/src/runtime.rs`.
+- Shim creation and PATH handling stay in `avm-cli/src/shims.rs`.
 
-One documented exception: `avm-cli` still depends on `avm-plugin-node` as
-a *library* (not just a discovered executable) for two things outside the
-`ToolProvider` protocol surface — `package.json` script alias detection,
-and a Windows `node.exe` path fallback used when building the shim PATH
-prefix. Both are filesystem lookups tied to Node's own project/distribution
-layout, not tool-version-provider operations, and routing them through a
-subprocess call would add latency to a hot path (PATH/alias resolution
-runs on every command) for no benefit.
+`package.json` script aliases are read in-process (`cli/state.rs`), not via
+the node plugin: it's a hot path (alias resolution runs on every command).
 
 ## Global packages across local version switches
 

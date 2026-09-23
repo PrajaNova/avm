@@ -1,4 +1,4 @@
-fn shell_init_script() -> String {
+pub fn shell_init_script() -> String {
     r#"unfunction avm 2>/dev/null || unset -f avm 2>/dev/null || true
 
 AVM_SHIM_DIR="${AVM_HOME:-$HOME/.avm}/shims"
@@ -45,7 +45,7 @@ avm() {
   local _avm_key="$1"
   local _avm_rc
     case "$_avm_key" in
-    init|add|list|ls|remove|rm|which|env|tool|tools|version|help|shell-init|plugin|completion|--help|-h|--version|-v|resolve|run|shims|exec-shim|node|java)
+    init|add|list|ls|remove|rm|which|env|help|shell-init|plugin|completion|--help|-h|--version|-v|resolve|run|shims|exec-shim|node|java)
       command avm-bin "$@"
       _avm_rc=$?
       _avm_apply_env
@@ -75,9 +75,16 @@ avm() {
     .to_string()
 }
 
-fn shell_quote(value: &str) -> String {
+/// POSIX single-quote escaping: safe for any byte string.
+pub fn sh_quote(value: &str) -> String {
     if value.is_empty() {
         return "''".to_string();
+    }
+    if value
+        .bytes()
+        .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'_' | b'-' | b'.' | b'/' | b':' | b'='))
+    {
+        return value.to_string();
     }
     format!("'{}'", value.replace('\'', "'\\''"))
 }

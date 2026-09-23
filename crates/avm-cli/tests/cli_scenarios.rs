@@ -98,7 +98,7 @@ fn create_node_archive(dist: &Path, version: &str) {
 }
 
 /// Providers are no longer compiled into avm-bin (see the marketplace model
-/// in crates/avm-runtime — `avm plugin add <name>` fetches a **compiled**
+/// in crates/avm-cli/src/runtime.rs — `avm plugin add <name>` fetches a **compiled**
 /// release from the plugin's own repo, built on GitHub's `ubuntu-latest`
 /// runners). That's proven working end-to-end separately (see
 /// docs/migration/PLUGIN_PROTOCOL.md) — for this test suite, fetching that
@@ -229,7 +229,7 @@ fn resolves_and_runs_local_aliases() {
 
     let output = run_avm(&work, &home, &["resolve", "dev", "web"]);
     assert_success(&output);
-    assert_eq!(stdout(&output).trim(), "'echo' 'local-dev:web'");
+    assert_eq!(stdout(&output).trim(), "echo local-dev:web");
 
     let output = run_avm(&work, &home, &["run", "dev", "web"]);
     assert_success(&output);
@@ -241,7 +241,7 @@ fn resolves_and_runs_local_aliases() {
 
     let output = run_avm(&work, &home, &["env"]);
     assert_success(&output);
-    assert!(stdout(&output).contains("export AVM_TEST_ENV='local'"));
+    assert!(stdout(&output).contains("export AVM_TEST_ENV=local"));
 }
 
 #[test]
@@ -290,8 +290,8 @@ fn local_config_overrides_global_config() {
 
     let output = run_avm(&work, &home, &["env"]);
     assert_success(&output);
-    assert!(stdout(&output).contains("export SCOPE='local'"));
-    assert!(stdout(&output).contains("export SHARED='yes'"));
+    assert!(stdout(&output).contains("export SCOPE=local"));
+    assert!(stdout(&output).contains("export SHARED=yes"));
 }
 
 #[test]
@@ -791,10 +791,9 @@ fn alias_exit_code_propagates_in_shell_mode() {
 }
 
 #[test]
-fn alias_quoted_metacharacters_stay_in_direct_mode() {
-    // `;` inside double quotes is literal; needs_shell() must not promote.
-    // We can't directly observe direct vs shell mode, but we can ensure the
-    // literal semicolon survives intact in the output.
+fn alias_quoted_metacharacters_stay_literal() {
+    // `;` inside double quotes is literal to `sh -c`; the semicolon must
+    // survive intact in the output.
     let root = temp_root("quoted-meta-alias");
     let home = root.join("home");
     let work = root.join("work");

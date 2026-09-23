@@ -60,11 +60,11 @@ checksum = "7f202df86484c868dbad7eaa557ef785d5c66295e41b460ef922eca0723b842c"
 
 [[package]]
 name = "avm-cli"
-version = "0.2.8"
+version = "0.3.0"
 dependencies = [
  "anyhow",
  "avm-core",
- "avm-plugin-api 0.2.8",
+ "avm-plugin-api 0.3.0",
  "avm-plugin-node",
  "avm-runtime",
  "avm-shims",
@@ -73,19 +73,10 @@ dependencies = [
 
 [[package]]
 name = "avm-core"
-version = "0.2.8"
+version = "0.3.0"
 dependencies = [
  "anyhow",
- "avm-plugin-api 0.2.8",
- "serde",
- "serde_json",
-]
-
-[[package]]
-name = "avm-plugin-api"
-version = "0.2.8"
-dependencies = [
- "anyhow",
+ "avm-plugin-api 0.3.0",
  "serde",
  "serde_json",
 ]
@@ -101,20 +92,18 @@ dependencies = [
 ]
 
 [[package]]
-name = "avm-plugin-node"
-version = "0.2.8"
-source = "git+https://github.com/PrajaNova/avm-plugin-node#45c134955d0aa21b9d785ba127a65679ac1e115e"
+name = "avm-plugin-api"
+version = "0.3.0"
 dependencies = [
  "anyhow",
- "avm-plugin-api 0.2.8 (git+https://github.com/PrajaNova/avm)",
  "serde",
  "serde_json",
- "wait-timeout",
 ]
 
 [[package]]
-name = "avm-runtime"
+name = "avm-plugin-node"
 version = "0.2.8"
+source = "git+https://github.com/PrajaNova/avm-plugin-node#45c134955d0aa21b9d785ba127a65679ac1e115e"
 dependencies = [
  "anyhow",
  "avm-plugin-api 0.2.8",
@@ -124,8 +113,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "avm-runtime"
+version = "0.3.0"
+dependencies = [
+ "anyhow",
+ "avm-plugin-api 0.3.0",
+ "serde",
+ "serde_json",
+ "wait-timeout",
+]
+
+[[package]]
 name = "avm-shims"
-version = "0.2.8"
+version = "0.3.0"
 dependencies = [
  "anyhow",
 ]

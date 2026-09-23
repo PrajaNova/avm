@@ -6,6 +6,21 @@ The format follows Keep a Changelog style, and releases use semantic versioning.
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-09-23
+
+### Added
+- Decentralized runtime plugin marketplace architecture (`avm plugin add`, `avm plugin remove`, `avm plugin list`, `avm plugin update`) with prebuilt binary asset resolution.
+- Native Android SDK and Java Temurin providers operating over the typed wire protocol in `avm-plugin-api`.
+- Real-time interactive version picker with type-to-search filtering.
+- Dedicated `avm alias` and `avm env` namespaces (add, remove, list) matching `avm plugin`, plus root alias invocation.
+- Plugin-defined custom subcommands beyond fixed protocol verbs.
+
+### Fixed
+- In-place overwrite handling on macOS to avoid Gatekeeper execution and quarantine races when updating plugins.
+- Fixed `EXDEV` cross-device file system move errors during plugin installation.
+- Preserved shims-first PATH order in `avm env` to prevent path shadowing.
+- Fixed pipe buffer deadlocks in `run_with_timeout` for plugins with large stdout streams.
+
 ## [0.2.8] - 2026-07-17
 
 ### Added

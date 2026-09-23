@@ -91,7 +91,8 @@ fn run(cli: Cli) -> Result<()> {
         Commands::Remove(args) => cmd_remove(args),
         Commands::List => cmd_list(),
         Commands::Which { key } => cmd_which(&key),
-        Commands::Env(args) => cmd_env(args),
+        Commands::Alias { command } => cmd_alias(command),
+        Commands::Env { command, format } => cmd_env(command, format),
         Commands::Resolve(args) => cmd_resolve(args),
         Commands::Run(args) => cmd_run(args),
         Commands::Tool { command } => cmd_tool(command),
@@ -112,6 +113,8 @@ fn run(cli: Cli) -> Result<()> {
             Ok(())
         }
         Commands::PluginCommand(args) => cmd_plugin_command(args),
+        Commands::Pa { source } => cmd_plugin(PluginCommands::Add { source }),
+        Commands::Ea { key, value, global } => cmd_env_add(key, value, global),
     }
 }
 
@@ -120,16 +123,23 @@ fn print_grouped_help() {
     println!();
     println!("Aliases:");
     println!("  avm init                         Create .avm.json");
-    println!("  avm add <name> <command>         Add alias");
-    println!("  avm remove <name>                Remove alias");
+    println!("  avm alias add <name> <command>   Add alias (short: avm aa ...)");
+    println!("  avm alias remove <name>          Remove alias");
+    println!("  avm alias list                   List aliases");
     println!("  avm list                         List config and aliases");
     println!("  avm run <name> [args...]         Run alias");
     println!("  avm resolve <name> [args...]     Print expanded alias command");
     println!("  avm which <name>                 Show alias/plugin origin");
     println!();
+    println!("Env vars:");
+    println!("  avm env                          Print export statements (used by shell-init)");
+    println!("  avm env add <KEY> <value>        Add a custom env var (short: avm ea ...)");
+    println!("  avm env remove <KEY>             Remove a custom env var");
+    println!("  avm env list                     List configured env vars");
+    println!();
     println!("Plugins:");
     println!("  avm plugin available             Show installable plugins");
-    println!("  avm plugin add node              Install built-in node plugin");
+    println!("  avm plugin add node              Install built-in node plugin (short: avm pa node)");
     println!("  avm plugin add <path-or-url>     Install AVM or compatible asdf plugin");
     println!("  avm plugin list --all            List installed and available plugins");
     println!("  avm plugin remove <name>         Remove plugin");

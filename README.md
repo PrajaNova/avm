@@ -36,7 +36,7 @@ For positioning versus popular alternatives, see [Comparison with asdf and vfox]
 | Node support strategy | Native plugin (`avm-plugin-node`): live version index + `package.json` script resolver | External Node plugin scripts | Provider-based Node integrations |
 | Fallback if requested node version missing | Uses system node with warning | Typically triggers plugin install flow | Typically triggers plugin install flow |
 | Configuration default | `.avm.json` with local/global + legacy compatibility | `.tool-versions` | `.tool-versions` |
-| Security / isolation | Plugins run as separate OS processes (never linked into `avm-bin`), a typed JSON contract instead of shared bash scripts | Shell scripts (higher host access) | In-process plugin runtime (less isolated than strict sandbox) |
+| Security / isolation | Plugins run as separate OS processes (never linked into `avm-bin`), a typed JSON contract instead of shared bash scripts; plugin downloads are sha256-verified against the release's `checksums.txt` before install | Shell scripts (higher host access) | In-process plugin runtime (less isolated than strict sandbox) |
 
 ## Quick start
 

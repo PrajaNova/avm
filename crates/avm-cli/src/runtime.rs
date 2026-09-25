@@ -1,7 +1,7 @@
 use anyhow::{anyhow, Context, Result};
 use avm_plugin_api::{
-    env_timeout_ms, fetch, list_installed, remove_version, run_timed, tool_dir, wait_deadline,
-    Manifest, ToolProvider, ToolVersion, ToolVersionQuery,
+    env_timeout_ms, fetch, list_installed, remove_version, run_timed, sha256_file, tool_dir,
+    verify_sha256, wait_deadline, Manifest, ToolProvider, ToolVersion, ToolVersionQuery,
 };
 use std::collections::HashMap;
 use std::fs;
@@ -546,7 +546,8 @@ struct GithubAsset {
 /// contract (documented in the avm-marketplace repo's README).
 pub fn install_from_marketplace(name: &str, repo: &str, plugin_dir: &Path) -> Result<String> {
     let (os, arch) = marketplace_platform()?;
-    let release_api = format!("https://api.github.com/repos/{repo}/releases/latest");
+    let api = std::env::var("AVM_GITHUB_API_URL").unwrap_or_else(|_| "https://api.github.com".to_string());
+    let release_api = format!("{}/repos/{repo}/releases/latest", api.trim_end_matches('/'));
     let body = fetch(&release_api, MARKETPLACE_TIMEOUT_SECS)
         .with_context(|| format!("failed to query latest release for {repo}"))?;
     let release: GithubRelease =
@@ -564,9 +565,14 @@ pub fn install_from_marketplace(name: &str, repo: &str, plugin_dir: &Path) -> Re
             )
         })?;
 
-    let target_dir = plugin_dir.join(format!("{PROTOCOL_PREFIX}{name}"));
-    let bin_dir = target_dir.join("bin");
-    fs::create_dir_all(&bin_dir).context("failed to create plugin bin dir")?;
+    let checksums = release.assets.iter().find(|a| a.name == "checksums.txt");
+    if checksums.is_none() && std::env::var("AVM_ALLOW_UNVERIFIED").as_deref() != Ok("1") {
+        return Err(anyhow!(
+            "release {} of {repo} publishes no checksums.txt, so {asset_name} can't be verified.\n  \
+             refusing to install. Set AVM_ALLOW_UNVERIFIED=1 to install it anyway.",
+            release.tag_name
+        ));
+    }
 
     let tmp = std::env::temp_dir().join(format!("avm-plugin-{name}-{}.tar.gz", std::process::id()));
     let mut download = Command::new("curl");
@@ -581,6 +587,21 @@ pub fn install_from_marketplace(name: &str, repo: &str, plugin_dir: &Path) -> Re
         &format!("downloading {asset_name}"),
         "AVM_MARKETPLACE_INSTALL_TIMEOUT",
     )?;
+
+    let (sha256, verified) = match checksums {
+        Some(c) => fetch(&c.browser_download_url, MARKETPLACE_TIMEOUT_SECS)
+            .context("failed to fetch checksums.txt")
+            .and_then(|sums| verify_sha256(&tmp, &String::from_utf8_lossy(&sums), &asset_name))
+            .map_err(|e| {
+                let _ = fs::remove_file(&tmp);
+                anyhow!("{e:#}\n  refusing to install. Report at https://github.com/{repo}/issues")
+            })
+            .map(|hash| (hash, true))?,
+        None => {
+            eprintln!("warning: installing UNVERIFIED {asset_name} (AVM_ALLOW_UNVERIFIED=1)");
+            (sha256_file(&tmp)?, false)
+        }
+    };
 
     let extract_dir = std::env::temp_dir().join(format!("avm-plugin-{name}-extract-{}", std::process::id()));
     fs::create_dir_all(&extract_dir).context("failed to create extraction temp dir")?;
@@ -598,6 +619,9 @@ pub fn install_from_marketplace(name: &str, repo: &str, plugin_dir: &Path) -> Re
             "{asset_name} did not contain the expected file avm-plugin-{name}"
         ));
     }
+    let target_dir = plugin_dir.join(format!("{PROTOCOL_PREFIX}{name}"));
+    let bin_dir = target_dir.join("bin");
+    fs::create_dir_all(&bin_dir).context("failed to create plugin bin dir")?;
     let dest = bin_dir.join("avm-plugin");
     // On macOS, overwriting an existing binary at `dest` in place (as
     // `fs::copy` alone does) and then executing it shortly after — exactly
@@ -620,6 +644,8 @@ pub fn install_from_marketplace(name: &str, repo: &str, plugin_dir: &Path) -> Re
         fs::set_permissions(&dest, perms)?;
     }
     let _ = fs::remove_dir_all(&extract_dir);
+    let meta = serde_json::json!({ "version": release.tag_name, "sha256": sha256, "verified": verified });
+    fs::write(target_dir.join("meta.json"), meta.to_string()).context("failed to write plugin meta.json")?;
 
     Ok(release.tag_name)
 }

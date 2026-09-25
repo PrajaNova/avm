@@ -172,6 +172,40 @@ pub fn fetch(url_or_path: &str, max_time_secs: u32) -> anyhow::Result<Vec<u8>> {
     Ok(output.stdout)
 }
 
+/// Lowercase hex sha256 of the file at `path`, streamed.
+pub fn sha256_file(path: &std::path::Path) -> anyhow::Result<String> {
+    use sha2::{Digest, Sha256};
+    use std::io::Read;
+    let mut file = std::fs::File::open(path).map_err(|e| anyhow::anyhow!("failed to open {}: {e}", path.display()))?;
+    let mut hasher = Sha256::new();
+    let mut buf = [0u8; 64 * 1024];
+    loop {
+        let n = file.read(&mut buf)?;
+        if n == 0 {
+            break;
+        }
+        hasher.update(&buf[..n]);
+    }
+    Ok(hasher.finalize().iter().map(|b| format!("{b:02x}")).collect())
+}
+
+/// Check `path` against the entry for `name` in `checksums` (`sha256sum`
+/// output: `<hex>  <name>` or `<hex> *<name>` per line). Returns the hash on
+/// a match; errors if `name` is unlisted or the hash differs.
+pub fn verify_sha256(path: &std::path::Path, checksums: &str, name: &str) -> anyhow::Result<String> {
+    let expected = checksums
+        .lines()
+        .filter_map(|line| line.split_once(char::is_whitespace))
+        .find(|(_, file)| file.trim_start().trim_start_matches('*') == name)
+        .map(|(hash, _)| hash.to_ascii_lowercase())
+        .ok_or_else(|| anyhow::anyhow!("checksums file has no entry for {name}"))?;
+    let actual = sha256_file(path)?;
+    if actual != expected {
+        anyhow::bail!("checksum mismatch for {name}\n  expected {expected}\n  got      {actual}");
+    }
+    Ok(actual)
+}
+
 /// Wire responses a plugin process prints as one JSON document on stdout for
 /// its "read" commands. See `docs/migration/PLUGIN_PROTOCOL.md` for the full
 /// contract, including why `install`/`uninstall` are deliberately NOT part
@@ -312,6 +346,20 @@ mod tests {
         assert_eq!(ToolVersionQuery::Recent.filter(v.clone(), |x| *x), v);
         assert_eq!(ToolVersionQuery::Latest.filter(v.clone(), |x| *x), vec![22]);
         assert_eq!(ToolVersionQuery::Major(22).filter(v, |x| *x), vec![22, 22]);
+    }
+
+    #[test]
+    fn verify_sha256_matches_and_rejects() {
+        let path = std::env::temp_dir().join(format!("avm-sha-test-{}", std::process::id()));
+        std::fs::write(&path, b"abc").unwrap();
+        let abc = "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad";
+        assert_eq!(sha256_file(&path).unwrap(), abc);
+        let sums = format!("{}  other.tar.gz\n{abc}  a.tar.gz\n", "0".repeat(64));
+        assert_eq!(verify_sha256(&path, &sums, "a.tar.gz").unwrap(), abc);
+        assert_eq!(verify_sha256(&path, &format!("{abc} *a.tar.gz"), "a.tar.gz").unwrap(), abc);
+        assert!(verify_sha256(&path, &sums, "other.tar.gz").unwrap_err().to_string().contains("mismatch"));
+        assert!(verify_sha256(&path, &sums, "missing.tar.gz").unwrap_err().to_string().contains("no entry"));
+        let _ = std::fs::remove_file(path);
     }
 
     #[test]

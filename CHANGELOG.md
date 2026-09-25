@@ -6,6 +6,9 @@ The format follows Keep a Changelog style, and releases use semantic versioning.
 
 ## [Unreleased]
 
+### Added
+- Reusable plugin release workflow publishes `checksums.txt` (sha256) alongside platform archives.
+
 ### Changed
 - Aliases always run via `sh -c`; `avm resolve` prints the expanded shell command.
 - `avm env` quotes values only when needed.

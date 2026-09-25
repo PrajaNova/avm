@@ -27,11 +27,11 @@ Commands you can use:
 - `avm run <alias> [args...]`
 - `avm resolve <alias> [args...]`
 - `avm env`
-- `avm tool use [--global] <tool> <version>`
-- `avm tool install <tool> <version>` (reserved provider surface; Node download is not implemented in the baseline)
-- `avm tool uninstall <tool> <version>`
-- `avm tool list`
+- `avm <tool> use <version> [--global]`
+- `avm <tool> install <version>`
+- `avm <tool> uninstall <version>`
+- `avm <tool> list`
 - `avm plugin add|list|remove|update`
 - `avm shims install|remove|path`
 - `avm shell-init`
-- `avm version`
+- `avm --version`

@@ -52,18 +52,9 @@ fi
 
 tar -xzf "${binary_name}.tar.gz"
 
-# Create ~/.avm.json if it doesn't exist
-if [ ! -f "$HOME/.avm.json" ]; then
-    echo "{}" > "$HOME/.avm.json"
-    echo "✓ Created $HOME/.avm.json"
-fi
-
 # Install binary as avm-bin (shell function will be named 'avm')
 INSTALL_PATH=""
 extracted_binary="avm-bin"
-if [ ! -f "$extracted_binary" ] && [ -f "avm" ]; then
-    extracted_binary="avm"
-fi
 if [ ! -f "$extracted_binary" ]; then
     echo "Error: archive did not contain avm-bin"
     exit 1

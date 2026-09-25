@@ -6,6 +6,23 @@ The format follows Keep a Changelog style, and releases use semantic versioning.
 
 ## [Unreleased]
 
+### Added
+- Reusable plugin release workflow publishes `checksums.txt` (sha256) alongside platform archives.
+- `avm plugin add`/`update` verify the downloaded archive's sha256 against the release's `checksums.txt` before extracting; a mismatch aborts with nothing installed. Releases without `checksums.txt` are refused unless `AVM_ALLOW_UNVERIFIED=1`. The verified hash is recorded in the plugin's `meta.json`.
+- `AVM_GITHUB_API_URL` overrides the GitHub API base used for marketplace installs.
+
+### Changed
+- Aliases always run via `sh -c`; `avm resolve` prints the expanded shell command.
+- `avm env` quotes values only when needed.
+- `avm create <name>` now prints the `gh repo create --template PrajaNova/avm-plugin-template` command instead of scaffolding files.
+- `avm shims reshim` is an alias of `avm shims install`.
+- `avm-core`, `avm-shims`, and `avm-runtime` folded into `avm-cli` as modules; `avm-cli` no longer links `avm-plugin-node`.
+
+### Removed
+- Hidden `avm tool` compatibility command (use `avm <plugin> ...`), `avm all`, `avm version` (use `avm --version`), and `avm env --format`.
+- Legacy alias-only plugins (`plugin.json` + `bin/export-aliases`).
+- Installers no longer create an empty `~/.avm.json`; a missing global config is treated as empty.
+
 ## [0.3.0] - 2026-09-23
 
 ### Added

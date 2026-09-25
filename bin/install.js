@@ -1,11 +1,9 @@
 #!/usr/bin/env node
 // Post-install script: downloads the correct avm binary for the current platform
 
-const https = require('https');
 const fs = require('fs');
 const path = require('path');
 const { execSync } = require('child_process');
-const os = require('os');
 
 const pkg = require('../package.json');
 const REPO = 'prajanova/avm';
@@ -33,64 +31,21 @@ function getPlatform() {
   return { osName, archName };
 }
 
-function download(url, dest) {
-  return new Promise((resolve, reject) => {
-    const file = fs.createWriteStream(dest);
-
-    const request = (reqUrl) => {
-      https.get(reqUrl, (res) => {
-        if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
-          request(res.headers.location);
-          return;
-        }
-        if (res.statusCode !== 200) {
-          reject(new Error(`Download failed: HTTP ${res.statusCode} for ${reqUrl}`));
-          return;
-        }
-        res.pipe(file);
-        file.on('finish', () => file.close(resolve));
-      }).on('error', (err) => {
-        fs.unlink(dest, () => {});
-        reject(err);
-      });
-    };
-
-    request(url);
-  });
-}
-
-async function main() {
+function main() {
   try {
     const { osName, archName } = getPlatform();
     const archiveName = `avm_${osName}_${archName}.tar.gz`;
     const url = `https://github.com/${REPO}/releases/download/${VERSION}/${archiveName}`;
 
-    const binDir = path.join(__dirname);
-    const tarPath = path.join(binDir, archiveName);
+    const binDir = __dirname;
     const finalBinary = path.join(binDir, 'avm-bin');
 
     console.log(`Downloading avm ${VERSION} for ${osName}/${archName}...`);
-    await download(url, tarPath);
-
-    console.log('Extracting...');
-    execSync(`tar -xzf "${tarPath}" -C "${binDir}"`);
-
-    const extractedAvmBin = path.join(binDir, 'avm-bin');
-    const extractedLegacyAvm = path.join(binDir, 'avm');
-    if (fs.existsSync(extractedLegacyAvm) && !fs.existsSync(extractedAvmBin)) {
-      fs.renameSync(extractedLegacyAvm, finalBinary);
-    } else if (!fs.existsSync(extractedAvmBin)) {
+    execSync(`curl -fsSL "${url}" | tar -xz -C "${binDir}"`, { stdio: 'inherit' });
+    if (!fs.existsSync(finalBinary)) {
       throw new Error('release archive did not contain avm-bin');
     }
-
     fs.chmodSync(finalBinary, 0o755);
-    fs.unlinkSync(tarPath);
-
-    // Create ~/.avm.json if missing
-    const globalConfig = path.join(os.homedir(), '.avm.json');
-    if (!fs.existsSync(globalConfig)) {
-      fs.writeFileSync(globalConfig, '{}\n');
-    }
 
     console.log('✓ avm installed successfully');
     console.log('');

@@ -98,7 +98,7 @@ fn create_node_archive(dist: &Path, version: &str) {
 }
 
 /// Providers are no longer compiled into avm-bin (see the marketplace model
-/// in crates/avm-runtime — `avm plugin add <name>` fetches a **compiled**
+/// in crates/avm-cli/src/runtime.rs — `avm plugin add <name>` fetches a **compiled**
 /// release from the plugin's own repo, built on GitHub's `ubuntu-latest`
 /// runners). That's proven working end-to-end separately (see
 /// docs/migration/PLUGIN_PROTOCOL.md) — for this test suite, fetching that
@@ -229,7 +229,7 @@ fn resolves_and_runs_local_aliases() {
 
     let output = run_avm(&work, &home, &["resolve", "dev", "web"]);
     assert_success(&output);
-    assert_eq!(stdout(&output).trim(), "'echo' 'local-dev:web'");
+    assert_eq!(stdout(&output).trim(), "echo local-dev:web");
 
     let output = run_avm(&work, &home, &["run", "dev", "web"]);
     assert_success(&output);
@@ -241,7 +241,7 @@ fn resolves_and_runs_local_aliases() {
 
     let output = run_avm(&work, &home, &["env"]);
     assert_success(&output);
-    assert!(stdout(&output).contains("export AVM_TEST_ENV='local'"));
+    assert!(stdout(&output).contains("export AVM_TEST_ENV=local"));
 }
 
 #[test]
@@ -290,8 +290,8 @@ fn local_config_overrides_global_config() {
 
     let output = run_avm(&work, &home, &["env"]);
     assert_success(&output);
-    assert!(stdout(&output).contains("export SCOPE='local'"));
-    assert!(stdout(&output).contains("export SHARED='yes'"));
+    assert!(stdout(&output).contains("export SCOPE=local"));
+    assert!(stdout(&output).contains("export SHARED=yes"));
 }
 
 #[test]
@@ -791,10 +791,9 @@ fn alias_exit_code_propagates_in_shell_mode() {
 }
 
 #[test]
-fn alias_quoted_metacharacters_stay_in_direct_mode() {
-    // `;` inside double quotes is literal; needs_shell() must not promote.
-    // We can't directly observe direct vs shell mode, but we can ensure the
-    // literal semicolon survives intact in the output.
+fn alias_quoted_metacharacters_stay_literal() {
+    // `;` inside double quotes is literal to `sh -c`; the semicolon must
+    // survive intact in the output.
     let root = temp_root("quoted-meta-alias");
     let home = root.join("home");
     let work = root.join("work");
@@ -1007,4 +1006,62 @@ fn corrupt_global_config_is_backed_up_and_recovered() {
         entries.iter().any(|n| n.starts_with(".avm.broken-")),
         "no backup in: {entries:?}"
     );
+}
+
+/// Serve a fake `o/fake` GitHub release from local files and check that
+/// `avm plugin add fake` refuses tampered or unverifiable archives (#19).
+#[test]
+fn marketplace_install_verifies_checksums() {
+    let root = temp_root("checksums");
+    let asset = format!(
+        "avm-plugin-fake_{}_{}.tar.gz",
+        if cfg!(target_os = "macos") { "darwin" } else { "linux" },
+        if cfg!(target_arch = "aarch64") { "arm64" } else { "amd64" },
+    );
+    let build = root.join("build");
+    write_file(&build.join("avm-plugin-fake"), "#!/bin/sh\n");
+    let archive = root.join(&asset);
+    let tar = Command::new("tar").arg("-czf").arg(&archive).arg("-C").arg(&build).arg("avm-plugin-fake").status();
+    assert!(tar.expect("run tar").success());
+    let good = avm_plugin_api::sha256_file(&archive).unwrap();
+
+    let registry = root.join("registry.json");
+    write_file(&registry, r#"{"plugins":[{"name":"fake","description":"x","repo":"o/fake"}]}"#);
+    let release = root.join("api/repos/o/fake/releases/latest");
+    let sums = root.join("checksums.txt");
+    let publish = |hash: Option<&str>| {
+        let mut assets = vec![format!(r#"{{"name":"{asset}","browser_download_url":"file://{}"}}"#, archive.display())];
+        if let Some(hash) = hash {
+            write_file(&sums, &format!("{hash}  {asset}\n"));
+            assets.push(format!(r#"{{"name":"checksums.txt","browser_download_url":"file://{}"}}"#, sums.display()));
+        }
+        write_file(&release, &format!(r#"{{"tag_name":"v1.0.0","assets":[{}]}}"#, assets.join(",")));
+    };
+    let plugin = root.join(".avm/plugins/avm-plugin-fake");
+    let api = root.join("api");
+    let add = |extra: &[(&str, &Path)]| {
+        let mut envs = vec![("AVM_MARKETPLACE_URL", registry.as_path()), ("AVM_GITHUB_API_URL", api.as_path())];
+        envs.extend_from_slice(extra);
+        run_avm_with_env(&root, &root, &["plugin", "add", "fake"], &envs)
+    };
+
+    publish(Some(&"0".repeat(64)));
+    let out = add(&[]);
+    assert_failure(&out);
+    assert!(stderr(&out).contains("checksum mismatch"), "{}", stderr(&out));
+    assert!(!plugin.exists(), "tampered install left files behind");
+
+    publish(None);
+    let out = add(&[]);
+    assert_failure(&out);
+    assert!(stderr(&out).contains("no checksums.txt"), "{}", stderr(&out));
+    assert!(!plugin.exists());
+    assert_success(&add(&[("AVM_ALLOW_UNVERIFIED", Path::new("1"))]));
+    assert!(fs::read_to_string(plugin.join("meta.json")).unwrap().contains(r#""verified":false"#));
+
+    publish(Some(&good));
+    assert_success(&add(&[]));
+    let meta = fs::read_to_string(plugin.join("meta.json")).unwrap();
+    assert!(meta.contains(&good) && meta.contains(r#""verified":true"#), "{meta}");
+    assert!(plugin.join("bin/avm-plugin").exists());
 }

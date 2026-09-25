@@ -7,7 +7,7 @@ Use this as a compact skill file for agents helping users with avm.
 ```bash
 avm init
 avm add dev "pnpm run dev"
-avm tool use node 20.11.1
+avm node use 20.11.1
 avm shims install
 eval "$(avm shell-init)"
 ```
@@ -20,7 +20,7 @@ eval "$(avm shell-init)"
 - `avm run <name>` runs an alias.
 - `avm which <name>` explains where a value came from.
 - `avm list` shows aliases, env, tools, and provider aliases.
-- `avm tool use node <version>` writes the selected Node version.
+- `avm node use <version>` writes the selected Node version.
 - `avm shims install` creates plain command shims.
 - `avm shell-init` prints shell integration.
 

@@ -167,6 +167,15 @@ npm install -g @prajanova/avm
 cargo install --path .
 ```
 
+`install.sh` and the npm installer verify the release archive against the
+release's `checksums.txt` before extracting. Every avm and first-party
+plugin release also carries a GitHub build provenance attestation:
+
+```bash
+gh attestation verify avm_linux_amd64.tar.gz -R PrajaNova/avm
+gh attestation verify avm-plugin-node_linux_amd64.tar.gz -R PrajaNova/avm-plugin-node
+```
+
 ## Docker-based test suite
 
 Run the full Rust and scenario suite in an isolated container:

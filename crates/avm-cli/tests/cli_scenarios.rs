@@ -95,6 +95,8 @@ fn create_node_archive(dist: &Path, version: &str) {
         .status()
         .expect("create fake node archive");
     assert!(status.success(), "tar fake node archive");
+    let sha = avm_plugin_api::sha256_file(&release_dir.join(&archive)).expect("hash fake node archive");
+    write_file(&release_dir.join("SHASUMS256.txt"), &format!("{sha}  {archive}\n"));
 }
 
 /// Providers are no longer compiled into avm-bin (see the marketplace model

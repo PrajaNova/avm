@@ -137,6 +137,14 @@ doesn't distinguish "installed by hand for testing" from "installed via
    one file, `avm-plugin-<name>`. It always fetches a compiled release —
    never source — so anyone installing your plugin needs no Rust
    toolchain, same as `avm plugin add node` today.
+
+   The release must also include **`checksums.txt`** (`sha256sum` output
+   over the archives). avm verifies the archive against it before
+   extracting and refuses releases without it (unless the user sets
+   `AVM_ALLOW_UNVERIFIED=1`). The reusable workflow
+   (`PrajaNova/avm/.github/workflows/plugin-release.yml`) generates it and
+   a build provenance attestation automatically; its caller must grant
+   `contents: write`, `id-token: write`, and `attestations: write`.
 3. **List it in the marketplace** (optional but recommended): open a PR
    adding an entry to `registry.json` in
    [PrajaNova/avm-marketplace](https://github.com/PrajaNova/avm-marketplace)
@@ -147,6 +155,16 @@ doesn't distinguish "installed by hand for testing" from "installed via
    `avm plugin add <path-or-url>` — same asset-naming contract applies,
    avm just resolves the repo from the URL you gave it instead of a
    registry lookup.
+
+## Verifying what your plugin downloads
+
+If `install` downloads a runtime, verify it before extracting — use
+`avm_plugin_api::verify_sha256(path, checksums_text, file_name)` against the
+upstream's checksum file (or a one-line `"<sha256>  <name>"` when the
+upstream reports a single hash). Fail closed, and honor
+`AVM_ALLOW_UNVERIFIED=1` as the only escape hatch. The first-party plugins
+show all three shapes: node (`SHASUMS256.txt`), java (foojay's per-package
+sha256), android (a pinned sha256 for the bootstrap zip).
 
 ## Real examples
 

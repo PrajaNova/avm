@@ -32,6 +32,7 @@ echo fake-node
 EOF
 chmod +x "$DISTDIR/v20.11.1/node-v20.11.1-$NODE_PLATFORM/bin/node"
 tar -C "$DISTDIR/v20.11.1" -czf "$DISTDIR/v20.11.1/node-v20.11.1-$NODE_PLATFORM.tar.gz" "node-v20.11.1-$NODE_PLATFORM"
+(cd "$DISTDIR/v20.11.1" && sha256sum "node-v20.11.1-$NODE_PLATFORM.tar.gz" > SHASUMS256.txt)
 
 # node is no longer bundled with avm-bin; run-docker-tests.sh builds it
 # from source into the shared AVM_PLUGIN_DIR before any scenario runs (see

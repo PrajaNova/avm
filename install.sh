@@ -31,10 +31,11 @@ echo "Detected: $os/$arch"
 # Download and install
 binary_name="avm_${os}_${arch}"
 if [ "$VERSION" = "latest" ]; then
-    url="https://github.com/${REPO}/releases/latest/download/${binary_name}.tar.gz"
+    base="https://github.com/${REPO}/releases/latest/download"
 else
-    url="https://github.com/${REPO}/releases/download/${VERSION}/${binary_name}.tar.gz"
+    base="https://github.com/${REPO}/releases/download/${VERSION}"
 fi
+url="${base}/${binary_name}.tar.gz"
 
 echo "Downloading $binary_name..."
 
@@ -44,10 +45,38 @@ trap "rm -rf $tmpdir" EXIT
 
 cd "$tmpdir"
 
-if command -v curl &> /dev/null; then
-    curl -fsSL "$url" -o "${binary_name}.tar.gz"
+download() {
+    if command -v curl &> /dev/null; then
+        curl -fsSL "$1" -o "$2"
+    else
+        wget -q "$1" -O "$2"
+    fi
+}
+
+download "$url" "${binary_name}.tar.gz"
+
+# Verify against the release's checksums.txt before extracting.
+if download "${base}/checksums.txt" checksums.txt 2>/dev/null; then
+    expected="$(awk -v f="${binary_name}.tar.gz" '$2 == f || $2 == "*" f {print $1}' checksums.txt)"
+    if command -v sha256sum &> /dev/null; then
+        actual="$(sha256sum "${binary_name}.tar.gz" | awk '{print $1}')"
+    else
+        actual="$(shasum -a 256 "${binary_name}.tar.gz" | awk '{print $1}')"
+    fi
+    if [ -z "$expected" ] || [ "$expected" != "$actual" ]; then
+        echo "Error: checksum mismatch for ${binary_name}.tar.gz"
+        echo "  expected ${expected:-<not listed>}"
+        echo "  got      $actual"
+        echo "  refusing to install. Report at https://github.com/${REPO}/issues"
+        exit 1
+    fi
+    echo "✓ Verified sha256"
+elif [ "${AVM_ALLOW_UNVERIFIED:-}" = "1" ]; then
+    echo "Warning: release has no checksums.txt; installing UNVERIFIED (AVM_ALLOW_UNVERIFIED=1)"
 else
-    wget -q "$url" -O "${binary_name}.tar.gz"
+    echo "Error: release has no checksums.txt, so ${binary_name}.tar.gz can't be verified."
+    echo "  Set AVM_ALLOW_UNVERIFIED=1 to install anyway."
+    exit 1
 fi
 
 tar -xzf "${binary_name}.tar.gz"

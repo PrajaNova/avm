@@ -6,6 +6,8 @@ The format follows Keep a Changelog style, and releases use semantic versioning.
 
 ## [Unreleased]
 
+## [0.4.0-beta-2] - 2026-09-28
+
 ### Added
 - `avm self-update [--version X]` (#28): updates install.sh/install.ps1 installs in place from the GitHub release, sha256-verified before the atomic swap (on Windows the running exe is moved aside, then shims are relinked). Homebrew, npm, cargo and Scoop installs print their own upgrade command instead.
 - Update notice (#28): after interactive commands, at most once a day, a one-line stderr notice when a newer release exists. The check runs in a detached background process, so commands never wait on the network. Never shown in pipes, CI, shims, `avm env`, or with `AVM_NO_UPDATE_CHECK=1`.

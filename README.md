@@ -222,8 +222,8 @@ release's `checksums.txt` before extracting. Every avm and first-party
 plugin release also carries a GitHub build provenance attestation:
 
 ```bash
-gh attestation verify avm_linux_amd64.tar.gz -R PrajaNova/avm
-gh attestation verify avm-plugin-node_linux_amd64.tar.gz -R PrajaNova/avm-plugin-node
+gh attestation verify avm_linux_amd64.tar.gz --owner PrajaNova
+gh attestation verify avm-plugin-node_linux_amd64.tar.gz --owner PrajaNova
 ```
 
 ## Docker-based test suite

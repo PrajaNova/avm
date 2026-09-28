@@ -19,7 +19,8 @@ Only the latest version of **avm** is currently supported for security updates.
   cmdline-tools zip against a pinned sha256 (`sdkmanager` verifies the rest).
 - `install.sh` and the npm installer verify `avm-bin` the same way.
 - Releases carry GitHub build provenance attestations
-  (`gh attestation verify <archive> -R <owner>/<repo>`).
+  (`gh attestation verify <archive> --owner PrajaNova`; plugin
+  attestations are signed by the shared workflow in `PrajaNova/avm`).
 - `AVM_ALLOW_UNVERIFIED=1` is the only way to skip verification.
 
 ## Reporting a Vulnerability

@@ -4,17 +4,23 @@
 $ErrorActionPreference = 'Stop'
 $repo = 'prajanova/avm'
 $version = if ($env:AVM_VERSION) { $env:AVM_VERSION } else { 'latest' }
-$base = if ($version -eq 'latest') { "https://github.com/$repo/releases/latest/download" } else { "https://github.com/$repo/releases/download/$version" }
+$base = if ($env:AVM_DOWNLOAD_BASE) { $env:AVM_DOWNLOAD_BASE }  # a mirror, or a local folder (e2e)
+    elseif ($version -eq 'latest') { "https://github.com/$repo/releases/latest/download" }
+    else { "https://github.com/$repo/releases/download/$version" }
+function Get-Asset($name, $out) {
+    if ($base -match '^https?://') { Invoke-WebRequest "$base/$name" -OutFile $out -UseBasicParsing }
+    else { Copy-Item (Join-Path $base $name) $out }
+}
 $asset = 'avm_windows_amd64.zip'
 $tmp = Join-Path ([IO.Path]::GetTempPath()) ("avm-" + [guid]::NewGuid())
 New-Item -ItemType Directory $tmp | Out-Null
 try {
     Write-Host "Downloading $asset..."
-    Invoke-WebRequest "$base/$asset" -OutFile "$tmp\$asset" -UseBasicParsing
+    Get-Asset $asset "$tmp\$asset"
 
     # Verify against the release's checksums.txt before extracting.
     $sums = "$tmp\checksums.txt"
-    try { Invoke-WebRequest "$base/checksums.txt" -OutFile $sums -UseBasicParsing } catch { $sums = $null }
+    try { Get-Asset 'checksums.txt' $sums } catch { $sums = $null }
     if ($sums) {
         $expected = Get-Content $sums | ForEach-Object {
             $parts = $_.Trim() -split '\s+'

@@ -27,6 +27,7 @@ jobs:
 
   windows:
     runs-on: windows-latest
+    timeout-minutes: 60
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -37,31 +38,9 @@ jobs:
       - name: Run Rust tests
         run: cargo test --workspace
 
-      - name: PowerShell integration smoke test
+      - name: Windows e2e (install.ps1, exe shims, node/java/android)
         shell: pwsh
-        run: |
-          cargo build --package avm-cli --bin avm-bin
-          $env:PATH = "$PWD\target\debug;$env:PATH"
-          Invoke-Expression ((& avm-bin shell-init pwsh) -join "`n")
-          avm env add AVM_SMOKE "it's ok" -g
-          if ($env:AVM_SMOKE -ne "it's ok") { throw "env not applied: '$env:AVM_SMOKE'" }
-          avm add hello "echo hello-from-cmd" -g
-          $out = avm hello
-          if ("$out" -notmatch 'hello-from-cmd') { throw "alias failed: $out" }
-          if (-not (Test-Path "$env:AVM_SHIM_DIR\node.exe")) { throw "node.exe shim missing" }
-          if (Test-Path "$env:AVM_SHIM_DIR\node.cmd") { throw "legacy node.cmd shim still present" }
-
-          # node.exe shim → exec-shim → the pinned managed version's bin\node.cmd
-          $bin = "$HOME\.avm\tools\node\1.0.0\bin"
-          New-Item -ItemType Directory -Force $bin | Out-Null
-          Set-Content "$bin\node.cmd" "@echo fake-node %*"
-          $cfg = Get-Content "$HOME\.avm.json" -Raw | ConvertFrom-Json
-          $cfg.tools | Add-Member -Force node "1.0.0"
-          $cfg | ConvertTo-Json -Depth 5 | Set-Content "$HOME\.avm.json"
-          $out = & "$env:AVM_SHIM_DIR\node.exe" -v
-          if ("$out" -notmatch 'fake-node -v') { throw "node.exe shim didn't run the managed node: $out" }
-          $out = node -v
-          if ("$out" -notmatch 'fake-node -v') { throw "plain node didn't resolve through the shim: $out" }
+        run: ./e2e/windows.ps1
 
   # Every PR: build avm from the PR, install it with the PR's install.sh on
   # a clean Ubuntu container, and run the core, node, java and android suites.

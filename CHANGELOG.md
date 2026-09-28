@@ -6,6 +6,8 @@ The format follows Keep a Changelog style, and releases use semantic versioning.
 
 ## [Unreleased]
 
+## [0.4.0-beta-1] - 2026-09-28
+
 ### Added
 - `avm trust` (`--list`, `--revoke`): a project's `.avm.json` aliases/env and its `.env` files are ignored until trusted; edits made outside avm re-block them. `trusted_paths` globs in the global config and `AVM_TRUST_ALL=1` trust without a hash (#20).
 - Version files projects already have now pin tools: `.tool-versions`, `.nvmrc`, `.node-version`, `package.json` (`volta.node`, `engines.node` ranges), `.java-version`, `.sdkmanrc`. The nearest directory wins, `.avm.json` `tools` beats them, and partial specs (`20`, `lts/*`, `>=18 <21`) resolve to the newest installed match. `avm which` shows the origin file; `"idiomatic_version_files": false` in the global config turns the tool-specific ones off (#21).

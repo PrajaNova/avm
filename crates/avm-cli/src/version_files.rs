@@ -8,11 +8,11 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
 
-/// `tool → (installed version or raw spec, origin file)`. Nearest directory
+/// `tool → (installed version or raw spec, origin file, spec as written)`. Nearest directory
 /// wins; within a directory `.tool-versions` beats the idiomatic files. Walks
 /// up from `cwd`, stopping before `home` (whose files would be global pins).
-pub fn pins(cwd: &Path, home: &Path, idiomatic: bool) -> HashMap<String, (String, String)> {
-    let mut found: HashMap<String, (String, String)> = HashMap::new();
+pub fn pins(cwd: &Path, home: &Path, idiomatic: bool) -> HashMap<String, (String, String, String)> {
+    let mut found: HashMap<String, (String, String, String)> = HashMap::new();
     for dir in cwd.ancestors().take_while(|d| *d != home) {
         let mut here: Vec<(String, String, &str)> = Vec::new();
         if let Ok(raw) = fs::read_to_string(dir.join(".tool-versions")) {
@@ -30,7 +30,7 @@ pub fn pins(cwd: &Path, home: &Path, idiomatic: bool) -> HashMap<String, (String
         for (tool, spec, file) in here {
             found.entry(tool.clone()).or_insert_with(|| {
                 let origin = if dir == cwd { format!("./{file}") } else { dir.join(file).display().to_string() };
-                (resolve(&tool, &spec), origin)
+                (resolve(&tool, &spec), origin, spec.clone())
             });
         }
     }
@@ -95,7 +95,8 @@ pub fn resolve(tool: &str, spec: &str) -> String {
     pick(tool, spec, installed).unwrap_or_else(|| spec.trim_start_matches('v').to_string())
 }
 
-fn pick(tool: &str, spec: &str, installed: Vec<String>) -> Option<String> {
+/// Newest of `installed` (any list of version names) matching `spec`.
+pub(crate) fn pick(tool: &str, spec: &str, installed: Vec<String>) -> Option<String> {
     let spec = spec.trim();
     let mut candidates: Vec<(Vec<u64>, String)> =
         installed.into_iter().filter_map(|name| Some((numbers(&name)?, name))).collect();
@@ -132,7 +133,7 @@ fn pick(tool: &str, spec: &str, installed: Vec<String>) -> Option<String> {
 }
 
 /// Numeric components of a version name: `openjdk-17.0.9+9` → `[17, 0, 9, 9]`.
-fn numbers(name: &str) -> Option<Vec<u64>> {
+pub(crate) fn numbers(name: &str) -> Option<Vec<u64>> {
     let start = name.find(|c: char| c.is_ascii_digit())?;
     let nums: Vec<u64> = name[start..]
         .split(|c: char| !c.is_ascii_digit())

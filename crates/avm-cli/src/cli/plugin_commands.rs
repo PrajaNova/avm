@@ -41,6 +41,7 @@ pub fn cmd_plugin(cmd: PluginCommands) -> Result<()> {
             println!("Plugin '{name}' removed.");
             Ok(())
         }
+        PluginCommands::Outdated { json } => cmd_plugin_outdated(json),
         PluginCommands::Update { all, name } => {
             if all {
                 for name in plugin_manager.list_plugins().into_keys() {

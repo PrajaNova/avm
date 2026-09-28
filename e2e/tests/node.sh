@@ -37,4 +37,33 @@ expect_not_contains "untrusted env is not exported" "$(cd "$W/cloned" && avm env
 (cd "$W/cloned" && avm trust >/dev/null)
 expect_eq "after avm trust the local alias runs" "$(cd "$W/cloned" && avm hello)" "hello-untrusted"
 
+
+log "node: outdated / upgrade (#26)"
+O="$W/old"
+mkdir -p "$O"
+in_dir "$O" avm init >/dev/null
+expect_ok "pin an older 20.x in another project" in_dir "$O" avm node use 20.9.0
+(cd "$O" && npm install -g cowsay >/dev/null 2>&1) # a global package under 20.9.0, for prune's warning
+json="$(in_dir "$O" avm outdated --json)"
+in_range="$(printf '%s' "$json" | grep -o '"latest_in_range": "[^"]*"' | head -1 | cut -d'"' -f4)"
+expect_contains "outdated --json: a newer 20.x is in range" "$in_range" "20."
+expect_contains "outdated table shows current and range" "$(in_dir "$O" avm outdated)" "20.9.0"
+expect_contains "upgrade --dry-run shows the plan" "$(in_dir "$O" avm upgrade --dry-run)" "20.9.0 → $in_range"
+expect_contains "--dry-run changes nothing" "$(cat "$O/.avm.json")" '"node": "20.9.0"'
+expect_ok "avm upgrade" in_dir "$O" avm upgrade
+expect_contains ".avm.json pin moved" "$(cat "$O/.avm.json")" "\"node\": \"$in_range\""
+expect_eq "node follows the new pin" "$(cd "$O" && node -v)" "v$in_range"
+expect_contains "plugin outdated" "$(avm plugin outdated)" "up to date"
+
+log "node: prune (#27)"
+plan="$(avm prune --dry-run)"
+expect_contains "the unused 20.9.0 is listed with its size" "$plan" "node 20.9.0"
+expect_contains "warns about its global packages" "$plan" "holds global packages (cowsay, cowthink)"
+expect_not_contains "keeps the project's node 22" "$plan" "node 22."
+expect_not_contains "keeps the global pin" "$plan" "node $in_range"
+expect_ok "avm prune -y" avm prune -y
+expect_fail "20.9.0 is gone" test -d "$HOME/.avm/tools/node/20.9.0"
+expect_contains "the project's node 22 still runs" "$(cd "$P" && node -v)" "v22."
+expect_contains "nothing left to prune" "$(avm prune --dry-run)" "Nothing to prune"
+
 finish

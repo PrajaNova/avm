@@ -6,6 +6,11 @@ The format follows Keep a Changelog style, and releases use semantic versioning.
 
 ## [Unreleased]
 
+### Added
+- `avm outdated [--json]` and `avm plugin outdated` (#26): pinned tools with the newest version in each pin's range and overall, and plugins against their latest releases.
+- `avm upgrade [tool…]` (#26): installs the newest in-range version and moves `.avm.json` pins; `--bump` goes to the latest across majors (with confirmation), `--dry-run` previews. Version files (`.nvmrc`, …) are never rewritten.
+- `avm prune` (#27): removes installed versions that neither a global pin nor a project avm has seen (recorded in `~/.avm/tracked-configs.json`) uses. `--older-than 90d` uses per-version last-use (shims mark it daily), `--dry-run` lists sizes, and it warns about versions holding global npm packages.
+
 ## [0.4.0-beta-2] - 2026-09-28
 
 ### Added

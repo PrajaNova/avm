@@ -164,6 +164,9 @@ match: `20` → `20.11.1`, `lts/*`, `lts/iron`, `>=18 <21`, `^20.1`, and
 - `avm shims install|remove|path|activate` controls shim lifecycle (`reshim` is an alias of `install`)
 - `avm shell-init` prints shell bootstrap script
 - `avm --version` (or `-v`) prints current CLI version
+- `avm outdated [--json]` lists pinned tools with newer versions (in the pin's range, and overall); `avm plugin outdated` does the same for plugins
+- `avm upgrade [tool…] [--bump] [--dry-run] [-y]` installs the newest version in range and moves `.avm.json` pins (`--bump` crosses majors; version files like `.nvmrc` are never rewritten)
+- `avm prune [--older-than 90d] [--dry-run] [-y]` removes installed versions no global pin or known project uses, showing sizes and warning about versions holding global npm packages
 - `avm self-update [--version X]` updates avm (Homebrew/npm/cargo/Scoop installs print their own upgrade command). A once-a-day notice says when an update is out; `AVM_NO_UPDATE_CHECK=1` turns it off
 
 ## Package layout (workspace crates)

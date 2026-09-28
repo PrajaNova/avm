@@ -45,7 +45,7 @@ avm() {
   local _avm_key="$1"
   local _avm_rc
     case "$_avm_key" in
-    init|add|list|ls|remove|rm|which|env|help|shell-init|plugin|completion|--help|-h|--version|-v|resolve|run|shims|exec-shim|node|java)
+    init|add|list|ls|remove|rm|which|env|trust|help|shell-init|plugin|completion|--help|-h|--version|-v|resolve|run|shims|exec-shim|node|java)
       command avm-bin "$@"
       _avm_rc=$?
       _avm_apply_env

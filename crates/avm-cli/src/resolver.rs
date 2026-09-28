@@ -1,5 +1,5 @@
 use std::collections::{BTreeSet, HashMap};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use avm_plugin_api::ResolvedAlias;
 
@@ -26,6 +26,9 @@ pub struct ResolvedConfig {
     pub local_tools: HashMap<String, String>,
     pub global_tools: HashMap<String, String>,
     pub plugin_aliases: HashMap<String, ResolvedAlias>,
+    /// The local `.avm.json` when it exists but isn't trusted (#20): its
+    /// aliases and env are dropped; its tool pins still apply.
+    pub untrusted: Option<PathBuf>,
 }
 
 impl ResolvedConfig {
@@ -98,8 +101,15 @@ pub fn load(
     home: &Path,
     plugin_aliases: HashMap<String, ResolvedAlias>,
 ) -> anyhow::Result<ResolvedConfig> {
-    let local = crate::config::load(cwd)?;
+    let mut local = crate::config::load(cwd)?;
     let global = crate::config::load(home)?;
+    let local_file = cwd.join(crate::config::CONFIG_FILE);
+    let untrusted = (local_file.exists() && !crate::trust::is_trusted(&local_file, &global.trusted_paths))
+        .then(|| {
+            local.aliases.clear();
+            local.env.clear();
+            local_file
+        });
 
     Ok(ResolvedConfig {
         local_aliases: local.aliases,
@@ -109,6 +119,7 @@ pub fn load(
         local_tools: local.tools,
         global_tools: global.tools,
         plugin_aliases,
+        untrusted,
     })
 }
 

@@ -15,14 +15,24 @@ pub fn main() {
 fn load_dotenv_env() -> Result<()> {
     let cwd = std::env::current_dir().context("failed to read current directory")?;
     let protected: HashSet<String> = std::env::vars().map(|(key, _)| key).collect();
+    let trusted_paths = home_dir().and_then(|home| config::load(&home)).map(|c| c.trusted_paths).unwrap_or_default();
 
     let dirs: Vec<&Path> = cwd.ancestors().collect();
+    let mut skipped = Vec::new();
     for dir in dirs.into_iter().rev() {
         let env_file = dir.join(".env");
-        if env_file.exists() {
+        if !env_file.exists() {
+            continue;
+        }
+        // A project's .env reaches every shimmed tool's environment, so it
+        // needs the same trust as its .avm.json (#20).
+        if crate::trust::is_trusted(&env_file, &trusted_paths) {
             load_env_file(&env_file, &protected)?;
+        } else {
+            skipped.push(env_file);
         }
     }
+    let _ = UNTRUSTED_DOTENV.set(skipped);
 
     Ok(())
 }
@@ -103,5 +113,6 @@ fn run(cli: Cli) -> Result<()> {
         Commands::PluginCommand(args) => cmd_plugin_command(args),
         Commands::Pa { source } => cmd_plugin(PluginCommands::Add { source }),
         Commands::Ea { key, value, global } => cmd_env_add(key, value, global),
+        Commands::Trust(args) => cmd_trust(args),
     }
 }

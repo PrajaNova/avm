@@ -88,10 +88,17 @@ pub struct ToolVersion {
     pub is_security: bool,
 }
 
+/// The user's home: `$HOME`, else `%USERPROFILE%` (Windows).
+pub fn home_dir() -> anyhow::Result<PathBuf> {
+    std::env::var_os("HOME")
+        .or_else(|| std::env::var_os("USERPROFILE"))
+        .map(PathBuf::from)
+        .ok_or_else(|| anyhow::anyhow!("HOME not set"))
+}
+
 /// `~/.avm/tools/<tool>` — where every provider keeps `<version>/` dirs.
 pub fn tool_dir(tool: &str) -> anyhow::Result<PathBuf> {
-    let home = std::env::var_os("HOME").ok_or_else(|| anyhow::anyhow!("HOME not set"))?;
-    Ok(PathBuf::from(home).join(".avm").join("tools").join(tool))
+    Ok(home_dir()?.join(".avm").join("tools").join(tool))
 }
 
 /// Sorted version dirs under `tool_dir(tool)` that pass `is_installed`.

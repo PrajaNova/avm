@@ -205,6 +205,7 @@ Scenario files:
 - `docker/tests/scenarios/04-node-package-scripts.sh`
 - `docker/tests/scenarios/05-plugin-first-node.sh`
 - `docker/tests/scenarios/06-asdf-java-plugin.sh`
+- `docker/tests/scenarios/07-trust.sh`
 
 ## Plugin behavior
 
@@ -232,6 +233,30 @@ routing through `~/.avm/tools/<tool>/<version>/bin`.
 Want to add support for another tool? Start from the plugin template
 (`avm create <name>` prints the command) — see
 [Creating a plugin](docs/plugins/CREATING_A_PLUGIN.md).
+
+## Security model
+
+A project's `.avm.json` aliases and `env`, and its `.env` files, run with
+your privileges. Once `avm shell-init` is active they reach every shimmed
+`node`/`java`, so avm ignores them until you trust that exact file content:
+
+```bash
+cd cloned-repo
+avm trust            # shows the aliases/env it will enable, then trusts them
+avm trust --list     # everything you've trusted
+avm trust --revoke   # stop trusting this directory
+```
+
+- Trust is stored in `~/.avm/trusted.json` as path → sha256. Any edit made
+  outside avm makes the file untrusted again. `avm init`, `avm add` and
+  `avm env add` keep an already-trusted file trusted.
+- Tool pins (`tools`, `.nvmrc`, `.tool-versions`, …) only pick a version
+  and are always honored.
+- Your global `~/.avm.json` is always trusted. It can list
+  `"trusted_paths": ["~/work/**"]` to trust whole trees.
+- `AVM_TRUST_ALL=1` trusts everything. It's meant for CI and is never
+  implied by `CI=true`.
+- Downloads are verified too; see [SECURITY.md](./SECURITY.md).
 
 ## Notes for contributors
 

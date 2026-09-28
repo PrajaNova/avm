@@ -7,6 +7,7 @@ The format follows Keep a Changelog style, and releases use semantic versioning.
 ## [Unreleased]
 
 ### Added
+- `avm trust` (`--list`, `--revoke`): a project's `.avm.json` aliases/env and its `.env` files are ignored until trusted; edits made outside avm re-block them. `trusted_paths` globs in the global config and `AVM_TRUST_ALL=1` trust without a hash (#20).
 - Reusable plugin release workflow publishes `checksums.txt` (sha256) alongside platform archives.
 - `avm plugin add`/`update` verify the downloaded archive's sha256 against the release's `checksums.txt` before extracting; a mismatch aborts with nothing installed. Releases without `checksums.txt` are refused unless `AVM_ALLOW_UNVERIFIED=1`. The verified hash is recorded in the plugin's `meta.json`.
 - `AVM_GITHUB_API_URL` overrides the GitHub API base used for marketplace installs.

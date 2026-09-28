@@ -28,7 +28,7 @@ use crate::ui;
 use anyhow::{anyhow, Context, Result};
 use avm_plugin_api::{ResolvedAlias, ToolProvider, ToolVersionQuery};
 use clap::{Args, Parser, Subcommand};
-use std::collections::{BTreeSet, HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::fs;
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};

@@ -11,7 +11,15 @@ pub struct ConfigLoadResult {
     pub aliases: HashMap<String, String>,
     pub env: HashMap<String, String>,
     pub tools: HashMap<String, String>,
+    /// Global config only: project dirs trusted without `avm trust` (globs, `~` allowed).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub trusted_paths: Vec<String>,
+    /// Global config only: `false` stops reading `.nvmrc`, `.java-version`, etc.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub idiomatic_version_files: Option<bool>,
 }
+
+const SECTIONS: &[&str] = &["aliases", "env", "tools", "trusted_paths", "idiomatic_version_files"];
 
 fn validate_env_key(key: &str) -> bool {
     !key.is_empty()
@@ -33,7 +41,7 @@ fn parse_config(raw: &[u8]) -> Result<ConfigLoadResult> {
 
     match root {
         serde_json::Value::Object(object) => {
-            if !["aliases", "env", "tools"].iter().any(|k| object.contains_key(*k)) {
+            if !SECTIONS.iter().any(|k| object.contains_key(*k)) {
                 // Legacy flat `{ "alias": "command" }` file; the next save
                 // rewrites it in the structured form.
                 let aliases = serde_json::from_value(serde_json::Value::Object(object))
@@ -48,6 +56,11 @@ fn parse_config(raw: &[u8]) -> Result<ConfigLoadResult> {
                 aliases: parse_string_map(object.get("aliases"), "aliases")?,
                 env: parse_string_map(object.get("env"), "env")?,
                 tools: parse_string_map(object.get("tools"), "tools")?,
+                trusted_paths: match object.get("trusted_paths") {
+                    None | Some(serde_json::Value::Null) => Vec::new(),
+                    Some(v) => serde_json::from_value(v.clone()).context("trusted_paths must be a list of strings")?,
+                },
+                idiomatic_version_files: object.get("idiomatic_version_files").and_then(|v| v.as_bool()),
             };
             validate_env(&cfg.env)?;
             Ok(cfg)
@@ -116,5 +129,9 @@ mod tests {
         let flat = parse_config(br#"{"dev":"npm run dev"}"#).unwrap();
         assert_eq!(flat.aliases["dev"], "npm run dev");
         assert!(parse_config(br#"{"env":{"1BAD":"x"}}"#).is_err());
+        let settings = parse_config(br#"{"trusted_paths":["~/work/**"],"idiomatic_version_files":false}"#).unwrap();
+        assert!(settings.aliases.is_empty() && settings.trusted_paths == ["~/work/**"]);
+        assert_eq!(settings.idiomatic_version_files, Some(false));
+        assert!(!String::from_utf8(serde_json::to_vec(&ConfigLoadResult::default()).unwrap()).unwrap().contains("trusted"));
     }
 }

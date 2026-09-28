@@ -15,8 +15,7 @@ pub const TOOL_BINS: &[(&str, &[&str])] = &[
 
 /// `$HOME/.avm`.
 pub fn avm_home() -> Result<PathBuf> {
-    let home = std::env::var("HOME").context("HOME not set")?;
-    Ok(PathBuf::from(home).join(".avm"))
+    Ok(avm_plugin_api::home_dir()?.join(".avm"))
 }
 
 pub fn shim_dir() -> Result<PathBuf> {
@@ -93,8 +92,7 @@ pub fn which(bin: &str, skip_shims: bool) -> Option<PathBuf> {
 /// like Codex/Claude). `.zshenv` is the key target — zsh sources it for every
 /// invocation, including non-interactive `zsh -c` used by such tools.
 pub fn activate_profiles() -> Result<Vec<PathBuf>> {
-    let home = std::env::var("HOME").context("HOME not set")?;
-    let home = PathBuf::from(home);
+    let home = avm_plugin_api::home_dir()?;
     let block = "\n# >>> avm shims >>>\nexport PATH=\"$HOME/.avm/shims:$PATH\"\n# <<< avm shims <<<\n";
     let marker = "# >>> avm shims >>>";
 

@@ -49,6 +49,15 @@ fn cmd_env_print() -> Result<()> {
     for key in keys {
         println!("export {key}={}", sh_quote(&env[key]));
     }
+    // This output is eval'd with stderr discarded, so the untrusted notice
+    // is emitted as shell code, once per shell session per set of files.
+    let untrusted = untrusted_files(&cfg);
+    let marker: Vec<String> = untrusted.iter().map(|f| f.display().to_string()).collect();
+    let marker = marker.join(":");
+    if !untrusted.is_empty() && std::env::var("_AVM_TRUST_NOTICE").ok().as_deref() != Some(&marker) {
+        println!("echo {} >&2", sh_quote(&untrusted_notice(&untrusted)));
+        println!("export _AVM_TRUST_NOTICE={}", sh_quote(&marker));
+    }
     Ok(())
 }
 
@@ -139,17 +148,17 @@ fn select_alias_suggestion(query: &str, suggestions: &[String]) -> Result<Option
 }
 
 fn alias_not_found_error(key: &str, cfg: &ResolvedConfig) -> anyhow::Error {
+    let mut message = format!("alias '{key}' not found");
     let suggestions = cfg.suggest_aliases(key);
-    if suggestions.is_empty() {
-        return anyhow!("alias '{key}' not found");
+    if !suggestions.is_empty() {
+        message.push_str("\n\nDid you mean?\n");
+        message.push_str(&suggestions.iter().map(|s| format!("  avm {s}")).collect::<Vec<_>>().join("\n"));
     }
-
-    anyhow!(
-        "alias '{key}' not found\n\nDid you mean?\n{}",
-        suggestions
-            .iter()
-            .map(|suggestion| format!("  avm {suggestion}"))
-            .collect::<Vec<_>>()
-            .join("\n")
-    )
+    if let Some(file) = &cfg.untrusted {
+        message.push_str(&format!(
+            "\n\n{} is not trusted, so its aliases are disabled. Review it, then run 'avm trust'.",
+            file.display()
+        ));
+    }
+    anyhow!(message)
 }

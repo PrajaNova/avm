@@ -62,7 +62,9 @@ pub fn cmd_exec_shim(args: ExecShimArgs) -> Result<()> {
     // so `tsc`/`eslint`/etc. are runnable immediately, no manual step.
     // ponytail: reshims on any pkg-manager install verb; prune stale shims later if it matters.
     if status.success() && is_node_pkg_install(&args.tool, &args.args) {
-        let _ = shims::reshim();
+        if let Err(err) = shims::reshim() {
+            eprintln!("avm: couldn't refresh shims after the install ({err:#}); run `avm shims install`");
+        }
     }
 
     std::process::exit(status.code().unwrap_or(1));

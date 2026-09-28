@@ -28,13 +28,21 @@ pub fn shim_dir() -> Result<PathBuf> {
 pub fn reshim() -> Result<()> {
     let shims_dir = shim_dir()?;
     fs::create_dir_all(&shims_dir).context("create shims dir")?;
+    remove_stale_shims(&shims_dir);
+    // One shim failing (e.g. in use) mustn't stop the rest; report the first.
+    let mut first_err = None;
+    let mut write = |tool: &str| {
+        if let Err(err) = write_shim(&shims_dir, tool) {
+            first_err.get_or_insert(err);
+        }
+    };
     for tool in TOOL_BINS.iter().flat_map(|(_, bins)| bins.iter()) {
-        write_shim(&shims_dir, tool)?;
+        write(tool);
     }
 
     let tools_root = avm_home()?.join("tools");
     let Ok(tools) = fs::read_dir(&tools_root) else {
-        return Ok(());
+        return first_err.map_or(Ok(()), Err);
     };
     for tool in tools.flatten() {
         let Ok(versions) = fs::read_dir(tool.path()) else {
@@ -55,12 +63,12 @@ pub fn reshim() -> Result<()> {
                     if name.starts_with('.') || name.contains('/') || name.contains('\\') {
                         continue;
                     }
-                    write_shim(&shims_dir, name)?;
+                    write(name);
                 }
             }
         }
     }
-    Ok(())
+    first_err.map_or(Ok(()), Err)
 }
 
 /// A regular file with an exec bit that isn't world-writable.
@@ -161,16 +169,38 @@ pub fn remove_shim(tool: &str) -> Result<()> {
 fn write_shim(shims_dir: &Path, tool: &str) -> Result<()> {
     let _ = fs::remove_file(shims_dir.join(format!("{tool}.cmd"))); // older .cmd shims
     let path = shims_dir.join(format!("{tool}.exe"));
-    let avm = std::env::current_exe().context("locate avm-bin")?;
-    if path.exists() {
-        // A running shim can't be replaced; the existing one still works.
-        if fs::remove_file(&path).is_err() {
-            return Ok(());
+    let avm = avm_exe()?;
+    if path.exists() && fs::remove_file(&path).is_err() {
+        // In use (a running shim): Windows lets a running exe be renamed, so
+        // move it aside; remove_stale_shims deletes it on a later reshim.
+        let aside = shims_dir.join(format!("{tool}.exe.stale-{}", std::process::id()));
+        if fs::rename(&path, &aside).is_err() {
+            return Ok(()); // keep the working one
         }
     }
     fs::hard_link(&avm, &path)
         .or_else(|_| fs::copy(&avm, &path).map(|_| ()))
         .with_context(|| format!("write shim for {tool}"))
+}
+
+/// The real avm-bin.exe to link shims to. When this process is itself a shim
+/// (reshim after `npm i -g` runs inside `npm.exe`), that's the one on PATH.
+#[cfg(windows)]
+fn avm_exe() -> Result<PathBuf> {
+    let exe = std::env::current_exe().context("locate avm-bin")?;
+    if invoked_as_shim().is_none() {
+        return Ok(exe);
+    }
+    which("avm-bin", true).context("avm-bin not found on PATH")
+}
+
+/// Best-effort cleanup of shims moved aside while they were running.
+fn remove_stale_shims(shims_dir: &Path) {
+    for entry in fs::read_dir(shims_dir).into_iter().flatten().flatten() {
+        if entry.file_name().to_string_lossy().contains(".exe.stale-") {
+            let _ = fs::remove_file(entry.path());
+        }
+    }
 }
 
 /// When avm-bin runs as a Windows shim (`node.exe`), the tool it stands for.

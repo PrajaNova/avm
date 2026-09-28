@@ -1,6 +1,13 @@
 use super::*;
 
 pub fn main() {
+    // Windows often has only USERPROFILE; plugins (including ones built on an
+    // older avm-plugin-api) find ~/.avm through HOME, so pass ours down.
+    if std::env::var_os("HOME").is_none() {
+        if let Ok(home) = home_dir() {
+            std::env::set_var("HOME", home);
+        }
+    }
     if let Err(err) = load_dotenv_env() {
         eprintln!("avm: failed to load .env: {err}");
         std::process::exit(1);

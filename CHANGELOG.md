@@ -7,7 +7,7 @@ The format follows Keep a Changelog style, and releases use semantic versioning.
 ## [Unreleased]
 
 ### Added
-- Windows, phases 2–3 (#23): shims are `node.exe`/`npm.exe`/… hard links to `avm-bin.exe` (it dispatches on the name it was started as), so IDEs and debuggers that launch `node.exe` directly are covered; `.cmd` shims are removed. Managed tools resolve `.exe`/`.cmd` binaries. `avm plugin add` installs `avm-plugin-<name>_windows_amd64.zip` releases; the reusable plugin release workflow builds them with `windows: true`. Each avm release publishes a Scoop manifest (`avm.json`).
+- Windows, phases 2–3 (#23): shims are `node.exe`/`npm.exe`/… hard links to `avm-bin.exe` (it dispatches on the name it was started as), so IDEs and debuggers that launch `node.exe` directly are covered; `.cmd` shims are removed. A Windows e2e suite (`e2e/windows.ps1`, run by CI on every PR) installs with `install.ps1` and drives real node/java/android installs through the `.exe` shims; `install.ps1` accepts `AVM_DOWNLOAD_BASE` (URL or local folder). Managed tools resolve `.exe`/`.cmd` binaries. `avm plugin add` installs `avm-plugin-<name>_windows_amd64.zip` releases; the reusable plugin release workflow builds them with `windows: true`. Each avm release publishes a Scoop manifest (`avm.json`).
 
 ### Changed
 - Tests: one end-to-end harness, `e2e/run.sh`, replaces the Docker scenario suite and the Rust CLI integration tests. It builds avm from the checkout, installs it with `install.sh` on a clean Ubuntu container, and runs the core, node, java and android suites; CI runs it on every PR. `install.sh` accepts `AVM_DOWNLOAD_BASE` for alternate archive locations.
@@ -15,6 +15,8 @@ The format follows Keep a Changelog style, and releases use semantic versioning.
 - Releases are manual only: `Release` workflows (avm and plugins) run from Actions → Run workflow with a version input and create the tag themselves; tag pushes no longer publish. npm supports trusted publishing (OIDC) or `NPM_TOKEN`. See `docs/ops/RELEASE.md`.
 
 ### Fixed
+- Windows: plugins failed with `HOME not set` when only `USERPROFILE` exists; avm now passes its home to plugins as `HOME`.
+- Windows: refreshing shims from inside a shim (after `npm i -g`) deleted `npm.exe` and skipped the new package's shim. Shims now link to the real avm-bin, in-use shims are moved aside, and one failure no longer stops the rest. A failed post-install refresh now prints a warning.
 - The Homebrew release job read a non-existent `HOMEBREW_TAP_TOKEN` secret; it now uses `HOMEBREW_TAP_GITHUB_TOKEN`.
 - npm trusted publishing was refused because `package.json` `repository.url` said `prajanova/avm`; npm compares it case-sensitively with `PrajaNova/avm`. The release workflow gains an `npm_only` input to retry npm for an existing release.
 - npm releases are staged (`npm stage publish`) and go public only after a maintainer approves them with 2FA.

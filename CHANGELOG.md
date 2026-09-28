@@ -6,6 +6,33 @@ The format follows Keep a Changelog style, and releases use semantic versioning.
 
 ## [Unreleased]
 
+### Added
+- `avm trust` (`--list`, `--revoke`): a project's `.avm.json` aliases/env and its `.env` files are ignored until trusted; edits made outside avm re-block them. `trusted_paths` globs in the global config and `AVM_TRUST_ALL=1` trust without a hash (#20).
+- Version files projects already have now pin tools: `.tool-versions`, `.nvmrc`, `.node-version`, `package.json` (`volta.node`, `engines.node` ranges), `.java-version`, `.sdkmanrc`. The nearest directory wins, `.avm.json` `tools` beats them, and partial specs (`20`, `lts/*`, `>=18 <21`) resolve to the newest installed match. `avm which` shows the origin file; `"idiomatic_version_files": false` in the global config turns the tool-specific ones off (#21).
+- Intel macOS (`darwin_amd64`) builds for avm-bin and, via the reusable workflow, every plugin; `install.sh`, npm and Homebrew install them. Release builds smoke-test each binary. A plugin with no build for the host now lists the platforms it does have (#22).
+- Windows, phase 1 (#23): `avm_windows_amd64.zip` release builds, `install.ps1` (sha256-verified), npm on `win32`; `avm shell-init pwsh`; `avm env --shell sh|pwsh|cmd`; aliases run via `cmd /C`; `.cmd` shims with `PATHEXT` lookup; `%USERPROFILE%` as home when `HOME` is unset. CI runs `cargo test` and a PowerShell smoke test on `windows-latest`. Windows plugin assets and an `avm-shim.exe` dispatcher are still to come.
+- Reusable plugin release workflow publishes `checksums.txt` (sha256) alongside platform archives.
+- `avm plugin add`/`update` verify the downloaded archive's sha256 against the release's `checksums.txt` before extracting; a mismatch aborts with nothing installed. Releases without `checksums.txt` are refused unless `AVM_ALLOW_UNVERIFIED=1`. The verified hash is recorded in the plugin's `meta.json`.
+- `AVM_GITHUB_API_URL` overrides the GitHub API base used for marketplace installs.
+- avm releases publish `checksums.txt`; `install.sh` and the npm installer verify `avm-bin` against it before extracting (`AVM_ALLOW_UNVERIFIED=1` to skip).
+- avm and plugin release workflows attach GitHub build provenance attestations (`gh attestation verify`).
+
+### Changed
+- README: the comparison table now covers mise and proto, has corrected asdf (Go) and vfox (Go/Lua) facts with sources, and links avm's gaps to roadmap issues. `agent.md`, `agent.skill.md` and `llm.text` are merged into `llms.txt` (#24).
+- Aliases always run via `sh -c`; `avm resolve` prints the expanded shell command.
+- `avm env` quotes values only when needed.
+- `avm create <name>` now prints the `gh repo create --template PrajaNova/avm-plugin-template` command instead of scaffolding files.
+- `avm shims reshim` is an alias of `avm shims install`.
+- `avm-core`, `avm-shims`, and `avm-runtime` folded into `avm-cli` as modules; `avm-cli` no longer links `avm-plugin-node`.
+
+### Removed
+- Hidden `avm tool` compatibility command (use `avm <plugin> ...`), `avm all`, `avm version` (use `avm --version`), and `avm env --format`.
+- Legacy alias-only plugins (`plugin.json` + `bin/export-aliases`).
+- Installers no longer create an empty `~/.avm.json`; a missing global config is treated as empty.
+
+### Fixed
+- Homebrew formula test called the removed `avm-bin version`; it now uses `--version`.
+
 ## [0.3.0] - 2026-09-23
 
 ### Added

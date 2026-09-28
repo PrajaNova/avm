@@ -4,7 +4,7 @@ const { spawn } = require('child_process');
 const path = require('path');
 const fs = require('fs');
 
-const binaryPath = path.join(__dirname, 'avm-bin');
+const binaryPath = path.join(__dirname, process.platform === 'win32' ? 'avm-bin.exe' : 'avm-bin');
 
 if (!fs.existsSync(binaryPath)) {
   console.error('avm binary not found. Try reinstalling: npm install -g @prajanova/avm');

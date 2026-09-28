@@ -47,12 +47,11 @@ cargo clippy --workspace --all-targets
 
 ## Code rules
 
-- Keep command wiring in `crates/avm-cli`.
-- Keep config and resolver logic in `crates/avm-core`.
-- Keep shim behavior in `crates/avm-shims`.
+- Keep command wiring in `crates/avm-cli/src/cli`.
+- Keep config and resolver logic in `crates/avm-cli/src/{config,resolver}.rs`.
+- Keep shim behavior in `crates/avm-cli/src/shims.rs`.
 - Keep provider contracts in `crates/avm-plugin-api`.
-- Keep external plugin execution in `crates/avm-runtime`.
-- Keep Node provider behavior in `crates/avm-plugin-node`.
+- Keep external plugin execution in `crates/avm-cli/src/runtime.rs`.
 - Avoid panics in runtime paths.
 - Preserve `.avm.json` compatibility.
 - Preserve local-first then global precedence.

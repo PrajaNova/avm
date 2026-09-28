@@ -1,5 +1,7 @@
-fn cmd_plugin(cmd: PluginCommands) -> Result<()> {
-    let plugin_manager = PluginManager::new(None)?;
+use super::*;
+
+pub fn cmd_plugin(cmd: PluginCommands) -> Result<()> {
+    let plugin_manager = PluginManager::new()?;
     match cmd {
         PluginCommands::Add { source } => {
             // A bare name (no "/", no scheme) is looked up in the
@@ -8,10 +10,10 @@ fn cmd_plugin(cmd: PluginCommands) -> Result<()> {
             // to the existing git-clone install path, which still works for
             // asdf-style plugins or a third party building from source.
             if !source.contains('/') {
-                if let Some(entry) = avm_runtime::marketplace_lookup(&source)? {
+                if let Some(entry) = runtime::marketplace_lookup(&source)? {
                     println!("Fetching '{source}' from {}...", entry.repo);
                     let version =
-                        avm_runtime::install_from_marketplace(&source, &entry.repo, &plugin_manager.plugin_dir())?;
+                        runtime::install_from_marketplace(&source, &entry.repo, &plugin_manager.plugin_dir())?;
                     println!("✓ Installed {source} {version}");
                     return Ok(());
                 }
@@ -41,12 +43,7 @@ fn cmd_plugin(cmd: PluginCommands) -> Result<()> {
         }
         PluginCommands::Update { all, name } => {
             if all {
-                let names: Vec<String> = plugin_manager
-                    .list_plugins()?
-                    .keys()
-                    .cloned()
-                    .collect();
-                for name in names {
+                for name in plugin_manager.list_plugins().into_keys() {
                     plugin_manager.update_plugin(&name)?;
                 }
                 return Ok(());
@@ -59,10 +56,10 @@ fn cmd_plugin(cmd: PluginCommands) -> Result<()> {
     }
 }
 /// Everything installed on disk — marketplace plugins (`avm-plugin-<name>`
-/// dirs), legacy asdf plugins, and legacy avm alias-only plugins alike.
+/// dirs) and legacy asdf plugins alike.
 /// Nothing is compiled into `avm-bin`; this is a plain directory listing.
 fn print_installed_plugins(plugin_manager: &PluginManager) -> Result<()> {
-    let on_disk = plugin_manager.list_plugins()?;
+    let on_disk = plugin_manager.list_plugins();
     let mut names: Vec<_> = on_disk.keys().collect();
     names.sort();
 
@@ -86,7 +83,7 @@ fn print_installed_plugins(plugin_manager: &PluginManager) -> Result<()> {
 
 fn print_available_plugins() -> Result<()> {
     println!("Marketplace (github.com/PrajaNova/avm-marketplace):");
-    match avm_runtime::marketplace_registry() {
+    match runtime::marketplace_registry() {
         Ok(mut entries) => {
             entries.sort_by(|a, b| a.name.cmp(&b.name));
             for entry in entries {

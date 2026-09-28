@@ -1,3 +1,5 @@
+use super::*;
+
 #[derive(Parser)]
 #[command(
     name = "avm",
@@ -5,13 +7,13 @@
     about = "Any Version Manager",
     long_about = "Any Version Manager: aliases, plugin commands, runtime versions, and shims."
 )]
-struct Cli {
+pub struct Cli {
     #[command(subcommand)]
-    command: Commands,
+    pub command: Commands,
 }
 
 #[derive(Subcommand)]
-enum Commands {
+pub enum Commands {
     /// Create a local .avm.json config file.
     Init,
     /// Add an alias command to local or global config.
@@ -38,29 +40,28 @@ enum Commands {
     Env {
         #[command(subcommand)]
         command: Option<EnvCommands>,
-        #[arg(short, long, default_value = "export")]
-        format: String,
+        /// Output syntax for the export list (default: sh on Unix, pwsh on Windows).
+        #[arg(long, value_enum)]
+        shell: Option<Shell>,
     },
     /// Print the command that an alias expands to.
     Resolve(ResolveArgs),
     /// Run an alias with optional arguments.
     Run(RunArgs),
-    /// Compatibility command for older scripts. Prefer `avm <plugin> ...`.
-    #[command(hide = true)]
-    #[command(alias = "tools")]
-    Tool {
-        #[command(subcommand)]
-        command: Option<ToolCommands>,
-    },
     /// Install, list, update, or remove avm plugins.
     Plugin {
         #[command(subcommand)]
         command: PluginCommands,
     },
-    /// Scaffold a new avm plugin project, ready to build and publish.
-    Create(CreateArgs),
-    /// Print shell setup for avm aliases and shims.
-    ShellInit,
+    /// Show how to start a new avm plugin from the template repo.
+    Create {
+        name: String,
+    },
+    /// Print shell setup for avm aliases and shims (sh/bash/zsh, or pwsh).
+    ShellInit {
+        #[arg(value_enum)]
+        shell: Option<Shell>,
+    },
     /// Manage executable shims used for plain commands like node and java.
     Shims {
         #[command(subcommand)]
@@ -70,10 +71,6 @@ enum Commands {
     #[command(hide = true)]
     #[command(name = "exec-shim")]
     ExecShim(ExecShimArgs),
-    /// Print avm version.
-    Version,
-    /// Show grouped command help.
-    All,
     /// Shortcut for `avm plugin add <source>`.
     #[command(hide = true)]
     Pa {
@@ -87,24 +84,15 @@ enum Commands {
         #[arg(short = 'g', long)]
         global: bool,
     },
+    /// Trust a project's .avm.json and .env so their aliases and env apply.
+    Trust(TrustArgs),
     /// Run an installed plugin command, for example `avm node versions` or `avm java versions`.
     #[command(external_subcommand)]
     PluginCommand(Vec<String>),
 }
 
 #[derive(Subcommand)]
-enum ToolCommands {
-    #[command(alias = "ls")]
-    List,
-    Use(ToolUseArgs),
-    Install(ToolInstallArgs),
-    Uninstall(ToolUninstallArgs),
-    #[command(external_subcommand)]
-    Provider(Vec<String>),
-}
-
-#[derive(Subcommand)]
-enum PluginCommands {
+pub enum PluginCommands {
     /// Install a plugin by name, path, or URL.
     Add {
         source: String,
@@ -130,11 +118,10 @@ enum PluginCommands {
 }
 
 #[derive(Subcommand)]
-enum ShimsCommands {
-    /// Install avm shims into ~/.avm/shims.
+pub enum ShimsCommands {
+    /// (Re)generate shims in ~/.avm/shims for all installed versions, including global package binaries.
+    #[command(alias = "reshim")]
     Install,
-    /// Regenerate shims for all installed versions, including global package binaries.
-    Reshim,
     /// Add ~/.avm/shims to PATH in shell startup files so it works everywhere, incl. closed envs.
     Activate,
     /// Remove one shim.
@@ -146,22 +133,22 @@ enum ShimsCommands {
 }
 
 #[derive(Args)]
-struct AddArgs {
-    key: String,
-    value: Vec<String>,
+pub struct AddArgs {
+    pub key: String,
+    pub value: Vec<String>,
     #[arg(short = 'g', long)]
-    global: bool,
+    pub global: bool,
 }
 
 #[derive(Args)]
-struct RemoveArgs {
-    key: String,
+pub struct RemoveArgs {
+    pub key: String,
     #[arg(short = 'g', long)]
-    global: bool,
+    pub global: bool,
 }
 
 #[derive(Subcommand)]
-enum AliasCommands {
+pub enum AliasCommands {
     /// Add an alias command to local or global config.
     Add(AddArgs),
     /// Remove an alias command from local or global config.
@@ -173,7 +160,7 @@ enum AliasCommands {
 }
 
 #[derive(Subcommand)]
-enum EnvCommands {
+pub enum EnvCommands {
     /// Add a custom env var to local or global config.
     Add {
         key: String,
@@ -194,15 +181,6 @@ enum EnvCommands {
     List,
 }
 
-#[derive(Args)]
-struct CreateArgs {
-    /// Tool name, e.g. "kotlin" — scaffolds ./avm-plugin-kotlin
-    name: String,
-    /// Directory to create the plugin project in (default: current directory)
-    #[arg(long)]
-    path: Option<PathBuf>,
-}
-
 // `disable_help_flag`: these forward trailing args verbatim to whatever the
 // key resolves to, which can legitimately include `--help`/`-h` meant for
 // the *target* (an alias command, or `avm <tool> --help`) — without this,
@@ -213,41 +191,34 @@ struct CreateArgs {
 // force that check to succeed.
 #[derive(Args)]
 #[command(disable_help_flag = true)]
-struct ResolveArgs {
-    key: String,
+pub struct ResolveArgs {
+    pub key: String,
     #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
-    args: Vec<String>,
+    pub args: Vec<String>,
 }
 
 #[derive(Args)]
 #[command(disable_help_flag = true)]
-struct RunArgs {
+pub struct RunArgs {
     #[arg(required = true, trailing_var_arg = true, allow_hyphen_values = true)]
-    args: Vec<String>,
+    pub args: Vec<String>,
 }
 
 #[derive(Args)]
-struct ToolUseArgs {
-    tool: String,
-    version: String,
-    #[arg(short = 'g', long)]
-    global: bool,
+pub struct TrustArgs {
+    /// Directory (or a specific .avm.json/.env file). Defaults to the current directory.
+    pub path: Option<PathBuf>,
+    /// Remove trust instead.
+    #[arg(long, conflicts_with = "list")]
+    pub revoke: bool,
+    /// List trusted files.
+    #[arg(long)]
+    pub list: bool,
 }
 
 #[derive(Args)]
-struct ToolInstallArgs {
-    tool: String,
-    version: String,
-}
-#[derive(Args)]
-struct ToolUninstallArgs {
-    tool: String,
-    version: String,
-}
-
-#[derive(Args)]
-struct ExecShimArgs {
-    tool: String,
+pub struct ExecShimArgs {
+    pub tool: String,
     #[arg(last = true)]
-    args: Vec<String>,
+    pub args: Vec<String>,
 }

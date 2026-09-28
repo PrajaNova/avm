@@ -11,11 +11,11 @@
 - Keep changes deterministic (sorted output for aliases/tools, stable ordering for lists).
 
 ## Folder boundaries
-- `crates/avm-cli`: command parsing, shell protocol, user-facing behavior.
-- `crates/avm-core`: `.avm.json`, resolve/merge rules, aliases, env, tools.
-- `crates/avm-shims`: shim generation and PATH integration scripts.
+- `crates/avm-cli/src/cli`: command parsing, shell protocol, user-facing behavior.
+- `crates/avm-cli/src/{config,resolver}.rs`: `.avm.json`, resolve/merge rules, aliases, env, tools.
+- `crates/avm-cli/src/shims.rs`: shim generation and PATH integration scripts.
 - `crates/avm-plugin-api`: plugin/host contracts, `ToolProvider` trait, wire protocol types (`protocol` module), and the `runner` module every plugin executable's `main.rs` dispatches through.
-- `crates/avm-runtime`: plugin discovery (builtin/third-party/asdf tiers), manifest validation, `PluginProcess` (the protocol host runner) and the legacy asdf adapter.
+- `crates/avm-cli/src/runtime.rs`: plugin discovery (protocol/asdf tiers), `PluginProcess` (the protocol host runner), the marketplace installer, and the legacy asdf adapter.
 - `crates/avm-plugin-node`, `crates/avm-plugin-java`, `crates/avm-plugin-android`: each both a library (the `ToolProvider` impl + version/install logic) and a standalone `[[bin]]` executable speaking the plugin protocol — see `docs/migration/PLUGIN_PROTOCOL.md`.
 
 ## Plugin and compatibility policy

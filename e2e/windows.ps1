@@ -53,9 +53,14 @@ $tools = Join-Path $HOME '.avm\tools'
 Check 'outside: managed node 20' { (Out { node -p 'process.version + process.execPath' }) -match '^v20\..*\\.avm\\tools\\node\\' }
 Check 'project: managed node 22' { Push-Location $P; try { (Out { node -p 'process.version + process.execPath' }) -match '^v22\..*\\.avm\\tools\\node\\' } finally { Pop-Location } }
 Check 'npm.exe shim runs npm.cmd' { Push-Location $P; try { (Out { npm -v }) -match '^\d+\.' } finally { Pop-Location } }
-npm install -g cowsay 2>&1 | Out-Null
+$npmOut = Out { npm install -g cowsay }
+Write-Host ($npmOut -split "`n" | Select-String 'avm:' | Out-String)
 Check 'npm -g installed into the managed node 20' { @(Get-ChildItem "$tools\node\20.*\bin\cowsay.cmd" -ErrorAction SilentlyContinue).Count -gt 0 }
 Check 'cowsay.exe shim created' { Test-Path "$env:AVM_SHIM_DIR\cowsay.exe" }
+if (-not (Test-Path "$env:AVM_SHIM_DIR\cowsay.exe")) {
+    Write-Host "  shims: $((Get-ChildItem $env:AVM_SHIM_DIR).Name -join ', ')"
+    Write-Host "  node 20 bin: $((Get-ChildItem "$tools\node\20.*\bin").Name -join ', ')"
+}
 Check 'global npm package (installed under 20) runs in the project on 22' { Push-Location $P; try { (Out { cowsay moo }) -match 'moo' } finally { Pop-Location } }
 
 Section 'java: global 17, local 21, JAVA_HOME'

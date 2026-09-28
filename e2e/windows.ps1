@@ -48,25 +48,30 @@ avm plugin add node
 avm node install 20 -g
 Push-Location $P; avm node install 22; Pop-Location
 Check 'node.exe shim (not .cmd)' { (Test-Path "$env:AVM_SHIM_DIR\node.exe") -and -not (Test-Path "$env:AVM_SHIM_DIR\node.cmd") }
-Check 'outside: node 20' { (Out { node -v }) -match '^v20\.' }
-Check 'project: node 22' { Push-Location $P; try { (Out { node -v }) -match '^v22\.' } finally { Pop-Location } }
+# The runner has its own node/java, so check the managed binary actually ran.
+$tools = Join-Path $HOME '.avm\tools'
+Check 'outside: managed node 20' { (Out { node -p 'process.version + process.execPath' }) -match '^v20\..*\\.avm\\tools\\node\\' }
+Check 'project: managed node 22' { Push-Location $P; try { (Out { node -p 'process.version + process.execPath' }) -match '^v22\..*\\.avm\\tools\\node\\' } finally { Pop-Location } }
 Check 'npm.exe shim runs npm.cmd' { Push-Location $P; try { (Out { npm -v }) -match '^\d+\.' } finally { Pop-Location } }
 npm install -g cowsay 2>&1 | Out-Null
+Check 'npm -g installed into the managed node 20' { @(Get-ChildItem "$tools\node\20.*\bin\cowsay.cmd" -ErrorAction SilentlyContinue).Count -gt 0 }
+Check 'cowsay.exe shim created' { Test-Path "$env:AVM_SHIM_DIR\cowsay.exe" }
 Check 'global npm package (installed under 20) runs in the project on 22' { Push-Location $P; try { (Out { cowsay moo }) -match 'moo' } finally { Pop-Location } }
 
 Section 'java: global 17, local 21, JAVA_HOME'
 avm plugin add java
 avm java install 17 -g
 Push-Location $P; avm java install 21; Pop-Location
-Check 'outside: java 17' { (Out { java -version }) -match 'version "17' }
-Check 'project: java 21' { Push-Location $P; try { (Out { java -version }) -match 'version "21' } finally { Pop-Location } }
-Check 'JAVA_HOME in project → a 21 JDK' { Push-Location $P; try { (Out { avm-bin env --shell pwsh }) -match 'JAVA_HOME = .*openjdk-21' } finally { Pop-Location } }
+Check 'outside: managed java 17' { ((Out { java -version }) -match 'version "17') -and ((Out { avm-bin env --shell pwsh }) -match 'JAVA_HOME = .*\\.avm\\tools\\java\\openjdk-17') }
+Check 'project: managed java 21' { Push-Location $P; try { ((Out { java -version }) -match 'version "21') -and ((Out { avm-bin env --shell pwsh }) -match 'JAVA_HOME = .*openjdk-21') } finally { Pop-Location } }
+Check 'java 21 JDK installed under ~/.avm' { @(Get-ChildItem "$tools\java\openjdk-21*\bin\java.exe" -ErrorAction SilentlyContinue).Count -gt 0 }
 
 Section 'android: install, ANDROID_HOME, adb'
 avm plugin add android
 avm android install 35 -g
-Check 'ANDROID_HOME set' { (Out { avm-bin env --shell pwsh }) -match 'ANDROID_HOME = ' }
-Check 'adb works' { (Out { adb version }) -match 'Android Debug Bridge' }
+Check 'ANDROID_HOME points into ~/.avm' { (Out { avm-bin env --shell pwsh }) -match 'ANDROID_HOME = .*\\.avm\\tools\\android\\35' }
+Check 'adb.exe shim runs the managed adb' { ((Out { adb version }) -match 'Android Debug Bridge') -and (Test-Path "$env:AVM_SHIM_DIR\adb.exe") }
+Check 'platform android-35 installed' { Test-Path "$tools\android\35\sdk\platforms\android-35" }
 
 Write-Host "`nwindows: $script:pass passed, $script:fail failed"
 if ($script:fail -gt 0) { exit 1 }

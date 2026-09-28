@@ -1,11 +1,21 @@
 name: Plugin CI (reusable)
 
+# Called from each plugin repo's ci.yml. Pass `windows: true` once the
+# plugin supports Windows (same switch as plugin-release.yml).
 on:
   workflow_call:
+    inputs:
+      windows:
+        type: boolean
+        default: false
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -13,5 +23,25 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Build
-        run: cargo build --release
+      - name: Test
+        run: cargo test
+
+      - name: Build and smoke test
+        shell: bash
+        run: cargo build --release && target/release/${{ github.event.repository.name }} manifest
+
+  build-windows:
+    if: ${{ inputs.windows }}
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Test
+        run: cargo test
+
+      - name: Build and smoke test
+        run: cargo build --release; target/release/${{ github.event.repository.name }}.exe manifest

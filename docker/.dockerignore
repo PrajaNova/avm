@@ -1,7 +1,0 @@
-.git
-target
-**/target
-node_modules
-.idea
-.vscode
-tmp

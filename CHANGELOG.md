@@ -11,6 +11,7 @@ The format follows Keep a Changelog style, and releases use semantic versioning.
 
 ### Fixed
 - The Homebrew release job read a non-existent `HOMEBREW_TAP_TOKEN` secret; it now uses `HOMEBREW_TAP_GITHUB_TOKEN`.
+- npm trusted publishing was refused because `package.json` `repository.url` said `prajanova/avm`; npm compares it case-sensitively with `PrajaNova/avm`. The release workflow gains an `npm_only` input to retry npm for an existing release.
 
 ## [0.4.0-beta-1] - 2026-09-28
 

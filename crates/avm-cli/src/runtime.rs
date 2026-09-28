@@ -575,7 +575,7 @@ pub fn fetch_verified_archive(repo: &str, release: &GithubRelease, asset_name: &
     let ext = if asset_name.ends_with(".zip") { "zip" } else { "tar.gz" };
     let tmp = std::env::temp_dir().join(format!("avm-download-{}.{ext}", std::process::id()));
     let mut download = Command::new("curl");
-    download.args(["-fL", "--connect-timeout", "10"]).arg(&asset.browser_download_url).arg("-o").arg(&tmp);
+    download.args(["-fsSL", "--connect-timeout", "10"]).arg(&asset.browser_download_url).arg("-o").arg(&tmp);
     run_timed(download, MARKETPLACE_INSTALL_TIMEOUT_MS, &format!("downloading {asset_name}"), "AVM_MARKETPLACE_INSTALL_TIMEOUT")?;
 
     let (sha256, verified) = match checksums {

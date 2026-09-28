@@ -1,0 +1,31 @@
+# avm — Any Version Manager
+
+avm is a version manager (node, java, android, and plugins), alias runner and
+env manager by PrajaNova. npm: @prajanova/avm · GitHub: PrajaNova/avm
+
+## Config
+- Project `.avm.json` (`aliases`, `env`, `tools`) overrides global `~/.avm.json`.
+- Tool versions are also read from `.tool-versions`, `.nvmrc`, `.node-version`,
+  `package.json` (`volta.node`, `engines.node`), `.java-version`, `.sdkmanrc`;
+  the nearest directory wins, and `.avm.json` `tools` beats them.
+  `avm which <tool>` shows which file won.
+- A project's aliases/env and `.env` files are ignored until `avm trust`
+  (hash-pinned; editing outside avm re-blocks). Tool pins always apply.
+- Missing managed versions: `avm <tool> use` installs; plain `node` falls back
+  to the system binary with a warning.
+
+## Commands
+- `avm init` · `avm add [-g] <alias> <command>` · `avm remove [-g] <alias>`
+- `avm run <alias> [args...]` · `avm resolve <alias> [args...]` · `avm which <key>` · `avm list`
+- `avm env [--shell sh|pwsh|cmd]` · `avm env add|remove|list`
+- `avm trust [path] [--revoke|--list]`
+- `avm <tool> use|install|uninstall|list|versions` (e.g. `avm node use 20`)
+- `avm plugin add|list|available|remove|update`
+- `avm shims install|remove|path|activate`
+- `eval "$(avm shell-init)"` (bash/zsh) or `Invoke-Expression ((avm-bin shell-init pwsh) -join "`n")` (PowerShell)
+
+## Helping a user
+1. Is it about aliases, env, tool versions, shims, trust, or plugins?
+2. Read `.avm.json` and any version files; run `avm which <tool>`.
+3. Explain local/global/version-file precedence, and whether the config is trusted.
+4. Give exact commands to fix it.

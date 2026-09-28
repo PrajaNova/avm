@@ -1,5 +1,5 @@
 use std::collections::{BTreeSet, HashMap};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use avm_plugin_api::ResolvedAlias;
 
@@ -26,6 +26,11 @@ pub struct ResolvedConfig {
     pub local_tools: HashMap<String, String>,
     pub global_tools: HashMap<String, String>,
     pub plugin_aliases: HashMap<String, ResolvedAlias>,
+    /// The local `.avm.json` when it exists but isn't trusted (#20): its
+    /// aliases and env are dropped; its tool pins still apply.
+    pub untrusted: Option<PathBuf>,
+    /// Version file each version-file pin came from (e.g. `./.nvmrc`).
+    pub tool_origins: HashMap<String, String>,
 }
 
 impl ResolvedConfig {
@@ -98,17 +103,39 @@ pub fn load(
     home: &Path,
     plugin_aliases: HashMap<String, ResolvedAlias>,
 ) -> anyhow::Result<ResolvedConfig> {
-    let local = crate::config::load(cwd)?;
+    let mut local = crate::config::load(cwd)?;
     let global = crate::config::load(home)?;
+    let local_file = cwd.join(crate::config::CONFIG_FILE);
+    let untrusted = (local_file.exists() && !crate::trust::is_trusted(&local_file, &global.trusted_paths))
+        .then(|| {
+            local.aliases.clear();
+            local.env.clear();
+            local_file
+        });
+
+    // Version files first, then `.avm.json` `tools` on top (#21).
+    let idiomatic = global.idiomatic_version_files != Some(false);
+    let mut local_tools = HashMap::new();
+    let mut tool_origins = HashMap::new();
+    for (tool, (version, origin)) in crate::version_files::pins(cwd, home, idiomatic) {
+        local_tools.insert(tool.clone(), version);
+        tool_origins.insert(tool, origin);
+    }
+    for (tool, version) in local.tools {
+        tool_origins.remove(&tool);
+        local_tools.insert(tool, version);
+    }
 
     Ok(ResolvedConfig {
         local_aliases: local.aliases,
         global_aliases: global.aliases,
         local_env: local.env,
         global_env: global.env,
-        local_tools: local.tools,
+        local_tools,
         global_tools: global.tools,
         plugin_aliases,
+        untrusted,
+        tool_origins,
     })
 }
 

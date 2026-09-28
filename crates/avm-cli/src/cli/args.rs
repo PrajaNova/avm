@@ -40,6 +40,9 @@ pub enum Commands {
     Env {
         #[command(subcommand)]
         command: Option<EnvCommands>,
+        /// Output syntax for the export list (default: sh on Unix, pwsh on Windows).
+        #[arg(long, value_enum)]
+        shell: Option<Shell>,
     },
     /// Print the command that an alias expands to.
     Resolve(ResolveArgs),
@@ -54,8 +57,11 @@ pub enum Commands {
     Create {
         name: String,
     },
-    /// Print shell setup for avm aliases and shims.
-    ShellInit,
+    /// Print shell setup for avm aliases and shims (sh/bash/zsh, or pwsh).
+    ShellInit {
+        #[arg(value_enum)]
+        shell: Option<Shell>,
+    },
     /// Manage executable shims used for plain commands like node and java.
     Shims {
         #[command(subcommand)]
@@ -78,6 +84,8 @@ pub enum Commands {
         #[arg(short = 'g', long)]
         global: bool,
     },
+    /// Trust a project's .avm.json and .env so their aliases and env apply.
+    Trust(TrustArgs),
     /// Run an installed plugin command, for example `avm node versions` or `avm java versions`.
     #[command(external_subcommand)]
     PluginCommand(Vec<String>),
@@ -194,6 +202,18 @@ pub struct ResolveArgs {
 pub struct RunArgs {
     #[arg(required = true, trailing_var_arg = true, allow_hyphen_values = true)]
     pub args: Vec<String>,
+}
+
+#[derive(Args)]
+pub struct TrustArgs {
+    /// Directory (or a specific .avm.json/.env file). Defaults to the current directory.
+    pub path: Option<PathBuf>,
+    /// Remove trust instead.
+    #[arg(long, conflicts_with = "list")]
+    pub revoke: bool,
+    /// List trusted files.
+    #[arg(long)]
+    pub list: bool,
 }
 
 #[derive(Args)]

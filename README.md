@@ -1,12 +1,20 @@
 # avm — Any Version Manager
 
-`avm` is a Rust-native, monorepo-based tooling layer for local command aliases, project-level runtime selection, and plugin-driven command discovery.
+`avm` is a Rust version manager: it picks the right `node`, `java` or
+Android SDK per directory, and it runs project aliases and env from one
+`.avm.json`. Each tool comes from a separately installed, compiled plugin.
 
-It solves three practical problems:
+What sets it apart:
 
-- command drift across projects
-- manual setup of project-specific runtime versions
-- repetitive shell configuration for ad hoc aliases
+- **Global packages survive version switches.** A CLI you `npm i -g` under
+  one Node version stays runnable in a project pinned to another.
+- **System fallback with a warning** when a pinned version isn't installed,
+  instead of a hard failure.
+- **Plugins are compiled binaries** speaking a typed JSON protocol, run as
+  separate processes, and sha256-verified on install. Plugins can add
+  their own subcommands (`avm android avd ...`).
+- **First-class mobile/TV toolchains**: the Android SDK plus an emulator
+  in one install.
 
 ### What avm handles today
 
@@ -23,20 +31,42 @@ It solves three practical problems:
   [Architecture](docs/architecture/ARCHITECTURE.md#global-packages-across-local-version-switches))
 - `avm create <name>` points you at the plugin template repo to start a new plugin
 - fallback behavior: if a managed version is not installed, avm uses the host/system command and warns
+- existing version files (`.nvmrc`, `.tool-versions`, `.java-version`, …) work as-is
+- `avm trust` gates project aliases/env, so cloning a repo never runs its config
+- Linux and macOS (Apple Silicon and Intel); Windows via PowerShell ([phase 1](https://github.com/PrajaNova/avm/issues/23))
 
-For positioning versus popular alternatives, see [Comparison with asdf and vfox](#comparison-with-asdf-and-vfox).
+For positioning versus popular alternatives, see [Comparison with asdf, vfox, mise, and proto](#comparison-with-asdf-vfox-mise-and-proto).
 
-## Comparison with asdf and vfox
+## Comparison with asdf, vfox, mise, and proto
 
-| Capability | avm (this project) | asdf | vfox |
-| --- | --- | --- | --- |
-| Runtime model | Native Rust binary | Ruby/plugin ecosystem with Bash integrations | Rust shell-hook engine with plugin runtime |
-| Tool interception | PATH shims in `~/.avm/shims` | Shim generation + dispatch by plugin hooks | Shell hook updates PATH dynamically |
-| Plugin ecosystem | Runtime marketplace — compiled binaries fetched from each plugin's own GitHub repo, JSON-over-stdio protocol | Bash-style plugins | Lua-style plugins |
-| Node support strategy | Native plugin (`avm-plugin-node`): live version index + `package.json` script resolver | External Node plugin scripts | Provider-based Node integrations |
-| Fallback if requested node version missing | Uses system node with warning | Typically triggers plugin install flow | Typically triggers plugin install flow |
-| Configuration default | `.avm.json` with local/global + legacy compatibility | `.tool-versions` | `.tool-versions` |
-| Security / isolation | Plugins run as separate OS processes (never linked into `avm-bin`), a typed JSON contract instead of shared bash scripts; plugin downloads are sha256-verified against the release's `checksums.txt` before install | Shell scripts (higher host access) | In-process plugin runtime (less isolated than strict sandbox) |
+Checked against each project's docs in September 2026 (sources below).
+"Not documented" means we couldn't find it, not that it's confirmed absent.
+Where avm is behind, the row links the roadmap issue.
+
+| | avm | asdf | vfox | mise | proto |
+| --- | --- | --- | --- | --- | --- |
+| Implementation | Rust | Go (rewritten from Bash in v0.16) | Go | Rust | Rust |
+| Plugin model | Compiled executable per tool, separate process, JSON-over-stdio; asdf plugins via an adapter | Bash scripts | Lua | asdf and vfox plugins plus backends (aqua, npm, cargo, …) | WASM plugins, or TOML/JSON/YAML definitions |
+| Download verification | sha256 on by default for plugins, avm-bin and first-party runtimes (fail closed); build provenance attestations published | Left to each plugin | Plugin-supplied checksum | aqua backend: checksums plus cosign/minisign/SLSA/attestations, on by default | Checksums, minisign, GPG |
+| Existing version files | `.tool-versions`, `.nvmrc`, `.node-version`, `package.json`, `.java-version`, `.sdkmanrc`, on by default | `.tool-versions`; others opt-in | `.tool-versions`, `.nvmrc`, `.node-version`, `.sdkmanrc` | Opt-in per tool | `.nvmrc` etc. on by default |
+| Lockfile | No ([#25](https://github.com/PrajaNova/avm/issues/25)) | No | Not documented | `mise.lock` (opt-in) | `.protolock` (unstable) |
+| Tasks | Aliases and `package.json` scripts; no deps/caching ([#33](https://github.com/PrajaNova/avm/issues/33)) | No | No | Yes | No (moon is separate) |
+| Env / secrets | `env` and `.env`; no secrets ([#32](https://github.com/PrajaNova/avm/issues/32)) | No | Not documented | `[env]`; secrets via fnox, sops/age | `[env]` and dotenv files |
+| Config trust | `avm trust` (hash-pinned) | Not documented | Not documented | `mise trust` | Not documented |
+| Windows | PowerShell phase 1; Windows plugins pending ([#23](https://github.com/PrajaNova/avm/issues/23)) | WSL only | Native | Native | Native |
+| Activation | Shims ([PATH mode: #39](https://github.com/PrajaNova/avm/issues/39)) | Shims | Shell hook | Shims or `activate` | Shims, bin links, or `activate` |
+| Pinned version missing | Falls back to system binary with a warning | Error | Not documented | Auto-install | Error (auto-install opt-in) |
+| Plugin subcommands | Yes | Yes | No | Not documented | Not documented |
+| Global npm packages across switches | Built in | Per plugin (default-packages file) | Not documented | Default-packages file (deprecated) | Shared globals dir |
+
+<details><summary>Sources</summary>
+
+- asdf: [v0.16.0 release](https://github.com/asdf-vm/asdf/releases/tag/v0.16.0), [configuration](https://asdf-vm.com/manage/configuration.html), [plugin commands](https://asdf-vm.com/plugins/create.html), [FAQ (Windows)](https://asdf-vm.com/more/faq.html), [asdf-nodejs](https://github.com/asdf-vm/asdf-nodejs)
+- vfox: [repo](https://github.com/version-fox/vfox), [plugin how-to](https://vfox.dev/plugins/create/howto.html), [configuration](https://vfox.dev/guides/configuration.html), [core commands](https://vfox.dev/usage/core-commands.html)
+- mise: [repo](https://github.com/jdx/mise), [plugins](https://mise.jdx.dev/plugins.html), [aqua backend](https://mise.jdx.dev/dev-tools/backends/aqua.html), [settings](https://mise.jdx.dev/configuration/settings.html), [mise.lock](https://mise.jdx.dev/dev-tools/mise-lock.html), [tasks](https://mise.jdx.dev/tasks/), [secrets](https://mise.jdx.dev/environments/secrets/), [trust](https://mise.jdx.dev/cli/trust.html), [installing](https://mise.jdx.dev/installing-mise.html), [node](https://mise.jdx.dev/lang/node.html)
+- proto: [overview](https://moonrepo.dev/docs/proto), [plugins](https://moonrepo.dev/docs/proto/plugins), [non-WASM plugins](https://moonrepo.dev/docs/proto/non-wasm-plugin), [config](https://moonrepo.dev/docs/proto/config), [detection](https://moonrepo.dev/docs/proto/detection), [workflows](https://moonrepo.dev/docs/proto/workflows), [v0.31 globals](https://moonrepo.dev/blog/proto-v0.31)
+
+</details>
 
 ## Quick start
 
@@ -82,6 +112,24 @@ Precedence rules:
 - alias suggestions respect override ordering
 - environment is merged with local values overriding global values
 - tool version lookup is local first, then global
+
+### Existing version files
+
+No need to rewrite config to try avm: tool versions are also read from the
+files projects already have. From nearest to farthest:
+
+1. `.avm.json` `tools` (current directory)
+2. `.tool-versions` (asdf format; `nodejs` maps to `node`)
+3. `.nvmrc`, `.node-version`, `package.json` (`volta.node`, else the
+   `engines.node` range), `.java-version`, `.sdkmanrc`
+4. global `~/.avm.json`
+
+Version files are searched upward from the current directory, and the
+nearest directory wins. Partial specs resolve to the newest installed
+match: `20` → `20.11.1`, `lts/*`, `lts/iron`, `>=18 <21`, `^20.1`, and
+`17` → `openjdk-17.0.9+9`. `avm which node` shows which file won, e.g.
+`20.11.1 (from ./.nvmrc)`. Set `"idiomatic_version_files": false` in
+`~/.avm.json` to ignore the tool-specific files (item 3).
 
 ## Commands
 
@@ -144,12 +192,7 @@ Docs:
 - [Creating a plugin](docs/plugins/CREATING_A_PLUGIN.md) — the plugin template,
   the `ToolProvider` reference, testing, publishing, getting listed
 
-Agent and LLM docs:
-
-- [Agent guide](agent.md)
-- [Agent skill](agent.skill.md)
-- [LLM context](llm.txt)
-- [LLM text context](llm.text)
+Agent and LLM context: [llms.txt](llms.txt)
 
 ## Installation
 
@@ -165,6 +208,22 @@ npm install -g @prajanova/avm
 
 ```bash
 cargo install --path .
+```
+
+Windows (PowerShell):
+
+```powershell
+irm https://raw.githubusercontent.com/PrajaNova/avm/main/install.ps1 | iex
+```
+
+
+`install.sh` and the npm installer verify the release archive against the
+release's `checksums.txt` before extracting. Every avm and first-party
+plugin release also carries a GitHub build provenance attestation:
+
+```bash
+gh attestation verify avm_linux_amd64.tar.gz -R PrajaNova/avm
+gh attestation verify avm-plugin-node_linux_amd64.tar.gz -R PrajaNova/avm-plugin-node
 ```
 
 ## Docker-based test suite
@@ -196,6 +255,8 @@ Scenario files:
 - `docker/tests/scenarios/04-node-package-scripts.sh`
 - `docker/tests/scenarios/05-plugin-first-node.sh`
 - `docker/tests/scenarios/06-asdf-java-plugin.sh`
+- `docker/tests/scenarios/07-trust.sh`
+- `docker/tests/scenarios/08-version-files.sh`
 
 ## Plugin behavior
 
@@ -223,6 +284,30 @@ routing through `~/.avm/tools/<tool>/<version>/bin`.
 Want to add support for another tool? Start from the plugin template
 (`avm create <name>` prints the command) — see
 [Creating a plugin](docs/plugins/CREATING_A_PLUGIN.md).
+
+## Security model
+
+A project's `.avm.json` aliases and `env`, and its `.env` files, run with
+your privileges. Once `avm shell-init` is active they reach every shimmed
+`node`/`java`, so avm ignores them until you trust that exact file content:
+
+```bash
+cd cloned-repo
+avm trust            # shows the aliases/env it will enable, then trusts them
+avm trust --list     # everything you've trusted
+avm trust --revoke   # stop trusting this directory
+```
+
+- Trust is stored in `~/.avm/trusted.json` as path → sha256. Any edit made
+  outside avm makes the file untrusted again. `avm init`, `avm add` and
+  `avm env add` keep an already-trusted file trusted.
+- Tool pins (`tools`, `.nvmrc`, `.tool-versions`, …) only pick a version
+  and are always honored.
+- Your global `~/.avm.json` is always trusted. It can list
+  `"trusted_paths": ["~/work/**"]` to trust whole trees.
+- `AVM_TRUST_ALL=1` trusts everything. It's meant for CI and is never
+  implied by `CI=true`.
+- Downloads are verified too; see [SECURITY.md](./SECURITY.md).
 
 ## Notes for contributors
 

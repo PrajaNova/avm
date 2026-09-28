@@ -24,9 +24,17 @@ pub fn edit_config(
             anyhow!("no {CONFIG_FILE} found in current directory. Run `avm init` first")
         });
     }
+    // Editing through avm keeps an already-trusted (or brand new) local file
+    // trusted; it never promotes an untrusted one.
+    let file = root.join(CONFIG_FILE);
+    let keep_trusted = !global && (!file.exists() || crate::trust::is_trusted(&file, &[]));
     let mut cfg = config::load(&root)?;
     f(&mut cfg)?;
-    config::save(&root, &cfg)
+    config::save(&root, &cfg)?;
+    if keep_trusted {
+        crate::trust::trust(&file)?;
+    }
+    Ok(())
 }
 
 fn scope(global: bool) -> &'static str {
@@ -62,6 +70,7 @@ pub fn cmd_init() -> Result<()> {
         return Err(anyhow!("{CONFIG_FILE} already exists"));
     }
     config::save(&root, &ConfigLoadResult::default())?;
+    crate::trust::trust(&root.join(CONFIG_FILE))?;
     println!("✓ Created {CONFIG_FILE} in current directory");
     Ok(())
 }
@@ -139,9 +148,58 @@ pub fn cmd_env_list() -> Result<()> {
     Ok(())
 }
 
+pub fn cmd_trust(args: TrustArgs) -> Result<()> {
+    if args.list {
+        for path in crate::trust::list().keys() {
+            println!("{path}");
+        }
+        return Ok(());
+    }
+    let target = match args.path {
+        Some(path) => path,
+        None => std::env::current_dir().context("failed to read current directory")?,
+    };
+    let files: Vec<PathBuf> = if target.is_dir() {
+        [CONFIG_FILE, ".env"].iter().map(|f| target.join(f)).filter(|f| f.exists()).collect()
+    } else {
+        vec![target.clone()]
+    };
+    if files.is_empty() {
+        return Err(anyhow!("no {CONFIG_FILE} or .env in {}", target.display()));
+    }
+    for file in files {
+        if args.revoke {
+            let removed = crate::trust::revoke(&file)?;
+            println!("{} {}", if removed { "✓ Revoked trust for" } else { "Was not trusted:" }, file.display());
+            continue;
+        }
+        // Show what's being trusted: the commands and env it will run with.
+        if file.file_name().is_some_and(|n| n == CONFIG_FILE) {
+            let cfg = config::load(file.parent().unwrap_or(Path::new(".")))?;
+            for (key, value) in cfg.aliases.iter().collect::<BTreeMap<_, _>>() {
+                println!("  alias {key} → {value}");
+            }
+            for (key, value) in cfg.env.iter().collect::<BTreeMap<_, _>>() {
+                println!("  env   {key}={value}");
+            }
+        } else {
+            for line in fs::read_to_string(&file)?.lines().filter(|l| !l.trim().is_empty() && !l.trim_start().starts_with('#')) {
+                println!("  {line}");
+            }
+        }
+        crate::trust::trust(&file)?;
+        println!("✓ Trusted {}", file.display());
+    }
+    Ok(())
+}
+
 pub fn cmd_list() -> Result<()> {
     let cfg = load_state()?;
     let mut printed = false;
+    let untrusted = untrusted_files(&cfg);
+    if !untrusted.is_empty() {
+        eprintln!("{}", untrusted_notice(&untrusted));
+    }
 
     if !cfg.local_aliases.is_empty() || !cfg.global_aliases.is_empty() {
         printed = true;

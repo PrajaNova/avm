@@ -39,6 +39,10 @@ jobs:
             archive: avm_linux_arm64.tar.gz
           - os: macos-latest
             archive: avm_darwin_arm64.tar.gz
+          - os: macos-15-intel
+            archive: avm_darwin_amd64.tar.gz
+          - os: windows-latest
+            archive: avm_windows_amd64.zip
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout
@@ -50,12 +54,21 @@ jobs:
       - name: Build release binary
         run: cargo build --release --package avm-cli --bin avm-bin
 
+      - name: Smoke test
+        run: target/release/avm-bin --version
+
       - name: Create release archive
+        if: runner.os != 'Windows'
         shell: bash
         run: |
           mkdir -p dist
           cp target/release/avm-bin dist/avm-bin
           tar -C dist -czf "${{ matrix.archive }}" avm-bin
+
+      - name: Create release archive (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: Compress-Archive -Path target/release/avm-bin.exe -DestinationPath "${{ matrix.archive }}"
 
       - name: Upload archive
         uses: actions/upload-artifact@v4
@@ -66,6 +79,10 @@ jobs:
   github-release:
     needs: build
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
     steps:
       - name: Download release archives
         uses: actions/download-artifact@v4
@@ -73,10 +90,20 @@ jobs:
           path: dist
           merge-multiple: true
 
+      - name: Generate checksums
+        run: cd dist && sha256sum avm_* > checksums.txt
+
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: dist/avm_*
+
       - name: Publish GitHub release
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/*.tar.gz
+          files: |
+            dist/avm_*
+            dist/checksums.txt
           generate_release_notes: true
 
   npm:
@@ -126,6 +153,7 @@ jobs:
           linux_amd64_sha="$(sha256sum dist/avm_linux_amd64.tar.gz | awk '{print $1}')"
           linux_arm64_sha="$(sha256sum dist/avm_linux_arm64.tar.gz | awk '{print $1}')"
           darwin_arm64_sha="$(sha256sum dist/avm_darwin_arm64.tar.gz | awk '{print $1}')"
+          darwin_amd64_sha="$(sha256sum dist/avm_darwin_amd64.tar.gz | awk '{print $1}')"
 
           mkdir -p homebrew-tap/Formula
           cat > homebrew-tap/Formula/avm.rb <<RUBY
@@ -139,6 +167,11 @@ jobs:
               on_arm do
                 url "${base_url}/avm_darwin_arm64.tar.gz"
                 sha256 "${darwin_arm64_sha}"
+              end
+
+              on_intel do
+                url "${base_url}/avm_darwin_amd64.tar.gz"
+                sha256 "${darwin_amd64_sha}"
               end
             end
 
@@ -159,7 +192,7 @@ jobs:
             end
 
             test do
-              assert_match version.to_s, shell_output("#{bin}/avm-bin version")
+              assert_match version.to_s, shell_output("#{bin}/avm-bin --version")
             end
           end
           RUBY

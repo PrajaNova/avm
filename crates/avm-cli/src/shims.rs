@@ -1,6 +1,5 @@
 use anyhow::{Context, Result};
 use std::fs;
-use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 
 /// Core shims per managed tool: every binary here always gets a shim and
@@ -15,8 +14,7 @@ pub const TOOL_BINS: &[(&str, &[&str])] = &[
 
 /// `$HOME/.avm`.
 pub fn avm_home() -> Result<PathBuf> {
-    let home = std::env::var("HOME").context("HOME not set")?;
-    Ok(PathBuf::from(home).join(".avm"))
+    Ok(avm_plugin_api::home_dir()?.join(".avm"))
 }
 
 pub fn shim_dir() -> Result<PathBuf> {
@@ -50,7 +48,9 @@ pub fn reshim() -> Result<()> {
                 if !is_executable(&entry.path()) {
                     continue;
                 }
-                if let Some(name) = entry.file_name().to_str() {
+                // Windows: `tsc.cmd` → shim `tsc`.
+                let file_name = if cfg!(windows) { entry.path().file_stem().map(|s| s.to_os_string()) } else { Some(entry.file_name()) };
+                if let Some(name) = file_name.as_deref().and_then(|n| n.to_str()) {
                     // Reject anything that isn't a plain command name.
                     if name.starts_with('.') || name.contains('/') || name.contains('\\') {
                         continue;
@@ -64,7 +64,9 @@ pub fn reshim() -> Result<()> {
 }
 
 /// A regular file with an exec bit that isn't world-writable.
+#[cfg(unix)]
 fn is_executable(path: &Path) -> bool {
+    use std::os::unix::fs::PermissionsExt;
     let Ok(meta) = fs::metadata(path) else {
         return false;
     };
@@ -72,12 +74,43 @@ fn is_executable(path: &Path) -> bool {
     meta.is_file() && mode & 0o111 != 0 && mode & 0o002 == 0
 }
 
+/// A regular file whose extension is in `PATHEXT` (`.exe`, `.cmd`, ...).
+#[cfg(windows)]
+fn is_executable(path: &Path) -> bool {
+    let exts = path_exts();
+    path.is_file()
+        && path
+            .extension()
+            .and_then(|e| e.to_str())
+            .is_some_and(|e| exts.iter().any(|x| x.trim_start_matches('.').eq_ignore_ascii_case(e)))
+}
+
+/// Candidate file names for a bare command: itself on Unix; `node.exe`,
+/// `node.cmd`, ... per `PATHEXT` on Windows.
+fn command_names(bin: &str) -> Vec<String> {
+    if cfg!(windows) && Path::new(bin).extension().is_none() {
+        path_exts().iter().map(|ext| format!("{bin}{}", ext.to_ascii_lowercase())).collect()
+    } else {
+        vec![bin.to_string()]
+    }
+}
+
+fn path_exts() -> Vec<String> {
+    std::env::var("PATHEXT")
+        .unwrap_or_else(|_| ".COM;.EXE;.BAT;.CMD".to_string())
+        .split(';')
+        .filter(|e| !e.is_empty())
+        .map(str::to_string)
+        .collect()
+}
+
 /// First executable `bin` on PATH, optionally skipping avm's own shims.
 pub fn which(bin: &str, skip_shims: bool) -> Option<PathBuf> {
     let shim_dir = shim_dir().ok().and_then(|dir| dir.canonicalize().ok());
     let paths = std::env::var_os("PATH")?;
+    let names = command_names(bin);
     std::env::split_paths(&paths)
-        .map(|dir| dir.join(bin))
+        .flat_map(|dir| names.iter().map(move |name| dir.join(name)))
         .filter(|candidate| is_executable(candidate))
         .find(|candidate| {
             !skip_shims
@@ -93,8 +126,7 @@ pub fn which(bin: &str, skip_shims: bool) -> Option<PathBuf> {
 /// like Codex/Claude). `.zshenv` is the key target — zsh sources it for every
 /// invocation, including non-interactive `zsh -c` used by such tools.
 pub fn activate_profiles() -> Result<Vec<PathBuf>> {
-    let home = std::env::var("HOME").context("HOME not set")?;
-    let home = PathBuf::from(home);
+    let home = avm_plugin_api::home_dir()?;
     let block = "\n# >>> avm shims >>>\nexport PATH=\"$HOME/.avm/shims:$PATH\"\n# <<< avm shims <<<\n";
     let marker = "# >>> avm shims >>>";
 
@@ -113,14 +145,26 @@ pub fn activate_profiles() -> Result<Vec<PathBuf>> {
 }
 
 pub fn remove_shim(tool: &str) -> Result<()> {
-    let path = shim_dir()?.join(tool);
-    if path.exists() {
-        fs::remove_file(path).context("remove shim")?;
+    for name in [tool.to_string(), format!("{tool}.cmd")] {
+        let path = shim_dir()?.join(name);
+        if path.exists() {
+            fs::remove_file(path).context("remove shim")?;
+        }
     }
     Ok(())
 }
 
+// ponytail: `.cmd` shims work in PowerShell/cmd but not for IDEs that spawn
+// `node.exe` directly; a copied `avm-shim.exe` dispatcher is #23 phase 2.
+#[cfg(windows)]
 fn write_shim(shims_dir: &Path, tool: &str) -> Result<()> {
+    let contents = format!("@echo off\r\navm-bin exec-shim {tool} -- %*\r\n");
+    fs::write(shims_dir.join(format!("{tool}.cmd")), contents).with_context(|| format!("write shim for {tool}"))
+}
+
+#[cfg(unix)]
+fn write_shim(shims_dir: &Path, tool: &str) -> Result<()> {
+    use std::os::unix::fs::PermissionsExt;
     let path = shims_dir.join(tool);
     let contents = format!(
         r#"#!/usr/bin/env sh

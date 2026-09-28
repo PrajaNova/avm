@@ -87,7 +87,7 @@ fn is_executable(path: &Path) -> bool {
 
 /// Candidate file names for a bare command: itself on Unix; `node.exe`,
 /// `node.cmd`, ... per `PATHEXT` on Windows.
-fn command_names(bin: &str) -> Vec<String> {
+pub fn command_names(bin: &str) -> Vec<String> {
     if cfg!(windows) && Path::new(bin).extension().is_none() {
         path_exts().iter().map(|ext| format!("{bin}{}", ext.to_ascii_lowercase())).collect()
     } else {
@@ -145,7 +145,7 @@ pub fn activate_profiles() -> Result<Vec<PathBuf>> {
 }
 
 pub fn remove_shim(tool: &str) -> Result<()> {
-    for name in [tool.to_string(), format!("{tool}.cmd")] {
+    for name in [tool.to_string(), format!("{tool}.cmd"), format!("{tool}.exe")] {
         let path = shim_dir()?.join(name);
         if path.exists() {
             fs::remove_file(path).context("remove shim")?;
@@ -154,12 +154,33 @@ pub fn remove_shim(tool: &str) -> Result<()> {
     Ok(())
 }
 
-// ponytail: `.cmd` shims work in PowerShell/cmd but not for IDEs that spawn
-// `node.exe` directly; a copied `avm-shim.exe` dispatcher is #23 phase 2.
+/// Windows: `<tool>.exe` is avm-bin itself (hard link, else a copy), so IDEs
+/// and debuggers that start `node.exe` directly still go through avm; avm-bin
+/// sees the name it was started as and dispatches to `exec-shim <tool>`.
 #[cfg(windows)]
 fn write_shim(shims_dir: &Path, tool: &str) -> Result<()> {
-    let contents = format!("@echo off\r\navm-bin exec-shim {tool} -- %*\r\n");
-    fs::write(shims_dir.join(format!("{tool}.cmd")), contents).with_context(|| format!("write shim for {tool}"))
+    let _ = fs::remove_file(shims_dir.join(format!("{tool}.cmd"))); // older .cmd shims
+    let path = shims_dir.join(format!("{tool}.exe"));
+    let avm = std::env::current_exe().context("locate avm-bin")?;
+    if path.exists() {
+        // A running shim can't be replaced; the existing one still works.
+        if fs::remove_file(&path).is_err() {
+            return Ok(());
+        }
+    }
+    fs::hard_link(&avm, &path)
+        .or_else(|_| fs::copy(&avm, &path).map(|_| ()))
+        .with_context(|| format!("write shim for {tool}"))
+}
+
+/// When avm-bin runs as a Windows shim (`node.exe`), the tool it stands for.
+pub fn invoked_as_shim() -> Option<String> {
+    if !cfg!(windows) {
+        return None;
+    }
+    let exe = std::env::current_exe().ok()?;
+    let stem = exe.file_stem()?.to_str()?.to_string();
+    (!stem.eq_ignore_ascii_case("avm-bin") && !stem.eq_ignore_ascii_case("avm")).then_some(stem)
 }
 
 #[cfg(unix)]

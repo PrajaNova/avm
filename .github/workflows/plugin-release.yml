@@ -9,6 +9,10 @@ on:
         description: "Version without the v, matching Cargo.toml"
         required: true
         type: string
+      windows:
+        description: "Also build avm-plugin-<name>_windows_amd64.zip (plugins that support Windows)"
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -82,8 +86,40 @@ jobs:
           name: ${{ env.ARCHIVE }}
           path: ${{ env.ARCHIVE }}
 
+  build-windows:
+    needs: validate
+    if: ${{ inputs.windows }}
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Build release binary
+        run: cargo build --release
+
+      - name: Smoke test
+        run: target/release/${{ github.event.repository.name }}.exe manifest
+
+      - name: Create release archive
+        shell: pwsh
+        run: |
+          $archive = "${{ github.event.repository.name }}_windows_amd64.zip"
+          Compress-Archive -Path "target/release/${{ github.event.repository.name }}.exe" -DestinationPath $archive
+          "ARCHIVE=$archive" >> $env:GITHUB_ENV
+
+      - name: Upload archive
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.ARCHIVE }}
+          path: ${{ env.ARCHIVE }}
+
   github-release:
-    needs: build
+    needs: [build, build-windows]
+    # build-windows is skipped for plugins without Windows support.
+    if: ${{ !cancelled() && needs.build.result == 'success' && needs.build-windows.result != 'failure' }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -97,12 +133,12 @@ jobs:
           merge-multiple: true
 
       - name: Generate checksums
-        run: cd dist && sha256sum *.tar.gz > checksums.txt
+        run: cd dist && sha256sum *.tar.gz $(ls *.zip 2>/dev/null) > checksums.txt
 
       - name: Attest build provenance
         uses: actions/attest-build-provenance@v2
         with:
-          subject-path: dist/*.tar.gz
+          subject-path: dist/avm-plugin-*
 
       - name: Publish GitHub release
         uses: softprops/action-gh-release@v2
@@ -110,6 +146,6 @@ jobs:
           tag_name: v${{ inputs.version }}
           target_commitish: ${{ github.sha }}
           files: |
-            dist/*.tar.gz
+            dist/avm-plugin-*
             dist/checksums.txt
           generate_release_notes: true

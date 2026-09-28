@@ -6,6 +6,9 @@ The format follows Keep a Changelog style, and releases use semantic versioning.
 
 ## [Unreleased]
 
+### Added
+- Windows, phases 2–3 (#23): shims are `node.exe`/`npm.exe`/… hard links to `avm-bin.exe` (it dispatches on the name it was started as), so IDEs and debuggers that launch `node.exe` directly are covered; `.cmd` shims are removed. Managed tools resolve `.exe`/`.cmd` binaries. `avm plugin add` installs `avm-plugin-<name>_windows_amd64.zip` releases; the reusable plugin release workflow builds them with `windows: true`. Each avm release publishes a Scoop manifest (`avm.json`).
+
 ### Changed
 - Tests: one end-to-end harness, `e2e/run.sh`, replaces the Docker scenario suite and the Rust CLI integration tests. It builds avm from the checkout, installs it with `install.sh` on a clean Ubuntu container, and runs the core, node, java and android suites; CI runs it on every PR. `install.sh` accepts `AVM_DOWNLOAD_BASE` for alternate archive locations.
 - The version flag is `-v`/`--version` (was clap's `-V`/`--version`), in avm-bin and the sh/bash/zsh and PowerShell hooks. `-V` is no longer accepted.

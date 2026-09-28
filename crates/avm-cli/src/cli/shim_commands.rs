@@ -172,12 +172,9 @@ fn resolved_tool_path_prefix(cfg: &ResolvedConfig) -> Option<String> {
 }
 
 fn managed_tool_bin_path(tool: &str, version: &str, binary: &str) -> Option<PathBuf> {
-    let candidate = avm_plugin_api::tool_dir(tool)
-        .ok()?
-        .join(version)
-        .join("bin")
-        .join(binary);
-    candidate.exists().then_some(candidate)
+    let bin = avm_plugin_api::tool_dir(tool).ok()?.join(version).join("bin");
+    // `node` → `node.exe` / `npm.cmd` on Windows.
+    shims::command_names(binary).into_iter().map(|name| bin.join(name)).find(|p| p.exists())
 }
 
 pub fn alias_source_label(source: &AliasSource) -> &'static str {

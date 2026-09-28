@@ -121,6 +121,26 @@ jobs:
       - name: Generate checksums
         run: cd dist && sha256sum avm_* > checksums.txt
 
+      # Scoop manifest as a release asset, so
+      #   scoop install https://github.com/PrajaNova/avm/releases/latest/download/avm.json
+      # always gets the newest version with its verified hash.
+      - name: Generate Scoop manifest
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="${RELEASE_TAG#v}"
+          hash="$(awk '$2 == "avm_windows_amd64.zip" {print $1}' dist/checksums.txt)"
+          jq -n --arg v "$version" --arg h "$hash" --arg url "https://github.com/PrajaNova/avm/releases/download/${RELEASE_TAG}/avm_windows_amd64.zip" '{
+            version: $v,
+            description: "Any Version Manager: per-directory node/java/Android SDK versions, project aliases and env",
+            homepage: "https://github.com/PrajaNova/avm",
+            license: "MIT",
+            architecture: { "64bit": { url: $url, hash: $h } },
+            bin: "avm-bin.exe",
+            notes: "Add avm to PowerShell: Add-Content $PROFILE \u0027Invoke-Expression ((& avm-bin shell-init pwsh) -join \"`n\")\u0027"
+          }' > dist/avm.json
+          cat dist/avm.json
+
       - name: Attest build provenance
         uses: actions/attest-build-provenance@v2
         with:
@@ -133,6 +153,7 @@ jobs:
           target_commitish: ${{ github.sha }}
           files: |
             dist/avm_*
+            dist/avm.json
             dist/checksums.txt
           generate_release_notes: true
 

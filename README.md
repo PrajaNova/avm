@@ -214,7 +214,13 @@ Windows (PowerShell):
 
 ```powershell
 irm https://raw.githubusercontent.com/PrajaNova/avm/main/install.ps1 | iex
+# or with Scoop (manifest published with every release):
+scoop install https://github.com/PrajaNova/avm/releases/latest/download/avm.json
 ```
+
+On Windows, shims are `node.exe`, `npm.exe`, … (hard links to `avm-bin.exe`),
+so editors and debuggers that start `node.exe` directly also get the
+directory's pinned version.
 
 
 `install.sh` and the npm installer verify the release archive against the

@@ -7,10 +7,10 @@ The format follows Keep a Changelog style, and releases use semantic versioning.
 ## [Unreleased]
 
 ### Changed
+- The version flag is `-v`/`--version` (was clap's `-V`/`--version`), in avm-bin and the sh/bash/zsh and PowerShell hooks. `-V` is no longer accepted.
 - Releases are manual only: `Release` workflows (avm and plugins) run from Actions → Run workflow with a version input and create the tag themselves; tag pushes no longer publish. npm supports trusted publishing (OIDC) or `NPM_TOKEN`. See `docs/ops/RELEASE.md`.
 
 ### Fixed
-- `avm -v` failed in the shell hook (`-v` was passed to avm-bin, which only knows `-V`/`--version`); `-v`, `-V` and `--version` now all print the version, in sh/bash/zsh and PowerShell.
 - The Homebrew release job read a non-existent `HOMEBREW_TAP_TOKEN` secret; it now uses `HOMEBREW_TAP_GITHUB_TOKEN`.
 - npm trusted publishing was refused because `package.json` `repository.url` said `prajanova/avm`; npm compares it case-sensitively with `PrajaNova/avm`. The release workflow gains an `npm_only` input to retry npm for an existing release.
 - npm releases are staged (`npm stage publish`) and go public only after a maintainer approves them with 2FA.

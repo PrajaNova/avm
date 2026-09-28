@@ -1130,8 +1130,8 @@ fn untrusted_project_config_is_ignored_until_trusted() {
     assert_failure(&avm(&["resolve", "hi"]));
 }
 
-/// The shell-init `avm` function must answer every version flag itself
-/// (`-v` isn't a clap flag, so passing it through used to fail).
+/// `-v` and `--version` print the version, from avm-bin and through the
+/// shell-init `avm` function; `-V` is not a flag.
 #[test]
 fn shell_function_handles_version_flags() {
     let home = temp_root("shell-version");
@@ -1139,11 +1139,12 @@ fn shell_function_handles_version_flags() {
     let path = format!("{}:{}", bin_dir.display(), std::env::var("PATH").unwrap_or_default());
     let out = Command::new("bash")
         .arg("-c")
-        .arg("eval \"$(avm-bin shell-init)\"; avm -v && avm -V && avm --version")
+        .arg("eval \"$(avm-bin shell-init)\"; avm -v && avm --version && avm-bin -v")
         .env("HOME", &home)
         .env("PATH", path)
         .output()
         .unwrap();
     assert_success(&out);
     assert_eq!(stdout(&out).lines().filter(|l| l.starts_with("avm ")).count(), 3, "{}", stdout(&out));
+    assert_failure(&run_avm(&home, &home, &["-V"]));
 }

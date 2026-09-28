@@ -55,8 +55,8 @@ function global:_avm_apply_env {
 _avm_apply_env
 
 function global:avm {
-  $builtins = 'init','add','list','ls','remove','rm','which','env','trust','help','shell-init','plugin','resolve','run','shims','exec-shim','node','java','--help','-h','--version','-V'
-  if ($args.Count -gt 0 -and @('-v','-V','--version') -contains $args[0]) {
+  $builtins = 'init','add','list','ls','remove','rm','which','env','trust','help','shell-init','plugin','resolve','run','shims','exec-shim','node','java','--help','-h'
+  if ($args.Count -gt 0 -and @('-v','--version') -contains $args[0]) {
     & avm-bin --version
   } elseif ($args.Count -eq 0 -or $builtins -contains $args[0]) {
     & avm-bin @args
@@ -118,7 +118,7 @@ avm() {
   local _avm_key="$1"
   local _avm_rc
   case "$_avm_key" in
-    -v|-V|--version)
+    -v|--version)
       command avm-bin --version
       return $?
       ;;

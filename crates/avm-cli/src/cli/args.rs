@@ -4,10 +4,16 @@ use super::*;
 #[command(
     name = "avm",
     version,
+    // `-v`/`--version` like most CLIs, instead of clap's default `-V`.
+    disable_version_flag = true,
     about = "Any Version Manager",
     long_about = "Any Version Manager: aliases, plugin commands, runtime versions, and shims."
 )]
 pub struct Cli {
+    /// Print version
+    #[arg(short = 'v', long = "version", action = clap::ArgAction::Version)]
+    pub version: Option<bool>,
+
     #[command(subcommand)]
     pub command: Commands,
 }

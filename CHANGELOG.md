@@ -15,6 +15,8 @@ The format follows Keep a Changelog style, and releases use semantic versioning.
 - Releases are manual only: `Release` workflows (avm and plugins) run from Actions → Run workflow with a version input and create the tag themselves; tag pushes no longer publish. npm supports trusted publishing (OIDC) or `NPM_TOKEN`. See `docs/ops/RELEASE.md`.
 
 ### Fixed
+- Windows: plugins failed with `HOME not set` when only `USERPROFILE` exists; avm now passes its home to plugins as `HOME`.
+- Windows: refreshing shims from inside a shim (after `npm i -g`) deleted `npm.exe` and skipped the new package's shim. Shims now link to the real avm-bin, in-use shims are moved aside, and one failure no longer stops the rest. A failed post-install refresh now prints a warning.
 - The Homebrew release job read a non-existent `HOMEBREW_TAP_TOKEN` secret; it now uses `HOMEBREW_TAP_GITHUB_TOKEN`.
 - npm trusted publishing was refused because `package.json` `repository.url` said `prajanova/avm`; npm compares it case-sensitively with `PrajaNova/avm`. The release workflow gains an `npm_only` input to retry npm for an existing release.
 - npm releases are staged (`npm stage publish`) and go public only after a maintainer approves them with 2FA.

@@ -22,6 +22,7 @@ env manager by PrajaNova. npm: @prajanova/avm · GitHub: PrajaNova/avm
 - `avm <tool> use|install|uninstall|list|versions` (e.g. `avm node use 20`)
 - `avm plugin add|list|available|remove|update`
 - `avm shims install|remove|path|activate`
+- `avm self-update [--version X]` (Homebrew/npm/cargo/Scoop: use their upgrade command); `AVM_NO_UPDATE_CHECK=1` silences the notice
 - `eval "$(avm shell-init)"` (bash/zsh) or `Invoke-Expression ((avm-bin shell-init pwsh) -join "`n")` (PowerShell)
 
 ## Helping a user

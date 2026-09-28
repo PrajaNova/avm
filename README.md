@@ -163,7 +163,8 @@ match: `20` → `20.11.1`, `lts/*`, `lts/iron`, `>=18 <21`, `^20.1`, and
 - `avm <plugin> uninstall <version>` removes an installed managed version when present
 - `avm shims install|remove|path|activate` controls shim lifecycle (`reshim` is an alias of `install`)
 - `avm shell-init` prints shell bootstrap script
-- `avm --version` prints current CLI version
+- `avm --version` (or `-v`) prints current CLI version
+- `avm self-update [--version X]` updates avm (Homebrew/npm/cargo/Scoop installs print their own upgrade command). A once-a-day notice says when an update is out; `AVM_NO_UPDATE_CHECK=1` turns it off
 
 ## Package layout (workspace crates)
 

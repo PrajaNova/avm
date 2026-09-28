@@ -78,5 +78,26 @@ Check 'ANDROID_HOME points into ~/.avm' { (Out { avm-bin env --shell pwsh }) -ma
 Check 'adb.exe shim runs the managed adb' { ((Out { adb version }) -match 'Android Debug Bridge') -and (Test-Path "$env:AVM_SHIM_DIR\adb.exe") }
 Check 'platform android-35 installed' { Test-Path "$tools\android\35\sdk\platforms\android-35" }
 
+# Last: the swapped-in "release" is hostname.exe, and self-update relinks shims.
+Section 'self-update replaces the running avm-bin.exe (fake local release)'
+$su = Join-Path $env:RUNNER_TEMP 'su'
+New-Item -ItemType Directory -Force "$su\bin", "$su\pkg", "$su\api\repos\PrajaNova\avm\releases\tags" | Out-Null
+Copy-Item "$env:LOCALAPPDATA\avm\bin\avm-bin.exe" "$su\bin\avm-bin.exe"
+Copy-Item "$env:SystemRoot\System32\hostname.exe" "$su\pkg\avm-bin.exe"
+Compress-Archive -Force "$su\pkg\avm-bin.exe" "$su\avm_windows_amd64.zip"
+$zh = (Get-FileHash "$su\avm_windows_amd64.zip" -Algorithm SHA256).Hash.ToLower()
+"$zh  avm_windows_amd64.zip" | Set-Content "$su\checksums.txt"
+$u = ([uri]"$su").AbsoluteUri
+@{ tag_name = 'v9.9.9'; assets = @(
+    @{ name = 'avm_windows_amd64.zip'; browser_download_url = "$u/avm_windows_amd64.zip" },
+    @{ name = 'checksums.txt'; browser_download_url = "$u/checksums.txt" }) } |
+    ConvertTo-Json -Depth 4 | Set-Content "$su\api\repos\PrajaNova\avm\releases\tags\v9.9.9"
+$env:AVM_GITHUB_API_URL = "$su\api"
+$out = Out { & "$su\bin\avm-bin.exe" self-update --version 9.9.9 }
+Remove-Item Env:AVM_GITHUB_API_URL
+Check "self-update swaps the running exe ($out)" { $out -match '→ 9\.9\.9' }
+Check 'new binary in place' { (Get-FileHash "$su\bin\avm-bin.exe").Hash -eq (Get-FileHash "$su\pkg\avm-bin.exe").Hash }
+Check 'previous binary moved aside' { Test-Path "$su\bin\avm-bin.old.exe" }
+
 Write-Host "`nwindows: $script:pass passed, $script:fail failed"
 if ($script:fail -gt 0) { exit 1 }

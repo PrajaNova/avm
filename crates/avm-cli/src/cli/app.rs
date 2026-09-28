@@ -16,15 +16,30 @@ pub fn main() {
     if let Some(tool) = shims::invoked_as_shim() {
         let args = std::env::args().skip(1).collect();
         if let Err(err) = cmd_exec_shim(ExecShimArgs { tool, args }) {
-            eprintln!("avm: {err}");
+            eprintln!("avm: {err:#}");
             std::process::exit(1);
         }
         return;
     }
     let cli = Cli::parse();
+    // The update notice is for people at a terminal: never in shims, the
+    // eval'd `env`/`shell-init`, or the alias path the shell hook drives.
+    let notify = !matches!(
+        cli.command,
+        Commands::ExecShim(_)
+            | Commands::Env { .. }
+            | Commands::ShellInit { .. }
+            | Commands::Resolve(_)
+            | Commands::Run(_)
+            | Commands::SelfUpdate { .. }
+            | Commands::UpdateCheck
+    );
     if let Err(err) = run(cli) {
-        eprintln!("avm: {err}");
+        eprintln!("avm: {err:#}");
         std::process::exit(1);
+    }
+    if notify {
+        crate::update::maybe_notify();
     }
 }
 
@@ -134,5 +149,7 @@ fn run(cli: Cli) -> Result<()> {
         Commands::Pa { source } => cmd_plugin(PluginCommands::Add { source }),
         Commands::Ea { key, value, global } => cmd_env_add(key, value, global),
         Commands::Trust(args) => cmd_trust(args),
+        Commands::SelfUpdate { version } => crate::update::self_update(version),
+        Commands::UpdateCheck => crate::update::refresh_cache(),
     }
 }

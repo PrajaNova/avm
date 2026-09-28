@@ -7,6 +7,8 @@ The format follows Keep a Changelog style, and releases use semantic versioning.
 ## [Unreleased]
 
 ### Added
+- `avm self-update [--version X]` (#28): updates install.sh/install.ps1 installs in place from the GitHub release, sha256-verified before the atomic swap (on Windows the running exe is moved aside, then shims are relinked). Homebrew, npm, cargo and Scoop installs print their own upgrade command instead.
+- Update notice (#28): after interactive commands, at most once a day, a one-line stderr notice when a newer release exists. The check runs in a detached background process, so commands never wait on the network. Never shown in pipes, CI, shims, `avm env`, or with `AVM_NO_UPDATE_CHECK=1`.
 - Windows, phases 2–3 (#23): shims are `node.exe`/`npm.exe`/… hard links to `avm-bin.exe` (it dispatches on the name it was started as), so IDEs and debuggers that launch `node.exe` directly are covered; `.cmd` shims are removed. A Windows e2e suite (`e2e/windows.ps1`, run by CI on every PR) installs with `install.ps1` and drives real node/java/android installs through the `.exe` shims; `install.ps1` accepts `AVM_DOWNLOAD_BASE` (URL or local folder). Managed tools resolve `.exe`/`.cmd` binaries. `avm plugin add` installs `avm-plugin-<name>_windows_amd64.zip` releases; the reusable plugin release workflow builds them with `windows: true`. Each avm release publishes a Scoop manifest (`avm.json`).
 
 ### Changed
@@ -15,6 +17,7 @@ The format follows Keep a Changelog style, and releases use semantic versioning.
 - Releases are manual only: `Release` workflows (avm and plugins) run from Actions → Run workflow with a version input and create the tag themselves; tag pushes no longer publish. npm supports trusted publishing (OIDC) or `NPM_TOKEN`. See `docs/ops/RELEASE.md`.
 
 ### Fixed
+- Errors now show their cause (e.g. `couldn't update …: checksum mismatch …`) instead of only the outermost message.
 - Windows: plugins failed with `HOME not set` when only `USERPROFILE` exists; avm now passes its home to plugins as `HOME`.
 - Windows: refreshing shims from inside a shim (after `npm i -g`) deleted `npm.exe` and skipped the new package's shim. Shims now link to the real avm-bin, in-use shims are moved aside, and one failure no longer stops the rest. A failed post-install refresh now prints a warning.
 - The Homebrew release job read a non-existent `HOMEBREW_TAP_TOKEN` secret; it now uses `HOMEBREW_TAP_GITHUB_TOKEN`.

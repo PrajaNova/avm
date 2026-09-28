@@ -18,8 +18,11 @@ publishes anything; CI (tests) is the only workflow that runs on its own.
      smoke-tests each binary,
    - creates the `v<version>` tag and GitHub release with `checksums.txt`
      and build provenance attestations,
-   - publishes npm (versions with a `-`, such as `0.4.0-beta-1`, go to the
-     `beta` dist-tag; everything else goes to `latest`),
+   - **stages** the npm package (versions with a `-`, such as
+     `0.4.0-beta-1`, target the `beta` dist-tag; everything else targets
+     `latest`). It isn't public until a maintainer approves it with 2FA:
+     npmjs.com → `@prajanova/avm` → staged versions → Approve, or
+     `npm stage approve @prajanova/avm@<version>`,
    - updates the Homebrew formula in `prajanova/homebrew-tap`.
 
 Follow a run with `gh run watch -R PrajaNova/avm`.
@@ -35,8 +38,7 @@ case included.
 | Needed for | What | Where |
 | --- | --- | --- |
 | Homebrew | `HOMEBREW_TAP_GITHUB_TOKEN`: a token with push access to `prajanova/homebrew-tap` | repo → Settings → Secrets → Actions |
-| npm (preferred) | **Trusted publishing**, no secret: on npmjs.com, open `@prajanova/avm` → Settings → Trusted Publisher → GitHub Actions, organization `PrajaNova`, repository `avm`, workflow `release.yml` | npmjs.com |
-| npm (alternative) | `NPM_TOKEN`: a granular access token with publish rights on `@prajanova/avm` | repo → Settings → Secrets → Actions |
+| npm | **Trusted publishing**, no secret: on npmjs.com, open `@prajanova/avm` → Settings → Trusted Publisher → GitHub Actions, organization `PrajaNova`, repository `avm`, workflow `release.yml`, environment empty. Allowed actions: `npm stage publish` only (the workflow never publishes directly) | npmjs.com |
 
 ## Plugins (avm-plugin-node, -java, -android, and third-party)
 

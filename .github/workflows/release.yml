@@ -156,12 +156,14 @@ jobs:
           node-version: "22"
           registry-url: "https://registry.npmjs.org"
 
-      - name: Update npm (trusted publishing needs npm >= 11.5.1)
+      - name: Update npm (trusted publishing and `npm stage` need a current npm)
         run: npm install -g npm@latest
 
-      - name: Publish npm package
-        # Prereleases (0.4.0-beta-1) go to the `beta` dist-tag, never `latest`.
-        run: npm publish --access public ${{ contains(inputs.version, '-') && '--tag beta' || '' }}
+      # Staged: the version waits on npm until a maintainer approves it with
+      # 2FA (npmjs.com, or `npm stage approve @prajanova/avm@<version>`).
+      # Prereleases (0.4.0-beta-1) go to the `beta` dist-tag, never `latest`.
+      - name: Stage npm package
+        run: npm stage publish --access public ${{ contains(inputs.version, '-') && '--tag beta' || '' }}
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 

@@ -1,9 +1,19 @@
 name: Release
 
+# Manual only: Actions → Release → Run workflow, or
+#   gh workflow run release.yml -R PrajaNova/avm -f version=0.4.0
+# The workflow creates the v<version> tag and GitHub release itself; pushing
+# a tag does nothing.
 on:
-  push:
-    tags:
-      - "v*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version without the v, matching package.json (e.g. 0.4.0 or 0.4.0-beta-1)"
+        required: true
+        type: string
+
+env:
+  RELEASE_TAG: v${{ inputs.version }}
 
 permissions:
   contents: write
@@ -14,6 +24,15 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Check version is new and run from main
+        shell: bash
+        run: |
+          set -euo pipefail
+          [ "${{ github.ref }}" = "refs/heads/main" ] || { echo "Run releases from main, not ${{ github.ref }}"; exit 1; }
+          if git ls-remote --exit-code --tags origin "refs/tags/v${{ inputs.version }}" >/dev/null; then
+            echo "Tag v${{ inputs.version }} already exists"; exit 1
+          fi
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
@@ -101,14 +120,21 @@ jobs:
       - name: Publish GitHub release
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ env.RELEASE_TAG }}
+          target_commitish: ${{ github.sha }}
           files: |
             dist/avm_*
             dist/checksums.txt
           generate_release_notes: true
 
+  # Auth: npm trusted publishing (OIDC, no secret; configure once on
+  # npmjs.com, see docs/ops/RELEASE.md), or an NPM_TOKEN repo secret.
   npm:
     needs: github-release
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -116,12 +142,15 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "22"
           registry-url: "https://registry.npmjs.org"
 
+      - name: Update npm (trusted publishing needs npm >= 11.5.1)
+        run: npm install -g npm@latest
+
       - name: Publish npm package
-        # Prereleases (v0.4.0-beta-1) go to the `beta` dist-tag, never `latest`.
-        run: npm publish --access public ${{ contains(github.ref_name, '-') && '--tag beta' || '' }}
+        # Prereleases (0.4.0-beta-1) go to the `beta` dist-tag, never `latest`.
+        run: npm publish --access public ${{ contains(inputs.version, '-') && '--tag beta' || '' }}
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
@@ -142,15 +171,15 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: prajanova/homebrew-tap
-          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          token: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
           path: homebrew-tap
 
       - name: Update formula
         shell: bash
         run: |
           set -euo pipefail
-          version="${GITHUB_REF_NAME#v}"
-          base_url="https://github.com/prajanova/avm/releases/download/${GITHUB_REF_NAME}"
+          version="${RELEASE_TAG#v}"
+          base_url="https://github.com/prajanova/avm/releases/download/${RELEASE_TAG}"
           linux_amd64_sha="$(sha256sum dist/avm_linux_amd64.tar.gz | awk '{print $1}')"
           linux_arm64_sha="$(sha256sum dist/avm_linux_arm64.tar.gz | awk '{print $1}')"
           darwin_arm64_sha="$(sha256sum dist/avm_darwin_arm64.tar.gz | awk '{print $1}')"
@@ -209,6 +238,6 @@ jobs:
           if git diff --cached --quiet; then
             echo "Formula already up to date"
           else
-            git commit -m "Update avm to ${GITHUB_REF_NAME}"
+            git commit -m "Update avm to ${RELEASE_TAG}"
             git push
           fi

@@ -1,13 +1,42 @@
 name: Plugin release (reusable)
 
+# Called from each plugin repo's manually-run release.yml with the version
+# to publish; this creates the v<version> tag and GitHub release.
 on:
   workflow_call:
+    inputs:
+      version:
+        description: "Version without the v, matching Cargo.toml"
+        required: true
+        type: string
 
 permissions:
   contents: write
 
 jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check version is new and run from main
+        shell: bash
+        run: |
+          set -euo pipefail
+          [ "${{ github.ref }}" = "refs/heads/main" ] || { echo "Run releases from main, not ${{ github.ref }}"; exit 1; }
+          if git ls-remote --exit-code --tags origin "refs/tags/v${{ inputs.version }}" >/dev/null; then
+            echo "Tag v${{ inputs.version }} already exists"; exit 1
+          fi
+
+      - name: Check Cargo.toml version
+        shell: bash
+        run: |
+          cargo_version="$(sed -n 's/^version = "\(.*\)"$/\1/p' Cargo.toml | head -n 1)"
+          [ "$cargo_version" = "${{ inputs.version }}" ] || { echo "Cargo.toml version $cargo_version != ${{ inputs.version }}"; exit 1; }
+
   build:
+    needs: validate
     strategy:
       fail-fast: false
       matrix:
@@ -78,6 +107,8 @@ jobs:
       - name: Publish GitHub release
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: v${{ inputs.version }}
+          target_commitish: ${{ github.sha }}
           files: |
             dist/*.tar.gz
             dist/checksums.txt

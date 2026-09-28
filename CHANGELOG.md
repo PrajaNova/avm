@@ -6,6 +6,12 @@ The format follows Keep a Changelog style, and releases use semantic versioning.
 
 ## [Unreleased]
 
+### Changed
+- Releases are manual only: `Release` workflows (avm and plugins) run from Actions → Run workflow with a version input and create the tag themselves; tag pushes no longer publish. npm supports trusted publishing (OIDC) or `NPM_TOKEN`. See `docs/ops/RELEASE.md`.
+
+### Fixed
+- The Homebrew release job read a non-existent `HOMEBREW_TAP_TOKEN` secret; it now uses `HOMEBREW_TAP_GITHUB_TOKEN`.
+
 ## [0.4.0-beta-1] - 2026-09-28
 
 ### Added

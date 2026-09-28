@@ -226,37 +226,27 @@ gh attestation verify avm_linux_amd64.tar.gz --owner PrajaNova
 gh attestation verify avm-plugin-node_linux_amd64.tar.gz --owner PrajaNova
 ```
 
-## Docker-based test suite
+## End-to-end tests
 
-Run the full Rust and scenario suite in an isolated container:
+`e2e/run.sh` builds avm from your checkout and starts a clean Ubuntu
+container (`--rm`, so every run starts fresh). There it installs avm with
+this repo's `install.sh` and runs the suites:
 
-```bash
-docker/tests/run-docker-tests.sh
-```
-
-Run only Rust tests locally:
-
-```bash
-cargo test --workspace
-```
-
-Run one scenario:
+| Suite | Covers |
+| --- | --- |
+| `install` (always) | install.sh refuses tampered/unverified archives, installs and wires the shell hook, `-v`/`--version` |
+| `core` | tampered/unsigned plugins refused, asdf-style plugins, missing-version fallback, `package.json` scripts |
+| `node`, `java`, `android` | same-name global + local aliases, global + local env, `plugin add`, `install <v> -g` globally and another version locally, the tool's env (`JAVA_HOME`, `ANDROID_HOME`), version files; node also `npm i -g` across versions and `avm trust` |
 
 ```bash
-docker/tests/run-docker-tests.sh 01
-docker/tests/run-docker-tests.sh 01-basic-alias.sh
-docker/tests/run-docker-tests.sh docker/tests/scenarios/01-basic-alias.sh
+e2e/run.sh                  # everything (android downloads several GB)
+e2e/run.sh core node        # some suites
+e2e/run.sh release node     # test the published release instead of your checkout
+e2e/run.sh shell            # a shell in the clean container
 ```
 
-Scenario files:
-- `docker/tests/scenarios/01-basic-alias.sh`
-- `docker/tests/scenarios/02-local-global-precedence.sh`
-- `docker/tests/scenarios/03-shim-fallback.sh`
-- `docker/tests/scenarios/04-node-package-scripts.sh`
-- `docker/tests/scenarios/05-plugin-first-node.sh`
-- `docker/tests/scenarios/06-asdf-java-plugin.sh`
-- `docker/tests/scenarios/07-trust.sh`
-- `docker/tests/scenarios/08-version-files.sh`
+CI runs `e2e/run.sh` on every pull request. `cargo test --workspace` runs
+the unit tests (parsers, checksum and glob helpers).
 
 ## Plugin behavior
 

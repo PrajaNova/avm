@@ -30,7 +30,10 @@ echo "Detected: $os/$arch"
 
 # Download and install
 binary_name="avm_${os}_${arch}"
-if [ "$VERSION" = "latest" ]; then
+if [ -n "${AVM_DOWNLOAD_BASE:-}" ]; then
+    # Alternate archive location (a mirror, or file:// for e2e tests).
+    base="$AVM_DOWNLOAD_BASE"
+elif [ "$VERSION" = "latest" ]; then
     base="https://github.com/${REPO}/releases/latest/download"
 else
     base="https://github.com/${REPO}/releases/download/${VERSION}"

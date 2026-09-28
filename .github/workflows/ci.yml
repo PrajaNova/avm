@@ -50,11 +50,14 @@ jobs:
           if ("$out" -notmatch 'hello-from-cmd') { throw "alias failed: $out" }
           if (-not (Test-Path "$env:AVM_SHIM_DIR\node.cmd")) { throw "node shim missing" }
 
-  docker:
+  # Every PR: build avm from the PR, install it with the PR's install.sh on
+  # a clean Ubuntu container, and run the core, node, java and android suites.
+  e2e:
     runs-on: ubuntu-latest
+    timeout-minutes: 60
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Run Docker test suite
-        run: docker/tests/run-docker-tests.sh
+      - name: Run e2e suites
+        run: e2e/run.sh

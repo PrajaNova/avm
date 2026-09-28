@@ -7,6 +7,8 @@ The format follows Keep a Changelog style, and releases use semantic versioning.
 ## [Unreleased]
 
 ### Changed
+- Tests: one end-to-end harness, `e2e/run.sh`, replaces the Docker scenario suite and the Rust CLI integration tests. It builds avm from the checkout, installs it with `install.sh` on a clean Ubuntu container, and runs the core, node, java and android suites; CI runs it on every PR. `install.sh` accepts `AVM_DOWNLOAD_BASE` for alternate archive locations.
+- The version flag is `-v`/`--version` (was clap's `-V`/`--version`), in avm-bin and the sh/bash/zsh and PowerShell hooks. `-V` is no longer accepted.
 - Releases are manual only: `Release` workflows (avm and plugins) run from Actions → Run workflow with a version input and create the tag themselves; tag pushes no longer publish. npm supports trusted publishing (OIDC) or `NPM_TOKEN`. See `docs/ops/RELEASE.md`.
 
 ### Fixed

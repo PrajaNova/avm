@@ -22,10 +22,12 @@ Run tests:
 cargo test --workspace
 ```
 
-Run the full Docker suite:
+Run the end-to-end suites in a clean container (Docker required; CI runs
+these on every PR):
 
 ```bash
-docker/tests/run-docker-tests.sh
+e2e/run.sh              # all suites
+e2e/run.sh core node    # some suites
 ```
 
 ## Pull requests

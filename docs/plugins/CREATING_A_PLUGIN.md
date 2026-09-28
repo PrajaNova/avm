@@ -16,7 +16,7 @@ cd avm-plugin-kotlin
 (`avm create kotlin` prints this command.) The template is a working (if
 unimplemented) plugin: `Cargo.toml`, a `ToolProvider` skeleton in
 `src/lib.rs` with `TODO`s, a `main.rs` wired to the protocol runner, and CI
-and release workflows that build and publish it on a tag push. It builds
+and a manually-run release workflow that builds and publishes it. It builds
 and runs immediately —
 `cargo build && ./target/debug/avm-plugin-kotlin manifest` prints a valid
 (if placeholder) manifest before you've written a line of logic.
@@ -127,8 +127,10 @@ doesn't distinguish "installed by hand for testing" from "installed via
 1. **Push to GitHub.** Any repo name works, but `avm-plugin-<name>` is the
    convention every first-party plugin and the marketplace's directory
    naming (`asdf-<name>` → `<name>`, mirrored here) assumes.
-2. **Tag a release**: `git tag v0.1.0 && git push origin v0.1.0`. The
-   scaffolded `.github/workflows/release.yml` builds
+2. **Release**: bump `version` in `Cargo.toml`, merge to `main`, then run
+   it by hand: Actions → Release → Run workflow (or
+   `gh workflow run release.yml -f version=0.1.0`). Nothing publishes on
+   push or tag. The scaffolded `.github/workflows/release.yml` builds
    `avm-plugin-<name>_<os>_<arch>.tar.gz` for `linux_amd64`, `linux_arm64`,
    `darwin_arm64`, and `darwin_amd64` (Intel Macs), and publishes them as
    GitHub Release assets. This

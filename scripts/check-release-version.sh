@@ -3,10 +3,10 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 VERSION="$(sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$ROOT_DIR/package.json" | head -n 1)"
-TAG="${GITHUB_REF_NAME:-}"
+TAG="${RELEASE_TAG:-}"
 
 if [ -z "$TAG" ]; then
-  echo "GITHUB_REF_NAME is not set"
+  echo "RELEASE_TAG is not set"
   exit 1
 fi
 

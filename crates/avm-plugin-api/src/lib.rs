@@ -369,6 +369,7 @@ mod tests {
         let _ = std::fs::remove_file(path);
     }
 
+    #[cfg(unix)]
     #[test]
     fn run_timed_reports_timeout_and_failure() {
         let mut sleep = std::process::Command::new("sleep");

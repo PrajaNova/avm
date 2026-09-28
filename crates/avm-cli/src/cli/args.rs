@@ -40,6 +40,9 @@ pub enum Commands {
     Env {
         #[command(subcommand)]
         command: Option<EnvCommands>,
+        /// Output syntax for the export list (default: sh on Unix, pwsh on Windows).
+        #[arg(long, value_enum)]
+        shell: Option<Shell>,
     },
     /// Print the command that an alias expands to.
     Resolve(ResolveArgs),
@@ -54,8 +57,11 @@ pub enum Commands {
     Create {
         name: String,
     },
-    /// Print shell setup for avm aliases and shims.
-    ShellInit,
+    /// Print shell setup for avm aliases and shims (sh/bash/zsh, or pwsh).
+    ShellInit {
+        #[arg(value_enum)]
+        shell: Option<Shell>,
+    },
     /// Manage executable shims used for plain commands like node and java.
     Shims {
         #[command(subcommand)]

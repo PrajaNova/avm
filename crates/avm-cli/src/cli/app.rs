@@ -95,7 +95,7 @@ fn run(cli: Cli) -> Result<()> {
         Commands::List => cmd_list(),
         Commands::Which { key } => cmd_which(&key),
         Commands::Alias { command } => cmd_alias(command),
-        Commands::Env { command } => cmd_env(command),
+        Commands::Env { command, shell } => cmd_env(command, shell.unwrap_or_default()),
         Commands::Resolve(args) => cmd_resolve(args),
         Commands::Run(args) => cmd_run(args),
         Commands::Plugin { command } => cmd_plugin(command),
@@ -104,8 +104,12 @@ fn run(cli: Cli) -> Result<()> {
             println!("  gh repo create avm-plugin-{name} --template PrajaNova/avm-plugin-template --public --clone");
             Ok(())
         }
-        Commands::ShellInit => {
-            println!("{}", shell_init_script());
+        Commands::ShellInit { shell } => {
+            match shell.unwrap_or_default() {
+                Shell::Pwsh => println!("{}", pwsh_init_script()),
+                Shell::Cmd => return Err(anyhow!("cmd has no init hook; run `avm-bin env --shell cmd` and use `avm-bin` directly")),
+                Shell::Sh => println!("{}", shell_init_script()),
+            }
             Ok(())
         }
         Commands::Shims { command } => cmd_shims(command),

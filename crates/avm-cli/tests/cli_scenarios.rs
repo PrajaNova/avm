@@ -1,3 +1,6 @@
+// These drive real sh aliases, symlinked plugins and tar fixtures (Unix only).
+#![cfg(unix)]
+
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
@@ -1068,6 +1071,12 @@ fn marketplace_install_verifies_checksums() {
     let meta = fs::read_to_string(plugin.join("meta.json")).unwrap();
     assert!(meta.contains(&good) && meta.contains(r#""verified":true"#), "{meta}");
     assert!(plugin.join("bin/avm-plugin").exists());
+
+    // No asset for this host: say which platforms the release does have (#22).
+    write_file(&release, r#"{"tag_name":"v1.0.0","assets":[{"name":"avm-plugin-fake_plan9_mips.tar.gz","browser_download_url":"file:///x"}]}"#);
+    let out = add(&[]);
+    assert_failure(&out);
+    assert!(stderr(&out).contains("has no release for") && stderr(&out).contains("available: plan9_mips"), "{}", stderr(&out));
 }
 
 /// Clone → cd → blocked → trust → works → edit → blocked (#20).

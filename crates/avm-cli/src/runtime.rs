@@ -559,9 +559,16 @@ pub fn install_from_marketplace(name: &str, repo: &str, plugin_dir: &Path) -> Re
         .iter()
         .find(|a| a.name == asset_name)
         .ok_or_else(|| {
+            let prefix = format!("avm-plugin-{name}_");
+            let available: Vec<&str> = release
+                .assets
+                .iter()
+                .filter_map(|a| a.name.strip_prefix(&prefix)?.strip_suffix(".tar.gz"))
+                .collect();
             anyhow!(
-                "release {} of {repo} has no asset named '{asset_name}' (no build for {os}/{arch})",
-                release.tag_name
+                "plugin '{name}' has no release for {os}_{arch} (release {} of {repo})\n  available: {}",
+                release.tag_name,
+                if available.is_empty() { "none".to_string() } else { available.join(", ") }
             )
         })?;
 
@@ -637,6 +644,7 @@ pub fn install_from_marketplace(name: &str, repo: &str, plugin_dir: &Path) -> Re
     let _ = fs::remove_file(&dest);
     fs::copy(&extracted_bin, &dest).context("failed to move plugin binary into place")?;
     let _ = fs::remove_file(&extracted_bin);
+    #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
         let mut perms = fs::metadata(&dest)?.permissions();
@@ -678,6 +686,7 @@ fn validate_plugin_source_permissions(path: &Path) -> Result<()> {
         return Err(anyhow!("plugin source must be a directory"));
     }
 
+    #[cfg(unix)]
     {
         use std::os::unix::fs::MetadataExt;
         use std::os::unix::fs::PermissionsExt;
@@ -693,6 +702,7 @@ fn validate_plugin_source_permissions(path: &Path) -> Result<()> {
     Ok(())
 }
 
+#[cfg(unix)]
 fn current_euid() -> u32 {
     extern "C" {
         fn geteuid() -> u32;
@@ -723,7 +733,7 @@ fn sandbox_asdf_command(cmd: &mut Command, plugin_path: &Path) {
     cmd.current_dir(plugin_path);
     cmd.env("ASDF_DIR", plugin_path);
     cmd.env("PATH", DEFAULT_PLUGIN_PATH_ENV);
-    if let Ok(home) = std::env::var("HOME") {
+    if let Ok(home) = avm_plugin_api::home_dir() {
         cmd.env("HOME", home);
     }
     if let Ok(tmpdir) = std::env::var("TMPDIR") {

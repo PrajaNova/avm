@@ -25,6 +25,31 @@ jobs:
       - name: Check changelog
         run: bash scripts/check-changelog.sh
 
+  windows:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Run Rust tests
+        run: cargo test --workspace
+
+      - name: PowerShell integration smoke test
+        shell: pwsh
+        run: |
+          cargo build --package avm-cli --bin avm-bin
+          $env:PATH = "$PWD\target\debug;$env:PATH"
+          Invoke-Expression ((& avm-bin shell-init pwsh) -join "`n")
+          avm env add AVM_SMOKE "it's ok" -g
+          if ($env:AVM_SMOKE -ne "it's ok") { throw "env not applied: '$env:AVM_SMOKE'" }
+          avm add hello "echo hello-from-cmd" -g
+          $out = avm hello
+          if ("$out" -notmatch 'hello-from-cmd') { throw "alias failed: $out" }
+          if (-not (Test-Path "$env:AVM_SHIM_DIR\node.cmd")) { throw "node shim missing" }
+
   docker:
     runs-on: ubuntu-latest
     steps:

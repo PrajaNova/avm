@@ -154,25 +154,21 @@ fn resolved_tool_path_prefix(cfg: &ResolvedConfig) -> Option<String> {
     let mut tools: Vec<_> = selections.iter().collect();
     tools.sort_unstable_by_key(|(tool, _)| *tool);
 
-    let mut paths: Vec<String> = Vec::new();
+    let mut paths: Vec<PathBuf> = Vec::new();
     for (tool, (version, _)) in tools {
-        if let Some(bin) = managed_tool_bin_path(tool, version, tool) {
-            if let Some(dir) = bin.parent().map(|d| d.to_string_lossy().to_string()) {
-                if !paths.contains(&dir) {
-                    paths.push(dir);
-                }
+        if let Some(dir) = managed_tool_bin_path(tool, version, tool).and_then(|bin| bin.parent().map(Path::to_path_buf)) {
+            if !paths.contains(&dir) {
+                paths.push(dir);
             }
         }
     }
     if paths.is_empty() {
         return None;
     }
-    if let Ok(existing) = std::env::var("PATH") {
-        if !existing.is_empty() {
-            paths.push(existing);
-        }
+    if let Some(existing) = std::env::var_os("PATH") {
+        paths.extend(std::env::split_paths(&existing));
     }
-    Some(paths.join(":"))
+    std::env::join_paths(paths).ok().map(|p| p.to_string_lossy().into_owned())
 }
 
 fn managed_tool_bin_path(tool: &str, version: &str, binary: &str) -> Option<PathBuf> {

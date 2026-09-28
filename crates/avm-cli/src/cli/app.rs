@@ -151,5 +151,8 @@ fn run(cli: Cli) -> Result<()> {
         Commands::Trust(args) => cmd_trust(args),
         Commands::SelfUpdate { version } => crate::update::self_update(version),
         Commands::UpdateCheck => crate::update::refresh_cache(),
+        Commands::Outdated { json } => cmd_outdated(json),
+        Commands::Upgrade { tools, bump, dry_run, yes } => cmd_upgrade(tools, bump, dry_run, yes),
+        Commands::Prune { older_than, dry_run, yes } => cmd_prune(older_than, dry_run, yes),
     }
 }

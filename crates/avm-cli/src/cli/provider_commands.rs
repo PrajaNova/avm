@@ -246,7 +246,7 @@ fn global_pin(tool: &str) -> Result<Option<String>> {
     Ok(config::load(&config_root(true)?)?.tools.get(tool).cloned())
 }
 
-fn set_tool_version(tool: &str, version: &str, global: bool) -> Result<()> {
+pub fn set_tool_version(tool: &str, version: &str, global: bool) -> Result<()> {
     // Auto-create the config on either scope: a user pinning a tool here
     // clearly wants it pinned without an `avm init` step first.
     edit_config(global, true, |cfg| {
@@ -274,7 +274,7 @@ fn use_provider_version(
     Ok(())
 }
 
-fn ensure_provider_version_installed(
+pub fn ensure_provider_version_installed(
     provider_name: &str,
     provider: &dyn ToolProvider,
     version: &str,

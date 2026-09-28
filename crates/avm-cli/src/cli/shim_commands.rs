@@ -37,7 +37,10 @@ pub fn cmd_exec_shim(args: ExecShimArgs) -> Result<()> {
     let effective_tool = normalize_shim_tool(&args.tool);
 
     let executable = match resolve_managed_binary(&cfg, effective_tool, &args.tool) {
-        Some(executable) => executable,
+        Some(executable) => {
+            mark_used(&executable);
+            executable
+        }
         None => {
             // A pinned tool that isn't installed is worth warning about; an
             // unknown binary (e.g. a global package) just falls through.

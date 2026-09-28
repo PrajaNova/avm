@@ -31,6 +31,8 @@ pub struct ResolvedConfig {
     pub untrusted: Option<PathBuf>,
     /// Version file each version-file pin came from (e.g. `./.nvmrc`).
     pub tool_origins: HashMap<String, String>,
+    /// Each local pin's spec as written (`20`, `lts/*`, `>=18`, `20.11.1`).
+    pub tool_specs: HashMap<String, String>,
 }
 
 impl ResolvedConfig {
@@ -117,12 +119,15 @@ pub fn load(
     let idiomatic = global.idiomatic_version_files != Some(false);
     let mut local_tools = HashMap::new();
     let mut tool_origins = HashMap::new();
-    for (tool, (version, origin)) in crate::version_files::pins(cwd, home, idiomatic) {
+    let mut tool_specs = HashMap::new();
+    for (tool, (version, origin, spec)) in crate::version_files::pins(cwd, home, idiomatic) {
         local_tools.insert(tool.clone(), version);
-        tool_origins.insert(tool, origin);
+        tool_origins.insert(tool.clone(), origin);
+        tool_specs.insert(tool, spec);
     }
     for (tool, version) in local.tools {
         tool_origins.remove(&tool);
+        tool_specs.insert(tool.clone(), version.clone());
         local_tools.insert(tool, version);
     }
 
@@ -136,6 +141,7 @@ pub fn load(
         plugin_aliases,
         untrusted,
         tool_origins,
+        tool_specs,
     })
 }
 

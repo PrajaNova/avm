@@ -98,6 +98,33 @@ pub enum Commands {
         #[arg(long)]
         version: Option<String>,
     },
+    /// Show pinned tools with newer versions (in range and overall).
+    Outdated {
+        #[arg(long)]
+        json: bool,
+    },
+    /// Install the newest version within each pin's range and update .avm.json pins.
+    Upgrade {
+        /// Only these tools (default: every pinned tool).
+        tools: Vec<String>,
+        /// Move to the latest release even across a major version.
+        #[arg(long)]
+        bump: bool,
+        #[arg(long)]
+        dry_run: bool,
+        #[arg(short = 'y', long)]
+        yes: bool,
+    },
+    /// Remove installed versions no project or global pin uses.
+    Prune {
+        /// Only versions not used in this long, e.g. 90d.
+        #[arg(long)]
+        older_than: Option<String>,
+        #[arg(long)]
+        dry_run: bool,
+        #[arg(short = 'y', long)]
+        yes: bool,
+    },
     /// Internal: background refresh for the update notice.
     #[command(hide = true, name = "__update-check")]
     UpdateCheck,
@@ -123,6 +150,11 @@ pub enum PluginCommands {
     /// Remove an installed plugin.
     Remove {
         name: String,
+    },
+    /// Show installed plugins with newer releases.
+    Outdated {
+        #[arg(long)]
+        json: bool,
     },
     /// Update one plugin or all plugins.
     Update {

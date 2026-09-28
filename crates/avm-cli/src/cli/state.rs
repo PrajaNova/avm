@@ -3,7 +3,11 @@ use super::*;
 pub fn load_state() -> Result<ResolvedConfig> {
     let cwd = std::env::current_dir().context("failed to read current directory")?;
     let plugin_aliases = package_json_aliases(&cwd)?;
-    crate::resolver::load(&cwd, &home_dir()?, plugin_aliases)
+    let cfg = crate::resolver::load(&cwd, &home_dir()?, plugin_aliases)?;
+    if !cfg.local_tools.is_empty() {
+        track_config_dir(&cwd); // so `avm prune` keeps this project's versions
+    }
+    Ok(cfg)
 }
 
 /// `.env` files skipped at startup because they aren't trusted.

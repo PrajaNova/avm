@@ -141,6 +141,10 @@ doesn't distinguish "installed by hand for testing" from "installed via
    never source — so anyone installing your plugin needs no Rust
    toolchain, same as `avm plugin add node` today.
 
+   For Windows, pass `windows: true` to the reusable workflow. It also builds
+   `avm-plugin-<name>_windows_amd64.zip` containing `avm-plugin-<name>.exe`,
+   which avm installs as `bin\avm-plugin.exe`.
+
    The release must also include **`checksums.txt`** (`sha256sum` output
    over the archives). avm verifies the archive against it before
    extracting and refuses releases without it (unless the user sets

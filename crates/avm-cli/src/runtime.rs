@@ -15,6 +15,10 @@ const ASDF_INSTALL_TIMEOUT_MS: u64 = 120_000;
 const GIT_CLONE_TIMEOUT_MS: u64 = 120_000;
 const GIT_PULL_TIMEOUT_MS: u64 = 60_000;
 const PROTOCOL_PREFIX: &str = "avm-plugin-";
+/// A protocol plugin's executable inside its dir: `bin/avm-plugin(.exe)`.
+const PLUGIN_BIN: &str = if cfg!(windows) { "avm-plugin.exe" } else { "avm-plugin" };
+/// Marketplace plugin archives: zip on Windows, tar.gz elsewhere.
+const PLUGIN_ARCHIVE_EXT: &str = if cfg!(windows) { "zip" } else { "tar.gz" };
 const ASDF_PREFIX: &str = "asdf-";
 
 #[derive(Debug)]
@@ -70,7 +74,7 @@ impl PluginManager {
         for (name, path) in self.plugin_dirs() {
             if is_protocol_plugin_source(&path) {
                 let tool = tool_name(&name, PROTOCOL_PREFIX).to_string();
-                let manifest = PluginProcess::new(tool.clone(), path.join("bin").join("avm-plugin"))
+                let manifest = PluginProcess::new(tool.clone(), path.join("bin").join(PLUGIN_BIN))
                     .manifest()
                     .unwrap_or_else(|_| Manifest {
                         name: tool,
@@ -201,7 +205,7 @@ impl PluginManager {
     /// as tool `<name>`.
     pub fn protocol_provider(&self, name: &str) -> Option<PluginProcess> {
         let (_, plugin_path) = self.find(name, PROTOCOL_PREFIX, is_protocol_plugin_source)?;
-        Some(PluginProcess::new(name, plugin_path.join("bin").join("avm-plugin")))
+        Some(PluginProcess::new(name, plugin_path.join("bin").join(PLUGIN_BIN)))
     }
 }
 
@@ -517,6 +521,7 @@ fn marketplace_platform() -> Result<(&'static str, &'static str)> {
     let os = match std::env::consts::OS {
         "macos" => "darwin",
         "linux" => "linux",
+        "windows" => "windows",
         other => return Err(anyhow!("unsupported platform for marketplace install: {other}")),
     };
     let arch = match std::env::consts::ARCH {
@@ -553,7 +558,7 @@ pub fn install_from_marketplace(name: &str, repo: &str, plugin_dir: &Path) -> Re
     let release: GithubRelease =
         serde_json::from_slice(&body).with_context(|| format!("malformed release info for {repo}"))?;
 
-    let asset_name = format!("avm-plugin-{name}_{os}_{arch}.tar.gz");
+    let asset_name = format!("avm-plugin-{name}_{os}_{arch}.{PLUGIN_ARCHIVE_EXT}");
     let asset = release
         .assets
         .iter()
@@ -563,7 +568,10 @@ pub fn install_from_marketplace(name: &str, repo: &str, plugin_dir: &Path) -> Re
             let available: Vec<&str> = release
                 .assets
                 .iter()
-                .filter_map(|a| a.name.strip_prefix(&prefix)?.strip_suffix(".tar.gz"))
+                .filter_map(|a| {
+                    let platform = a.name.strip_prefix(&prefix)?;
+                    platform.strip_suffix(".tar.gz").or_else(|| platform.strip_suffix(".zip"))
+                })
                 .collect();
             anyhow!(
                 "plugin '{name}' has no release for {os}_{arch} (release {} of {repo})\n  available: {}",
@@ -581,7 +589,7 @@ pub fn install_from_marketplace(name: &str, repo: &str, plugin_dir: &Path) -> Re
         ));
     }
 
-    let tmp = std::env::temp_dir().join(format!("avm-plugin-{name}-{}.tar.gz", std::process::id()));
+    let tmp = std::env::temp_dir().join(format!("avm-plugin-{name}-{}.{PLUGIN_ARCHIVE_EXT}", std::process::id()));
     let mut download = Command::new("curl");
     download
         .args(["-fL", "--connect-timeout", "10"])
@@ -613,23 +621,23 @@ pub fn install_from_marketplace(name: &str, repo: &str, plugin_dir: &Path) -> Re
     let extract_dir = std::env::temp_dir().join(format!("avm-plugin-{name}-extract-{}", std::process::id()));
     fs::create_dir_all(&extract_dir).context("failed to create extraction temp dir")?;
     let mut tar = Command::new("tar");
-    tar.arg("-xzf").arg(&tmp).arg("-C").arg(&extract_dir);
+    // Windows 10+ ships bsdtar, which also reads zip.
+    tar.arg(if cfg!(windows) { "-xf" } else { "-xzf" }).arg(&tmp).arg("-C").arg(&extract_dir);
     let status = tar.status().context("failed to run tar")?;
     let _ = fs::remove_file(&tmp);
     if !status.success() {
         return Err(anyhow!("failed to extract {asset_name}"));
     }
 
-    let extracted_bin = extract_dir.join(format!("avm-plugin-{name}"));
+    let bin_name = format!("avm-plugin-{name}{}", std::env::consts::EXE_SUFFIX);
+    let extracted_bin = extract_dir.join(&bin_name);
     if !extracted_bin.exists() {
-        return Err(anyhow!(
-            "{asset_name} did not contain the expected file avm-plugin-{name}"
-        ));
+        return Err(anyhow!("{asset_name} did not contain the expected file {bin_name}"));
     }
     let target_dir = plugin_dir.join(format!("{PROTOCOL_PREFIX}{name}"));
     let bin_dir = target_dir.join("bin");
     fs::create_dir_all(&bin_dir).context("failed to create plugin bin dir")?;
-    let dest = bin_dir.join("avm-plugin");
+    let dest = bin_dir.join(PLUGIN_BIN);
     // On macOS, overwriting an existing binary at `dest` in place (as
     // `fs::copy` alone does) and then executing it shortly after — exactly
     // what `avm plugin update` does — can race the OS's Gatekeeper
@@ -672,7 +680,7 @@ fn is_asdf_plugin_source(path: &Path) -> bool {
 }
 
 fn is_protocol_plugin_source(path: &Path) -> bool {
-    path.join("bin").join("avm-plugin").exists()
+    path.join("bin").join(PLUGIN_BIN).exists()
 }
 
 /// Plugin dir name → tool name (`avm-plugin-node` → `node`, `asdf-kotlin` → `kotlin`).

@@ -5,6 +5,15 @@ pub fn main() {
         eprintln!("avm: failed to load .env: {err}");
         std::process::exit(1);
     }
+    // Windows shims are avm-bin started as `node.exe`, `npm.exe`, ...
+    if let Some(tool) = shims::invoked_as_shim() {
+        let args = std::env::args().skip(1).collect();
+        if let Err(err) = cmd_exec_shim(ExecShimArgs { tool, args }) {
+            eprintln!("avm: {err}");
+            std::process::exit(1);
+        }
+        return;
+    }
     let cli = Cli::parse();
     if let Err(err) = run(cli) {
         eprintln!("avm: {err}");

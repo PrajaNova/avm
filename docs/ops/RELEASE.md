@@ -24,6 +24,12 @@ publishes anything; CI (tests) is the only workflow that runs on its own.
 
 Follow a run with `gh run watch -R PrajaNova/avm`.
 
+If only the npm step failed, fix the cause, then retry npm alone for the
+same version: `gh workflow run release.yml -R PrajaNova/avm -f version=0.4.0 -f npm_only=true`
+(or tick **npm_only** in the Run workflow form). Trusted publishing
+requires `package.json` `repository.url` to match `PrajaNova/avm` exactly,
+case included.
+
 ### Secrets and one-time setup
 
 | Needed for | What | Where |

@@ -11,6 +11,10 @@ on:
         description: "Version without the v, matching package.json (e.g. 0.4.0 or 0.4.0-beta-1)"
         required: true
         type: string
+      npm_only:
+        description: "Only (re)publish npm for an already-released version"
+        type: boolean
+        default: false
 
 env:
   RELEASE_TAG: v${{ inputs.version }}
@@ -30,7 +34,11 @@ jobs:
         run: |
           set -euo pipefail
           [ "${{ github.ref }}" = "refs/heads/main" ] || { echo "Run releases from main, not ${{ github.ref }}"; exit 1; }
-          if git ls-remote --exit-code --tags origin "refs/tags/v${{ inputs.version }}" >/dev/null; then
+          exists=false
+          git ls-remote --exit-code --tags origin "refs/tags/v${{ inputs.version }}" >/dev/null && exists=true
+          if [ "${{ inputs.npm_only }}" = "true" ]; then
+            [ "$exists" = true ] || { echo "npm_only needs an existing v${{ inputs.version }} release"; exit 1; }
+          elif [ "$exists" = true ]; then
             echo "Tag v${{ inputs.version }} already exists"; exit 1
           fi
 
@@ -48,6 +56,7 @@ jobs:
 
   build:
     needs: validate
+    if: ${{ !inputs.npm_only }}
     strategy:
       fail-fast: false
       matrix:
@@ -130,7 +139,9 @@ jobs:
   # Auth: npm trusted publishing (OIDC, no secret; configure once on
   # npmjs.com, see docs/ops/RELEASE.md), or an NPM_TOKEN repo secret.
   npm:
-    needs: github-release
+    needs: [validate, github-release]
+    # Runs after a full release, or alone with npm_only (github-release skipped).
+    if: ${{ !cancelled() && needs.validate.result == 'success' && (inputs.npm_only || needs.github-release.result == 'success') }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -156,6 +167,7 @@ jobs:
 
   homebrew:
     needs: github-release
+    if: ${{ !inputs.npm_only }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout source

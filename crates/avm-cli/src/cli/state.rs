@@ -6,10 +6,25 @@ pub fn load_state() -> Result<ResolvedConfig> {
     crate::resolver::load(&cwd, &home_dir()?, plugin_aliases)
 }
 
+/// `.env` files skipped at startup because they aren't trusted.
+pub static UNTRUSTED_DOTENV: std::sync::OnceLock<Vec<PathBuf>> = std::sync::OnceLock::new();
+
+/// Project files whose aliases/env are currently ignored for lack of trust.
+pub fn untrusted_files(cfg: &ResolvedConfig) -> Vec<PathBuf> {
+    cfg.untrusted
+        .iter()
+        .cloned()
+        .chain(UNTRUSTED_DOTENV.get().into_iter().flatten().cloned())
+        .collect()
+}
+
+pub fn untrusted_notice(files: &[PathBuf]) -> String {
+    let names: Vec<String> = files.iter().map(|f| f.display().to_string()).collect();
+    format!("avm: {} not trusted, so its aliases and env are ignored. Run 'avm trust' to enable it.", names.join(", "))
+}
+
 pub fn home_dir() -> Result<PathBuf> {
-    std::env::var("HOME")
-        .map(PathBuf::from)
-        .map_err(|_| anyhow!("HOME not set"))
+    avm_plugin_api::home_dir()
 }
 
 /// `package.json` scripts as plugin aliases, run through whichever package

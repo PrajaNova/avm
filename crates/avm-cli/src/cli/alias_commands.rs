@@ -15,7 +15,11 @@ pub fn cmd_which(key: &str) -> Result<()> {
     }
 
     if let Some((version, source)) = cfg.resolve_tool(key) {
-        println!("tool '{key}': {version} ({})", alias_source_label(&source));
+        let origin = match (&source, cfg.tool_origins.get(key)) {
+            (AliasSource::Local, Some(file)) => format!("from {file}"),
+            _ => alias_source_label(&source).to_string(),
+        };
+        println!("tool '{key}': {version} ({origin})");
         return Ok(());
     }
 
@@ -23,16 +27,16 @@ pub fn cmd_which(key: &str) -> Result<()> {
     Ok(())
 }
 
-pub fn cmd_env(command: Option<EnvCommands>) -> Result<()> {
+pub fn cmd_env(command: Option<EnvCommands>, shell: Shell) -> Result<()> {
     match command {
-        None => cmd_env_print(),
+        None => cmd_env_print(shell),
         Some(EnvCommands::Add { key, value, global }) => cmd_env_add(key, value, global),
         Some(EnvCommands::Remove { key, global }) => cmd_env_remove(key, global),
         Some(EnvCommands::List) => cmd_env_list(),
     }
 }
 
-fn cmd_env_print() -> Result<()> {
+fn cmd_env_print(shell: Shell) -> Result<()> {
     let cfg = load_state()?;
     let mut env = resolved_tool_env(&cfg)?;
     env.extend(merge_env(&cfg));
@@ -47,7 +51,16 @@ fn cmd_env_print() -> Result<()> {
     let mut keys: Vec<_> = env.keys().collect();
     keys.sort();
     for key in keys {
-        println!("export {key}={}", sh_quote(&env[key]));
+        println!("{}", shell.export(key, &env[key]));
+    }
+    // This output is eval'd with stderr discarded, so the untrusted notice
+    // is emitted as shell code, once per shell session per set of files.
+    let untrusted = untrusted_files(&cfg);
+    let marker: Vec<String> = untrusted.iter().map(|f| f.display().to_string()).collect();
+    let marker = marker.join(":");
+    if !untrusted.is_empty() && std::env::var("_AVM_TRUST_NOTICE").ok().as_deref() != Some(&marker) {
+        println!("{}", shell.warn(&untrusted_notice(&untrusted)));
+        println!("{}", shell.export("_AVM_TRUST_NOTICE", &marker));
     }
     Ok(())
 }
@@ -78,12 +91,15 @@ pub fn cmd_run(args: RunArgs) -> Result<()> {
     };
 
     let script = build_shell_alias_string(&alias.command, &args.args[1..])?;
-    let status = Command::new("sh")
-        .arg("-c")
+    // ponytail: Windows runs aliases through `cmd /C` with sh-style quoting of
+    // extra args; a cmd-aware quoter if args with spaces or quotes misbehave.
+    let (shell, flag) = if cfg!(windows) { ("cmd", "/C") } else { ("sh", "-c") };
+    let status = Command::new(shell)
+        .arg(flag)
         .arg(script)
         .envs(child_env(&cfg)?)
         .status()
-        .context("failed to run alias via sh")?;
+        .with_context(|| format!("failed to run alias via {shell}"))?;
     std::process::exit(status.code().unwrap_or(1));
 }
 
@@ -139,17 +155,17 @@ fn select_alias_suggestion(query: &str, suggestions: &[String]) -> Result<Option
 }
 
 fn alias_not_found_error(key: &str, cfg: &ResolvedConfig) -> anyhow::Error {
+    let mut message = format!("alias '{key}' not found");
     let suggestions = cfg.suggest_aliases(key);
-    if suggestions.is_empty() {
-        return anyhow!("alias '{key}' not found");
+    if !suggestions.is_empty() {
+        message.push_str("\n\nDid you mean?\n");
+        message.push_str(&suggestions.iter().map(|s| format!("  avm {s}")).collect::<Vec<_>>().join("\n"));
     }
-
-    anyhow!(
-        "alias '{key}' not found\n\nDid you mean?\n{}",
-        suggestions
-            .iter()
-            .map(|suggestion| format!("  avm {suggestion}"))
-            .collect::<Vec<_>>()
-            .join("\n")
-    )
+    if let Some(file) = &cfg.untrusted {
+        message.push_str(&format!(
+            "\n\n{} is not trusted, so its aliases are disabled. Review it, then run 'avm trust'.",
+            file.display()
+        ));
+    }
+    anyhow!(message)
 }

@@ -21,6 +21,9 @@ jobs:
           - os: macos-latest
             target_os: darwin
             target_arch: arm64
+          - os: macos-15-intel
+            target_os: darwin
+            target_arch: amd64
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout
@@ -31,6 +34,9 @@ jobs:
 
       - name: Build release binary
         run: cargo build --release
+
+      - name: Smoke test
+        run: target/release/${{ github.event.repository.name }} manifest
 
       - name: Create release archive
         shell: bash

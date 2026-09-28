@@ -11,6 +11,8 @@ log() {
   echo "[info] $*"
 }
 
+# Scenarios write .avm.json by hand, so run_avm trusts everything unless a
+# scenario sets AVM_TRUST_ALL itself (see 07-trust.sh).
 run_avm() {
   local cwd="$1"
   shift
@@ -19,7 +21,7 @@ run_avm() {
   local status
 
   set +e
-  output="$(cd "$cwd" && env AVM_NODE_DIST_URL="${AVM_NODE_DIST_URL:-}" "$avm_bin" "$@" 2>&1)"
+  output="$(cd "$cwd" && env AVM_NODE_DIST_URL="${AVM_NODE_DIST_URL:-}" AVM_TRUST_ALL="${AVM_TRUST_ALL-1}" "$avm_bin" "$@" 2>&1)"
   status=$?
   set -e
 
@@ -57,4 +59,17 @@ write_json_file() {
   local path="$1"
   local content="$2"
   printf '%s\n' "$content" > "$path"
+}
+
+# Like run_avm, but for commands that must fail: prints output, fails if it succeeded.
+run_avm_expect_fail() {
+  local cwd="$1"
+  shift
+  local avm_bin="${AVM_BIN:-/workspace/target/debug/avm-bin}"
+  local output
+  if output="$(cd "$cwd" && env AVM_TRUST_ALL="${AVM_TRUST_ALL-1}" "$avm_bin" "$@" 2>&1)"; then
+    printf '%s\n' "$output" >&2
+    fail "expected failure: avm $*"
+  fi
+  echo "$output"
 }

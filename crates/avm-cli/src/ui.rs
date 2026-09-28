@@ -5,8 +5,10 @@ use std::process::Command;
 const HELP: &str = "Type to search, Up/Down to move, Enter to select, Ctrl+C to cancel.";
 const PAGE_SIZE: usize = 10;
 
+/// The picker drives raw mode through `stty`, so it's Unix-only; elsewhere
+/// callers fall back to their non-interactive path.
 pub fn can_select() -> bool {
-    io::stdin().is_terminal() && io::stdout().is_terminal()
+    cfg!(unix) && io::stdin().is_terminal() && io::stdout().is_terminal()
 }
 
 /// Interactive picker: type to filter (substring, case-insensitive),

@@ -19,16 +19,12 @@ function getPlatform() {
 
   if (platform === 'darwin') osName = 'darwin';
   else if (platform === 'linux') osName = 'linux';
+  else if (platform === 'win32') osName = 'windows';
   else throw new Error(`Unsupported OS: ${platform}`);
 
   if (arch === 'x64') archName = 'amd64';
   else if (arch === 'arm64') archName = 'arm64';
   else throw new Error(`Unsupported architecture: ${arch}`);
-
-  // macOS ships Apple Silicon builds only; Intel Macs are no longer supported.
-  if (osName === 'darwin' && archName === 'amd64') {
-    throw new Error('Intel macOS is not supported; avm provides Apple Silicon (arm64) macOS builds only');
-  }
 
   return { osName, archName };
 }
@@ -55,11 +51,11 @@ function verify(archive, archiveName, base) {
 function main() {
   try {
     const { osName, archName } = getPlatform();
-    const archiveName = `avm_${osName}_${archName}.tar.gz`;
+    const archiveName = `avm_${osName}_${archName}.${osName === 'windows' ? 'zip' : 'tar.gz'}`;
     const base = `https://github.com/${REPO}/releases/download/${VERSION}`;
 
     const binDir = __dirname;
-    const finalBinary = path.join(binDir, 'avm-bin');
+    const finalBinary = path.join(binDir, osName === 'windows' ? 'avm-bin.exe' : 'avm-bin');
 
     console.log(`Downloading avm ${VERSION} for ${osName}/${archName}...`);
     const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'avm-'));
@@ -67,7 +63,8 @@ function main() {
     try {
       execSync(`curl -fsSL "${base}/${archiveName}" -o "${archive}"`, { stdio: 'inherit' });
       verify(archive, archiveName, base);
-      execSync(`tar -xzf "${archive}" -C "${binDir}"`, { stdio: 'inherit' });
+      // Windows 10+ ships bsdtar, which also reads zip.
+      execSync(`tar -xf "${archive}" -C "${binDir}"`, { stdio: 'inherit' });
     } finally {
       fs.rmSync(tmp, { recursive: true, force: true });
     }

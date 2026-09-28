@@ -517,7 +517,7 @@ pub fn marketplace_lookup(name: &str) -> Result<Option<MarketplaceEntry>> {
     Ok(marketplace_registry()?.into_iter().find(|e| e.name == name))
 }
 
-fn marketplace_platform() -> Result<(&'static str, &'static str)> {
+pub fn marketplace_platform() -> Result<(&'static str, &'static str)> {
     let os = match std::env::consts::OS {
         "macos" => "darwin",
         "linux" => "linux",
@@ -533,53 +533,36 @@ fn marketplace_platform() -> Result<(&'static str, &'static str)> {
 }
 
 #[derive(Debug, serde::Deserialize)]
-struct GithubRelease {
-    tag_name: String,
-    assets: Vec<GithubAsset>,
+pub struct GithubRelease {
+    pub tag_name: String,
+    pub assets: Vec<GithubAsset>,
 }
 
 #[derive(Debug, serde::Deserialize)]
-struct GithubAsset {
-    name: String,
-    browser_download_url: String,
+pub struct GithubAsset {
+    pub name: String,
+    pub browser_download_url: String,
 }
 
-/// Install a marketplace plugin by fetching its **compiled** latest GitHub
-/// Release for the current platform — never source, never built locally.
-/// `avm-plugin-<name>_<os>_<arch>.tar.gz` on `repo`'s latest release,
-/// containing exactly one file named `avm-plugin-<name>`, is the expected
-/// contract (documented in the avm-marketplace repo's README).
-pub fn install_from_marketplace(name: &str, repo: &str, plugin_dir: &Path) -> Result<String> {
-    let (os, arch) = marketplace_platform()?;
+/// `repo`'s release for `tag`, or its latest. `AVM_GITHUB_API_URL` overrides
+/// the API base (a local directory works too, for tests).
+pub fn github_release(repo: &str, tag: Option<&str>) -> Result<GithubRelease> {
     let api = std::env::var("AVM_GITHUB_API_URL").unwrap_or_else(|_| "https://api.github.com".to_string());
-    let release_api = format!("{}/repos/{repo}/releases/latest", api.trim_end_matches('/'));
-    let body = fetch(&release_api, MARKETPLACE_TIMEOUT_SECS)
-        .with_context(|| format!("failed to query latest release for {repo}"))?;
-    let release: GithubRelease =
-        serde_json::from_slice(&body).with_context(|| format!("malformed release info for {repo}"))?;
+    let which = tag.map_or("latest".to_string(), |t| format!("tags/{t}"));
+    let url = format!("{}/repos/{repo}/releases/{which}", api.trim_end_matches('/'));
+    let body = fetch(&url, MARKETPLACE_TIMEOUT_SECS).with_context(|| format!("failed to query release {which} of {repo}"))?;
+    serde_json::from_slice(&body).with_context(|| format!("malformed release info for {repo}"))
+}
 
-    let asset_name = format!("avm-plugin-{name}_{os}_{arch}.{PLUGIN_ARCHIVE_EXT}");
+/// Download `asset_name` from `release`, verify it against the release's
+/// `checksums.txt` (refusing if there is none, unless AVM_ALLOW_UNVERIFIED=1),
+/// and extract it into `extract_dir`. Returns (sha256, verified).
+pub fn fetch_verified_archive(repo: &str, release: &GithubRelease, asset_name: &str, extract_dir: &Path) -> Result<(String, bool)> {
     let asset = release
         .assets
         .iter()
         .find(|a| a.name == asset_name)
-        .ok_or_else(|| {
-            let prefix = format!("avm-plugin-{name}_");
-            let available: Vec<&str> = release
-                .assets
-                .iter()
-                .filter_map(|a| {
-                    let platform = a.name.strip_prefix(&prefix)?;
-                    platform.strip_suffix(".tar.gz").or_else(|| platform.strip_suffix(".zip"))
-                })
-                .collect();
-            anyhow!(
-                "plugin '{name}' has no release for {os}_{arch} (release {} of {repo})\n  available: {}",
-                release.tag_name,
-                if available.is_empty() { "none".to_string() } else { available.join(", ") }
-            )
-        })?;
-
+        .ok_or_else(|| anyhow!("release {} of {repo} has no {asset_name}", release.tag_name))?;
     let checksums = release.assets.iter().find(|a| a.name == "checksums.txt");
     if checksums.is_none() && std::env::var("AVM_ALLOW_UNVERIFIED").as_deref() != Ok("1") {
         return Err(anyhow!(
@@ -589,24 +572,16 @@ pub fn install_from_marketplace(name: &str, repo: &str, plugin_dir: &Path) -> Re
         ));
     }
 
-    let tmp = std::env::temp_dir().join(format!("avm-plugin-{name}-{}.{PLUGIN_ARCHIVE_EXT}", std::process::id()));
+    let ext = if asset_name.ends_with(".zip") { "zip" } else { "tar.gz" };
+    let tmp = std::env::temp_dir().join(format!("avm-download-{}.{ext}", std::process::id()));
     let mut download = Command::new("curl");
-    download
-        .args(["-fL", "--connect-timeout", "10"])
-        .arg(&asset.browser_download_url)
-        .arg("-o")
-        .arg(&tmp);
-    run_timed(
-        download,
-        MARKETPLACE_INSTALL_TIMEOUT_MS,
-        &format!("downloading {asset_name}"),
-        "AVM_MARKETPLACE_INSTALL_TIMEOUT",
-    )?;
+    download.args(["-fL", "--connect-timeout", "10"]).arg(&asset.browser_download_url).arg("-o").arg(&tmp);
+    run_timed(download, MARKETPLACE_INSTALL_TIMEOUT_MS, &format!("downloading {asset_name}"), "AVM_MARKETPLACE_INSTALL_TIMEOUT")?;
 
     let (sha256, verified) = match checksums {
         Some(c) => fetch(&c.browser_download_url, MARKETPLACE_TIMEOUT_SECS)
             .context("failed to fetch checksums.txt")
-            .and_then(|sums| verify_sha256(&tmp, &String::from_utf8_lossy(&sums), &asset_name))
+            .and_then(|sums| verify_sha256(&tmp, &String::from_utf8_lossy(&sums), asset_name))
             .map_err(|e| {
                 let _ = fs::remove_file(&tmp);
                 anyhow!("{e:#}\n  refusing to install. Report at https://github.com/{repo}/issues")
@@ -618,16 +593,46 @@ pub fn install_from_marketplace(name: &str, repo: &str, plugin_dir: &Path) -> Re
         }
     };
 
-    let extract_dir = std::env::temp_dir().join(format!("avm-plugin-{name}-extract-{}", std::process::id()));
-    fs::create_dir_all(&extract_dir).context("failed to create extraction temp dir")?;
+    fs::create_dir_all(extract_dir).context("failed to create extraction dir")?;
     let mut tar = Command::new("tar");
     // Windows 10+ ships bsdtar, which also reads zip.
-    tar.arg(if cfg!(windows) { "-xf" } else { "-xzf" }).arg(&tmp).arg("-C").arg(&extract_dir);
-    let status = tar.status().context("failed to run tar")?;
+    tar.arg(if ext == "zip" { "-xf" } else { "-xzf" }).arg(&tmp).arg("-C").arg(extract_dir);
+    let status = tar.status().context("failed to run tar");
     let _ = fs::remove_file(&tmp);
-    if !status.success() {
+    if !status?.success() {
         return Err(anyhow!("failed to extract {asset_name}"));
     }
+    Ok((sha256, verified))
+}
+
+/// Install a marketplace plugin by fetching its **compiled** latest GitHub
+/// Release for the current platform — never source, never built locally.
+/// `avm-plugin-<name>_<os>_<arch>.tar.gz` (`.zip` on Windows) on `repo`'s
+/// latest release, containing exactly one file named `avm-plugin-<name>`, is
+/// the expected contract (documented in the avm-marketplace repo's README).
+pub fn install_from_marketplace(name: &str, repo: &str, plugin_dir: &Path) -> Result<String> {
+    let (os, arch) = marketplace_platform()?;
+    let release = github_release(repo, None)?;
+    let asset_name = format!("avm-plugin-{name}_{os}_{arch}.{PLUGIN_ARCHIVE_EXT}");
+    if !release.assets.iter().any(|a| a.name == asset_name) {
+        let prefix = format!("avm-plugin-{name}_");
+        let available: Vec<&str> = release
+            .assets
+            .iter()
+            .filter_map(|a| {
+                let platform = a.name.strip_prefix(&prefix)?;
+                platform.strip_suffix(".tar.gz").or_else(|| platform.strip_suffix(".zip"))
+            })
+            .collect();
+        return Err(anyhow!(
+            "plugin '{name}' has no release for {os}_{arch} (release {} of {repo})\n  available: {}",
+            release.tag_name,
+            if available.is_empty() { "none".to_string() } else { available.join(", ") }
+        ));
+    }
+
+    let extract_dir = std::env::temp_dir().join(format!("avm-plugin-{name}-extract-{}", std::process::id()));
+    let (sha256, verified) = fetch_verified_archive(repo, &release, &asset_name, &extract_dir)?;
 
     let bin_name = format!("avm-plugin-{name}{}", std::env::consts::EXE_SUFFIX);
     let extracted_bin = extract_dir.join(&bin_name);

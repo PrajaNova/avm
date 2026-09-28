@@ -92,6 +92,15 @@ pub enum Commands {
     },
     /// Trust a project's .avm.json and .env so their aliases and env apply.
     Trust(TrustArgs),
+    /// Update avm to the latest release (or --version X). Homebrew, npm,
+    /// cargo and Scoop installs print their own upgrade command instead.
+    SelfUpdate {
+        #[arg(long)]
+        version: Option<String>,
+    },
+    /// Internal: background refresh for the update notice.
+    #[command(hide = true, name = "__update-check")]
+    UpdateCheck,
     /// Run an installed plugin command, for example `avm node versions` or `avm java versions`.
     #[command(external_subcommand)]
     PluginCommand(Vec<String>),

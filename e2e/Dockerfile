@@ -26,6 +26,8 @@ COPY --chown=tester e2e/tests/ /e2e/
 USER tester
 WORKDIR /home/tester
 ENV AVM_E2E_INSTALL=release
+# No update notices or GitHub checks in the suites (core.sh tests them).
+ENV AVM_NO_UPDATE_CHECK=1
 ENTRYPOINT ["bash", "/e2e/run-all.sh"]
 
 FROM release AS local

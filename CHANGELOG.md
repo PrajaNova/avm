@@ -6,6 +6,8 @@ The format follows Keep a Changelog style, and releases use semantic versioning.
 
 ## [Unreleased]
 
+## [0.4.0-beta-3] - 2026-09-29
+
 ### Added
 - `avm outdated [--json]` and `avm plugin outdated` (#26): pinned tools with the newest version in each pin's range and overall, and plugins against their latest releases.
 - `avm upgrade [tool…]` (#26): installs the newest in-range version and moves `.avm.json` pins; `--bump` goes to the latest across majors (with confirmation), `--dry-run` previews. Version files (`.nvmrc`, …) are never rewritten.

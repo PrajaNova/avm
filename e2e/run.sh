@@ -19,5 +19,5 @@ tty=(); [ -t 1 ] && tty=(-t)
 if [ "${1:-}" = "shell" ]; then
   exec docker run --rm -it --platform linux/amd64 -e AVM_VERSION --entrypoint bash "avm-e2e:$target"
 fi
-exec docker run --rm ${tty[@]+"${tty[@]}"} --platform linux/amd64 -e AVM_VERSION \
+exec docker run --rm ${tty[@]+"${tty[@]}"} --platform linux/amd64 -e AVM_VERSION -e GITHUB_TOKEN \
   -e ANDROID_GLOBAL -e ANDROID_LOCAL "avm-e2e:$target" "$@"

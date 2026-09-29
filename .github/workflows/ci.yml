@@ -41,6 +41,8 @@ jobs:
       - name: Windows e2e (install.ps1, exe shims, node/java/android)
         shell: pwsh
         run: ./e2e/windows.ps1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   # Every PR: build avm from the PR, install it with the PR's install.sh on
   # a clean Ubuntu container, and run the core, node, java and android suites.
@@ -53,3 +55,5 @@ jobs:
 
       - name: Run e2e suites
         run: e2e/run.sh
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # GitHub API rate limits on shared runners

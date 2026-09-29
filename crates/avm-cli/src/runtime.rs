@@ -550,8 +550,28 @@ pub fn github_release(repo: &str, tag: Option<&str>) -> Result<GithubRelease> {
     let api = std::env::var("AVM_GITHUB_API_URL").unwrap_or_else(|_| "https://api.github.com".to_string());
     let which = tag.map_or("latest".to_string(), |t| format!("tags/{t}"));
     let url = format!("{}/repos/{repo}/releases/{which}", api.trim_end_matches('/'));
-    let body = fetch(&url, MARKETPLACE_TIMEOUT_SECS).with_context(|| format!("failed to query release {which} of {repo}"))?;
+    let body = github_api_get(&url).with_context(|| format!("failed to query release {which} of {repo}"))?;
     serde_json::from_slice(&body).with_context(|| format!("malformed release info for {repo}"))
+}
+
+/// GET a GitHub API URL. Sends `GITHUB_TOKEN`/`GH_TOKEN` when set, since
+/// unauthenticated calls share 60/hour per IP (offices, CI runners).
+fn github_api_get(url: &str) -> Result<Vec<u8>> {
+    let token = std::env::var("GITHUB_TOKEN").or_else(|_| std::env::var("GH_TOKEN")).ok().filter(|t| !t.is_empty());
+    let Some(token) = token.filter(|_| url.starts_with("https://api.github.com/")) else {
+        return fetch(url, MARKETPLACE_TIMEOUT_SECS);
+    };
+    let output = Command::new("curl")
+        .args(["-fsSL", "--connect-timeout", "10", "--max-time", &MARKETPLACE_TIMEOUT_SECS.to_string()])
+        .arg("-H")
+        .arg(format!("Authorization: Bearer {token}"))
+        .args(["-H", "Accept: application/vnd.github+json", url])
+        .output()
+        .with_context(|| format!("failed to fetch {url}"))?;
+    if !output.status.success() {
+        return Err(anyhow!("failed to fetch {url}: curl exited with {}", output.status));
+    }
+    Ok(output.stdout)
 }
 
 /// Download `asset_name` from `release`, verify it against the release's

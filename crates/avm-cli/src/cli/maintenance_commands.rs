@@ -191,6 +191,7 @@ pub fn cmd_plugin_outdated(json: bool) -> Result<()> {
             let state = match (&installed, &latest) {
                 (Some(i), Some(l)) if i == l => "up to date".to_string(),
                 (Some(_), Some(_)) => format!("run `avm plugin update {name}`"),
+                (Some(_), None) => "couldn't reach GitHub (set GITHUB_TOKEN if rate-limited)".to_string(),
                 _ => "not from the marketplace".to_string(),
             };
             vec![name, installed.unwrap_or_else(|| "-".into()), latest.unwrap_or_else(|| "-".into()), state]

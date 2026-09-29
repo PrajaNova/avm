@@ -98,10 +98,11 @@ pub fn resolve(tool: &str, spec: &str) -> String {
 /// Newest of `installed` (any list of version names) matching `spec`.
 pub(crate) fn pick(tool: &str, spec: &str, installed: Vec<String>) -> Option<String> {
     let spec = spec.trim();
-    let mut candidates: Vec<(Vec<u64>, String)> =
-        installed.into_iter().filter_map(|name| Some((numbers(&name)?, name))).collect();
+    // Sorted by version, then build (`17.0.2+8` < `17.0.13+11`), then name.
+    let mut candidates: Vec<(Vec<u64>, u64, String)> =
+        installed.into_iter().filter_map(|name| Some((numbers(&name)?, build(&name), name))).collect();
     candidates.sort();
-    let newest = |ok: &dyn Fn(&[u64]) -> bool| candidates.iter().rev().find(|(v, _)| ok(v)).map(|(_, n)| n.clone());
+    let newest = |ok: &dyn Fn(&[u64]) -> bool| candidates.iter().rev().find(|(v, _, _)| ok(v)).map(|(_, _, n)| n.clone());
 
     if tool == "node" {
         let lts_major = |name: &str| match name {
@@ -133,14 +134,22 @@ pub(crate) fn pick(tool: &str, spec: &str, installed: Vec<String>) -> Option<Str
 }
 
 /// Numeric components of a version name: `openjdk-17.0.9+9` → `[17, 0, 9, 9]`.
+/// Numeric version components, build suffix excluded:
+/// `openjdk-17.0.9+9` → `[17, 0, 9]`, `openjdk-17+35` → `[17]`.
 pub(crate) fn numbers(name: &str) -> Option<Vec<u64>> {
     let start = name.find(|c: char| c.is_ascii_digit())?;
-    let nums: Vec<u64> = name[start..]
+    let core = name[start..].split('+').next().unwrap_or("");
+    let nums: Vec<u64> = core
         .split(|c: char| !c.is_ascii_digit())
         .take_while(|p| !p.is_empty())
         .map(|p| p.parse().ok())
         .collect::<Option<_>>()?;
     Some(nums)
+}
+
+/// The `+N` build number (Java), 0 when there is none.
+fn build(name: &str) -> u64 {
+    name.split_once('+').and_then(|(_, b)| b.split(|c: char| !c.is_ascii_digit()).next()?.parse().ok()).unwrap_or(0)
 }
 
 /// npm semver range check (`>=18 <21`, `^20.1`, `~1.2`, `18 || 20`,
@@ -220,6 +229,11 @@ mod tests {
         let java = installed(&["openjdk-17.0.9+9", "openjdk-21.0.2+13"]);
         assert_eq!(pick("java", "17", java.clone()).as_deref(), Some("openjdk-17.0.9+9"));
         assert_eq!(pick("java", "temurin-21.0.2", java).as_deref(), Some("openjdk-21.0.2+13"));
+        // The build number is not a version component: 17+35 is 17.0.0 build 35.
+        let java17 = installed(&["openjdk-17+35", "openjdk-17.0.2+8", "openjdk-17.0.13+11", "openjdk-17.0.13+7", "openjdk-27+35"]);
+        assert_eq!(pick("java", "17", java17.clone()).as_deref(), Some("openjdk-17.0.13+11"));
+        assert_eq!(pick("java", "*", java17.clone()).as_deref(), Some("openjdk-27+35"));
+        assert_eq!(pick("java", ">=17 <18", java17).as_deref(), Some("openjdk-17.0.13+11"));
     }
 
     #[test]

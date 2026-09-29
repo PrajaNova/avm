@@ -120,6 +120,9 @@ pub enum Commands {
         /// Only versions not used in this long, e.g. 90d.
         #[arg(long)]
         older_than: Option<String>,
+        /// Also consider versions avm has never seen used (e.g. installed before avm recorded use).
+        #[arg(long)]
+        include_unrecorded: bool,
         #[arg(long)]
         dry_run: bool,
         #[arg(short = 'y', long)]

@@ -6,6 +6,10 @@ The format follows Keep a Changelog style, and releases use semantic versioning.
 
 ## [Unreleased]
 
+### Fixed
+- `avm outdated`/`upgrade` sorted Java builds wrong: `openjdk-17+35` (17.0.0) ranked above `17.0.2`. The `+N` build is now a tiebreaker, not a version component.
+- `avm prune` no longer removes versions avm has never seen used (e.g. everything installed before this release) unless you pass `--include-unrecorded`; it reports how many it skipped.
+
 ## [0.4.0-beta-3] - 2026-09-29
 
 ### Added

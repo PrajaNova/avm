@@ -56,7 +56,11 @@ expect_eq "node follows the new pin" "$(cd "$O" && node -v)" "v$in_range"
 expect_contains "plugin outdated" "$(avm plugin outdated)" "up to date"
 
 log "node: prune (#27)"
+mkdir -p "$HOME/.avm/tools/node/1.0.0/bin" # installed before avm recorded use
 plan="$(avm prune --dry-run)"
+expect_not_contains "a version never seen used is skipped by default" "$plan" "node 1.0.0"
+expect_contains "and the skip is reported" "$plan" "Skipped 1 version(s)"
+expect_contains "--include-unrecorded lists it" "$(avm prune --include-unrecorded --dry-run)" "node 1.0.0"
 expect_contains "the unused 20.9.0 is listed with its size" "$plan" "node 20.9.0"
 expect_contains "warns about its global packages" "$plan" "holds global packages (cowsay, cowthink)"
 expect_not_contains "keeps the project's node 22" "$plan" "node 22."

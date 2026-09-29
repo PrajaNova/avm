@@ -273,7 +273,7 @@ fn global_packages(tool: &str, version_dir: &Path) -> Vec<String> {
     pkgs.into_iter().collect()
 }
 
-pub fn cmd_prune(older_than: Option<String>, dry_run: bool, yes: bool) -> Result<()> {
+pub fn cmd_prune(older_than: Option<String>, include_unrecorded: bool, dry_run: bool, yes: bool) -> Result<()> {
     let home = home_dir()?;
     let cutoff = older_than.as_deref().map(parse_days).transpose()?.map(|d| Duration::from_secs(d * 24 * 60 * 60));
 
@@ -292,6 +292,7 @@ pub fn cmd_prune(older_than: Option<String>, dry_run: bool, yes: bool) -> Result
 
     let tools_root = shims::avm_home()?.join("tools");
     let mut doomed = Vec::new();
+    let mut unrecorded = 0;
     for tool in fs::read_dir(&tools_root).into_iter().flatten().flatten() {
         let tool_name = tool.file_name().to_string_lossy().into_owned();
         for version in fs::read_dir(tool.path()).into_iter().flatten().flatten() {
@@ -300,6 +301,12 @@ pub fn cmd_prune(older_than: Option<String>, dry_run: bool, yes: bool) -> Result
                 continue;
             }
             let last = fs::metadata(version.path().join(".last_used")).and_then(|m| m.modified()).ok();
+            // avm only learns which projects use a version as it runs, so a version
+            // it has never seen used may still be needed. Don't guess unless asked.
+            if last.is_none() && !include_unrecorded {
+                unrecorded += 1;
+                continue;
+            }
             if let Some(cutoff) = cutoff {
                 let age = last.or_else(|| version.metadata().and_then(|m| m.modified()).ok()).and_then(|t| t.elapsed().ok());
                 if age.is_some_and(|a| a < cutoff) {
@@ -311,8 +318,16 @@ pub fn cmd_prune(older_than: Option<String>, dry_run: bool, yes: bool) -> Result
     }
     doomed.sort();
 
+    let skipped_note = || {
+        if unrecorded > 0 {
+            println!(
+                "Skipped {unrecorded} version(s) avm hasn't seen used yet; add --include-unrecorded to consider them (check the list with --dry-run first)."
+            );
+        }
+    };
     if doomed.is_empty() {
         println!("Nothing to prune.");
+        skipped_note();
         return Ok(());
     }
     let mut total = 0;
@@ -332,6 +347,7 @@ pub fn cmd_prune(older_than: Option<String>, dry_run: bool, yes: bool) -> Result
         }
     }
     println!("{} version(s), {} to reclaim.", doomed.len(), human(total));
+    skipped_note();
     println!("Kept: global pins and pins of {} project(s) avm has seen (it records them as you use them).", live_dirs.len());
     if dry_run || !confirm("Remove them?", yes)? {
         return Ok(());

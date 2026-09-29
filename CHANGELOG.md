@@ -6,6 +6,9 @@ The format follows Keep a Changelog style, and releases use semantic versioning.
 
 ## [Unreleased]
 
+### Changed
+- README is now a short overview that links to the website for commands, configuration, version files, security and the comparison; contributor docs (code layout, e2e suites) moved to CONTRIBUTING.md.
+
 ### Fixed
 - `avm outdated`/`upgrade` sorted Java builds wrong: `openjdk-17+35` (17.0.0) ranked above `17.0.2`. The `+N` build is now a tiebreaker, not a version component.
 - `avm prune` no longer removes versions avm has never seen used (e.g. everything installed before this release) unless you pass `--include-unrecorded`; it reports how many it skipped.

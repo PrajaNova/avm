@@ -7,7 +7,7 @@
 Prerequisites:
 
 - Rust stable
-- Docker with Compose for isolated test runs
+- Docker for the end-to-end suites
 - Node.js 20+ only for npm package wrapper and release tooling
 
 Build:
@@ -29,6 +29,35 @@ these on every PR):
 e2e/run.sh              # all suites
 e2e/run.sh core node    # some suites
 ```
+
+## Code layout
+
+- `crates/avm-cli` is the `avm-bin` binary:
+  - `src/cli/`: command routing and handlers
+  - `src/config.rs`, `src/resolver.rs`, `src/version_files.rs`: `.avm.json`, version files, and alias/env/tool resolution
+  - `src/trust.rs`: trust store for project config
+  - `src/shims.rs`: shims and PATH lookup
+  - `src/runtime.rs`: plugin discovery, the protocol host, the verified marketplace installer, and the asdf adapter
+  - `src/update.rs`: `self-update` and the update notice
+- `crates/avm-plugin-api` is the one crate a plugin depends on: the `ToolProvider` trait, the wire protocol, the runner, and the sha256 helpers.
+- node, java and android are separate repos ([avm-plugin-node](https://github.com/PrajaNova/avm-plugin-node), [avm-plugin-java](https://github.com/PrajaNova/avm-plugin-java), [avm-plugin-android](https://github.com/PrajaNova/avm-plugin-android)), installed at runtime like any third-party plugin.
+
+More: [Architecture](docs/architecture/ARCHITECTURE.md) · [Creating a plugin](docs/plugins/CREATING_A_PLUGIN.md) · [Releasing](docs/ops/RELEASE.md) · agent/LLM context in [llms.txt](llms.txt).
+
+## End-to-end tests
+
+`e2e/run.sh` builds avm from your checkout and runs the suites in a fresh
+Ubuntu container (`--rm`), installing avm with this repo's `install.sh`:
+
+| Suite | Covers |
+| --- | --- |
+| `install` | install.sh refuses tampered/unverified archives, shell hook, `-v`/`--version` |
+| `core` | plugin verification, asdf plugins, missing-version fallback, `package.json` scripts, `self-update`, the update notice |
+| `node`, `java`, `android` | global + local aliases, env and versions, `-g` installs, tool env, version files; node also `outdated`/`upgrade`/`prune` and `avm trust` |
+
+`e2e/run.sh release [suites]` tests the published release instead, and
+`e2e/run.sh shell` opens the clean container. `e2e/windows.ps1` is the
+Windows suite (CI's `windows` job). CI runs both on every PR.
 
 ## Pull requests
 

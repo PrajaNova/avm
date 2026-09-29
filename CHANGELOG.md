@@ -6,6 +6,8 @@ The format follows Keep a Changelog style, and releases use semantic versioning.
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-09-29
+
 ### Added
 - GitHub API calls (plugin installs, `outdated`, `self-update`) send `GITHUB_TOKEN`/`GH_TOKEN` when set, avoiding the shared 60/hour unauthenticated limit.
 

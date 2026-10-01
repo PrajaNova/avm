@@ -1,10 +1,14 @@
-name: Plugin CI (reusable)
+name: Test plugins (reusable)
 
 # Called from each plugin repo's ci.yml. Pass `windows: true` once the
 # plugin supports Windows (same switch as plugin-release.yml).
 on:
   workflow_call:
     inputs:
+      plugin:
+        description: "Workspace package (defaults to repository name)"
+        type: string
+        default: ""
       windows:
         type: boolean
         default: false
@@ -24,11 +28,11 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
 
       - name: Test
-        run: cargo test
+        run: cargo test --package ${{ inputs.plugin || github.event.repository.name }}
 
       - name: Build and smoke test
         shell: bash
-        run: cargo build --release && target/release/${{ github.event.repository.name }} manifest
+        run: cargo build --release --package ${{ inputs.plugin || github.event.repository.name }} && target/release/${{ inputs.plugin || github.event.repository.name }} manifest
 
   build-windows:
     if: ${{ inputs.windows }}
@@ -41,7 +45,7 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
 
       - name: Test
-        run: cargo test
+        run: cargo test --package ${{ inputs.plugin || github.event.repository.name }}
 
       - name: Build and smoke test
-        run: cargo build --release; target/release/${{ github.event.repository.name }}.exe manifest
+        run: cargo build --release --package ${{ inputs.plugin || github.event.repository.name }}; target/release/${{ inputs.plugin || github.event.repository.name }}.exe manifest

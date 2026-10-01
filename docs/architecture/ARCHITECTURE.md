@@ -11,10 +11,10 @@ shims, and a runtime plugin marketplace.
 | `crates/avm-plugin-api` | The `ToolProvider` trait, the plugin wire-protocol types (`protocol` module), and the `runner` module every plugin's `main.rs` calls. This is the one crate a plugin repo depends on. |
 
 **Nothing else is compiled into `avm-bin`.** node, java, and android are
-not workspace members — they're separate repos
-([avm-plugin-node](https://github.com/PrajaNova/avm-plugin-node),
-[avm-plugin-java](https://github.com/PrajaNova/avm-plugin-java),
-[avm-plugin-android](https://github.com/PrajaNova/avm-plugin-android)),
+workspace members under `plugins/` with local API dependencies
+([avm-plugin-node](https://github.com/PrajaNova/avm/tree/main/plugins/avm-plugin-node),
+[avm-plugin-java](https://github.com/PrajaNova/avm/tree/main/plugins/avm-plugin-java),
+[avm-plugin-android](https://github.com/PrajaNova/avm/tree/main/plugins/avm-plugin-android)),
 fetched at runtime the same way a third-party plugin would be. See
 [Creating a plugin](../plugins/CREATING_A_PLUGIN.md) to add one.
 
@@ -44,7 +44,7 @@ flowchart TD
   A["avm plugin add node"] --> B{"Bare name, no '/'?"}
   B -->|Yes| C["Fetch registry.json from\ngithub.com/PrajaNova/avm-marketplace"]
   C --> D{"Name found in registry?"}
-  D -->|Yes| E["Get its repo field, e.g. PrajaNova/avm-plugin-node"]
+  D -->|Yes| E["Get its repo field, e.g. PrajaNova/avm + release_tag"]
   D -->|No| F["Fall through to git-clone install\n(asdf-style plugin, or a plugin\nnot yet in the marketplace)"]
   B -->|No: org/repo or URL| F
   E --> G["GET api.github.com/repos/<repo>/releases/latest"]

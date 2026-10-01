@@ -63,3 +63,24 @@ report a vulnerability.
 ## License
 
 [MIT](LICENSE)
+
+## Rust workspace
+
+The CLI and first-party plugins share one Cargo workspace:
+
+```text
+crates/avm-cli
+crates/avm-plugin-api
+plugins/avm-plugin-node
+plugins/avm-plugin-java
+plugins/avm-plugin-android
+```
+
+```bash
+cargo build --workspace
+cargo test --workspace
+cargo build -p avm-plugin-node  # one plugin
+```
+
+Plugins remain separate executables; the CLI discovers them at runtime.
+See [Contributing](CONTRIBUTING.md) and [Releasing](docs/ops/RELEASE.md).

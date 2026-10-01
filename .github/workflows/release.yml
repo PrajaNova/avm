@@ -1,6 +1,6 @@
-name: Release
+name: Release AVM CLI
 
-# Manual only: Actions → Release → Run workflow, or
+# Manual only: Actions → Release AVM CLI → Run workflow, or
 #   gh workflow run release.yml -R PrajaNova/avm -f version=0.4.0
 # The workflow creates the v<version> tag and GitHub release itself; pushing
 # a tag does nothing.

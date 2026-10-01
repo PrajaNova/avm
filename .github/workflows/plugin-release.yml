@@ -1,18 +1,25 @@
-name: Plugin release (reusable)
+name: Publish plugin (reusable)
 
-# Called from each plugin repo's manually-run release.yml with the version
-# to publish; this creates the v<version> tag and GitHub release.
+# First-party releases use namespaced tags and are marked as prereleases so
+# /releases/latest remains the CLI release. The registry pins each plugin tag.
 on:
   workflow_call:
     inputs:
+      plugin:
+        description: "Workspace plugin name; empty for standalone repositories"
+        type: string
+        default: ""
       version:
-        description: "Version without the v, matching Cargo.toml"
         required: true
         type: string
       windows:
-        description: "Also build avm-plugin-<name>_windows_amd64.zip (plugins that support Windows)"
         type: boolean
         default: false
+
+env:
+  RELEASE_VERSION: ${{ inputs.version }}
+  PLUGIN: ${{ inputs.plugin && format('avm-plugin-{0}', inputs.plugin) || github.event.repository.name }}
+  RELEASE_TAG: ${{ inputs.plugin && format('avm-plugin-{0}-v{1}', inputs.plugin, inputs.version) || format('v{0}', inputs.version) }}
 
 permissions:
   contents: write
@@ -28,16 +35,25 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          [ "${{ github.ref }}" = "refs/heads/main" ] || { echo "Run releases from main, not ${{ github.ref }}"; exit 1; }
-          if git ls-remote --exit-code --tags origin "refs/tags/v${{ inputs.version }}" >/dev/null; then
-            echo "Tag v${{ inputs.version }} already exists"; exit 1
+          [ "$GITHUB_REF" = "refs/heads/main" ] || { echo "Run releases from main, not $GITHUB_REF"; exit 1; }
+          [[ "$RELEASE_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+([+-][0-9A-Za-z.-]+)?$ ]] || { echo "Invalid release version"; exit 1; }
+          if git ls-remote --exit-code --tags origin "refs/tags/${RELEASE_TAG}" >/dev/null; then
+            echo "Tag ${RELEASE_TAG} already exists"; exit 1
           fi
 
       - name: Check Cargo.toml version
         shell: bash
         run: |
-          cargo_version="$(sed -n 's/^version = "\(.*\)"$/\1/p' Cargo.toml | head -n 1)"
-          [ "$cargo_version" = "${{ inputs.version }}" ] || { echo "Cargo.toml version $cargo_version != ${{ inputs.version }}"; exit 1; }
+          manifest="Cargo.toml"
+          if [ -d "plugins/${PLUGIN}" ]; then manifest="plugins/${PLUGIN}/Cargo.toml"; fi
+          cargo_version="$(sed -n 's/^version = "\(.*\)"$/\1/p' "$manifest" | head -n 1)"
+          [ "$cargo_version" = "$RELEASE_VERSION" ] || { echo "Cargo.toml version $cargo_version != $RELEASE_VERSION"; exit 1; }
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Test release package
+        run: cargo test --locked --package "${{ env.PLUGIN }}"
 
   build:
     needs: validate
@@ -66,18 +82,18 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
 
       - name: Build release binary
-        run: cargo build --release
+        run: cargo build --locked --release --package ${{ env.PLUGIN }}
 
       - name: Smoke test
-        run: target/release/${{ github.event.repository.name }} manifest
+        run: target/release/${{ env.PLUGIN }} manifest
 
       - name: Create release archive
         shell: bash
         run: |
-          archive="${{ github.event.repository.name }}_${{ matrix.target_os }}_${{ matrix.target_arch }}.tar.gz"
+          archive="${{ env.PLUGIN }}_${{ matrix.target_os }}_${{ matrix.target_arch }}.tar.gz"
           mkdir -p dist
-          cp target/release/${{ github.event.repository.name }} dist/${{ github.event.repository.name }}
-          tar -C dist -czf "$archive" ${{ github.event.repository.name }}
+          cp target/release/${{ env.PLUGIN }} dist/${{ env.PLUGIN }}
+          tar -C dist -czf "$archive" ${{ env.PLUGIN }}
           echo "ARCHIVE=$archive" >> "$GITHUB_ENV"
 
       - name: Upload archive
@@ -98,16 +114,16 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
 
       - name: Build release binary
-        run: cargo build --release
+        run: cargo build --locked --release --package ${{ env.PLUGIN }}
 
       - name: Smoke test
-        run: target/release/${{ github.event.repository.name }}.exe manifest
+        run: target/release/${{ env.PLUGIN }}.exe manifest
 
       - name: Create release archive
         shell: pwsh
         run: |
-          $archive = "${{ github.event.repository.name }}_windows_amd64.zip"
-          Compress-Archive -Path "target/release/${{ github.event.repository.name }}.exe" -DestinationPath $archive
+          $archive = "${{ env.PLUGIN }}_windows_amd64.zip"
+          Compress-Archive -Path "target/release/${{ env.PLUGIN }}.exe" -DestinationPath $archive
           "ARCHIVE=$archive" >> $env:GITHUB_ENV
 
       - name: Upload archive
@@ -143,7 +159,9 @@ jobs:
       - name: Publish GitHub release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v${{ inputs.version }}
+          tag_name: ${{ env.RELEASE_TAG }}
+          name: ${{ env.PLUGIN }} v${{ inputs.version }}
+          prerelease: ${{ inputs.plugin != '' }}
           target_commitish: ${{ github.sha }}
           files: |
             dist/avm-plugin-*

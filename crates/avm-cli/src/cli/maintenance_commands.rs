@@ -176,7 +176,7 @@ pub fn cmd_plugin_outdated(json: bool) -> Result<()> {
         let latest = runtime::marketplace_lookup(&name)
             .ok()
             .flatten()
-            .and_then(|entry| runtime::github_release(&entry.repo, None).ok())
+            .and_then(|entry| runtime::github_release(&entry.repo, entry.release_tag.as_deref()).ok())
             .map(|r| r.tag_name);
         rows.push((name, installed, latest));
     }

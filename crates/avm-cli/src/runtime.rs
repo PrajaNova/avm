@@ -181,7 +181,7 @@ impl PluginManager {
                      URL instead of `avm plugin add {tool}`?) — nothing to update against"
                 )
             })?;
-            install_from_marketplace(tool, &entry.repo, &self.plugin_dir)?;
+            install_from_marketplace(tool, &entry, &self.plugin_dir)?;
             return Ok(());
         }
 
@@ -491,6 +491,9 @@ pub struct MarketplaceEntry {
     /// `<owner>/<repo>` — its GitHub Releases are the actual install source.
     /// Never fetched or built from source; only compiled release assets.
     pub repo: String,
+    /// Optional release tag for plugins sharing a repository with other releases.
+    #[serde(default)]
+    pub release_tag: Option<String>,
 }
 
 #[derive(Debug, serde::Deserialize)]
@@ -625,14 +628,15 @@ pub fn fetch_verified_archive(repo: &str, release: &GithubRelease, asset_name: &
     Ok((sha256, verified))
 }
 
-/// Install a marketplace plugin by fetching its **compiled** latest GitHub
-/// Release for the current platform — never source, never built locally.
+/// Install the registry-selected compiled GitHub release (or latest when
+/// no release_tag is set) — never source, never built locally.
 /// `avm-plugin-<name>_<os>_<arch>.tar.gz` (`.zip` on Windows) on `repo`'s
-/// latest release, containing exactly one file named `avm-plugin-<name>`, is
+/// selected release, containing exactly one file named `avm-plugin-<name>`, is
 /// the expected contract (documented in the avm-marketplace repo's README).
-pub fn install_from_marketplace(name: &str, repo: &str, plugin_dir: &Path) -> Result<String> {
+pub fn install_from_marketplace(name: &str, entry: &MarketplaceEntry, plugin_dir: &Path) -> Result<String> {
     let (os, arch) = marketplace_platform()?;
-    let release = github_release(repo, None)?;
+    let repo = &entry.repo;
+    let release = github_release(repo, entry.release_tag.as_deref())?;
     let asset_name = format!("avm-plugin-{name}_{os}_{arch}.{PLUGIN_ARCHIVE_EXT}");
     if !release.assets.iter().any(|a| a.name == asset_name) {
         let prefix = format!("avm-plugin-{name}_");

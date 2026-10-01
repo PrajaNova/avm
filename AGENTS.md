@@ -16,10 +16,10 @@
 - `crates/avm-cli/src/shims.rs`: shim generation and PATH integration scripts.
 - `crates/avm-plugin-api`: plugin/host contracts, `ToolProvider` trait, wire protocol types (`protocol` module), and the `runner` module every plugin executable's `main.rs` dispatches through.
 - `crates/avm-cli/src/runtime.rs`: plugin discovery (protocol/asdf tiers), `PluginProcess` (the protocol host runner), the marketplace installer, and the legacy asdf adapter.
-- `crates/avm-plugin-node`, `crates/avm-plugin-java`, `crates/avm-plugin-android`: each both a library (the `ToolProvider` impl + version/install logic) and a standalone `[[bin]]` executable speaking the plugin protocol — see `docs/migration/PLUGIN_PROTOCOL.md`.
+- `plugins/avm-plugin-node`, `plugins/avm-plugin-java`, `plugins/avm-plugin-android`: each both a library (the `ToolProvider` impl + version/install logic) and a standalone `[[bin]]` executable speaking the plugin protocol — see `docs/plugins/CREATING_A_PLUGIN.md`.
 
 ## Plugin and compatibility policy
-- Every provider — first-party or third-party — speaks the same JSON-over-stdio plugin protocol (`docs/migration/PLUGIN_PROTOCOL.md`) and is discovered in tiers: builtin (bundled next to `avm-bin`) → user-installed third-party (`~/.avm/plugins/<dir>/bin/avm-plugin`) → legacy asdf adapter.
+- Every provider — first-party or third-party — speaks the same JSON-over-stdio plugin protocol (`docs/plugins/CREATING_A_PLUGIN.md`) and is discovered in tiers: builtin (bundled next to `avm-bin`) → user-installed third-party (`~/.avm/plugins/<dir>/bin/avm-plugin`) → legacy asdf adapter.
 - Keep the asdf compatibility adapter (`AsdfToolProvider`) for community plugins that haven't adopted the native protocol; it's the permanent fallback tier, not a temporary v1 shim.
 - "Host-first form" now means "speaks the plugin protocol," not "compiled into `avm-cli`" — no `ToolProvider` implementation should be linked directly into `avm-cli` going forward; wrap it in a plugin executable (`avm_plugin_api::runner::run`) instead, even for first-party tools.
 - New provider loading should isolate failures by command and continue fallback flow.

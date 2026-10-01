@@ -22,6 +22,15 @@ jobs:
       - name: Run Rust tests
         run: cargo test --workspace
 
+      - name: Smoke test plugins
+        run: |
+          target/debug/avm-plugin-node manifest
+          target/debug/avm-plugin-java manifest
+          target/debug/avm-plugin-android manifest
+
+      - name: Check shared-repository plugin releases
+        run: bash scripts/check-plugin-releases.sh
+
       - name: Check changelog
         run: bash scripts/check-changelog.sh
 
@@ -57,3 +66,13 @@ jobs:
         run: e2e/run.sh
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # GitHub API rate limits on shared runners
+
+  plugins:
+    strategy:
+      fail-fast: false
+      matrix:
+        plugin: [avm-plugin-node, avm-plugin-java, avm-plugin-android]
+    uses: ./.github/workflows/plugin-ci.yml
+    with:
+      plugin: ${{ matrix.plugin }}
+      windows: true

@@ -1,0 +1,13 @@
+[package]
+name = "avm-plugin-node"
+version = "0.3.2"
+edition = "2021"
+description = "avm native provider for Node.js — versions, install, package.json scripts. Speaks avm's plugin protocol (https://github.com/PrajaNova/avm)."
+license = "MIT"
+repository = "https://github.com/PrajaNova/avm"
+
+[dependencies]
+avm-plugin-api = { path = "../../crates/avm-plugin-api" }
+anyhow = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }

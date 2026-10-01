@@ -70,6 +70,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "avm-plugin-android"
+version = "0.3.0"
+dependencies = [
+ "anyhow",
+ "avm-plugin-api",
+ "serde_json",
+]
+
+[[package]]
 name = "avm-plugin-api"
 version = "0.4.0"
 dependencies = [
@@ -77,6 +86,26 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2",
+]
+
+[[package]]
+name = "avm-plugin-java"
+version = "0.3.0"
+dependencies = [
+ "anyhow",
+ "avm-plugin-api",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "avm-plugin-node"
+version = "0.3.2"
+dependencies = [
+ "anyhow",
+ "avm-plugin-api",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

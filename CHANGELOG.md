@@ -6,6 +6,8 @@ The format follows Keep a Changelog style, and releases use semantic versioning.
 
 ## [Unreleased]
 
+- First-party Node, Java and Android plugins now share the AVM Cargo workspace under `plugins/`, with local API dependencies and independent namespaced releases published to `PrajaNova/avm` through the manual **Release workspace plugins** workflow. Marketplace entries can select a release with `release_tag`.
+
 ## [0.4.0] - 2026-09-29
 
 ### Added

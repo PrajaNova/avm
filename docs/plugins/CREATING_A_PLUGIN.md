@@ -154,7 +154,7 @@ doesn't distinguish "installed by hand for testing" from "installed via
    `contents: write`, `id-token: write`, and `attestations: write`.
 3. **List it in the marketplace** (optional but recommended): open a PR
    adding an entry to `registry.json` in
-   [PrajaNova/avm-marketplace](https://github.com/PrajaNova/avm-marketplace)
+   [PrajaNova/avm/marketplace](https://github.com/PrajaNova/avm/tree/main/marketplace)
    — `{"name", "description", "section_label", "repo"}`. Once merged,
    `avm plugin add <name>` works with just the bare name instead of a full
    URL, and it shows up in `avm plugin available`.

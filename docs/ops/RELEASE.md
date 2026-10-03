@@ -86,5 +86,14 @@ tags and stable releases.
 ## Marketplace site
 
 **Actions → Deploy Documentation & Marketplace to GitHub Pages → Run
-workflow** in `PrajaNova/avm-marketplace`. Merging to `main` doesn't
-deploy.
+workflow** in `PrajaNova/avm`, or run
+`gh workflow run deploy.yml -R PrajaNova/avm`. Merging to `main` doesn't
+deploy. Enable **Settings → Pages → Source → GitHub Actions** in this
+repository before the first deployment. The site builds from `marketplace/`
+and publishes at `https://prajanova.github.io/avm/`.
+
+Merge `marketplace/registry.json` before releasing a CLI that reads the new
+registry URL. Existing CLI releases still read the old marketplace repository:
+keep its registry available and synchronized until those clients upgrade.
+The original local marketplace checkout and its Git history are preserved;
+archive the old repository only after the site and registry migration.

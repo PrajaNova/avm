@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "plugins": [
+    {
+      "name": "node",
+      "description": "Node.js — versions, install, package.json scripts",
+      "section_label": "Node",
+      "repo": "PrajaNova/avm-plugin-node"
+    },
+    {
+      "name": "java",
+      "description": "OpenJDK (Eclipse Temurin, via the foojay Disco API) — versions, install, JAVA_HOME",
+      "section_label": "OpenJDK",
+      "repo": "PrajaNova/avm-plugin-java"
+    },
+    {
+      "name": "android",
+      "description": "Android SDK (cmdline-tools, platform-tools, sdkmanager) — versions, install, ANDROID_HOME",
+      "section_label": "Android SDK",
+      "repo": "PrajaNova/avm-plugin-android"
+    }
+  ]
+}

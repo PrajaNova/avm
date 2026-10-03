@@ -1,6 +1,6 @@
 # Contributing to avm
 
-`avm` is maintained as a Rust workspace. Keep contributions scoped to the current Rust implementation unless a migration note explicitly says otherwise.
+`avm` contains the Rust workspace and the documentation and marketplace frontend.
 
 ## Development setup
 
@@ -8,7 +8,7 @@ Prerequisites:
 
 - Rust stable
 - Docker for the end-to-end suites
-- Node.js 20+ only for npm package wrapper and release tooling
+- Node.js 22+ and pnpm 11 for the marketplace frontend; Node.js also supports npm package wrapper and release tooling
 
 Build:
 
@@ -42,7 +42,7 @@ e2e/run.sh core node    # some suites
   - `src/update.rs`: `self-update` and the update notice
 - `crates/avm-plugin-api` is the one crate a plugin depends on: the `ToolProvider` trait, the wire protocol, the runner, and the sha256 helpers.
 - `plugins/avm-plugin-{node,java,android}` are members of this Cargo workspace. They use the local plugin API and remain separate executables, installed at runtime like third-party plugins.
-- The marketplace frontend stays in its own repository.
+- `marketplace/` contains the React frontend and `registry.json`. From that directory, run `pnpm install --frozen-lockfile`, `pnpm dev`, or `pnpm build`. CI builds it on every PR.
 
 Build or test a single plugin with `cargo build -p avm-plugin-node` or
 `cargo test -p avm-plugin-node`. All workspace binaries go into the root

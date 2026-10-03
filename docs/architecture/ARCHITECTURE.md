@@ -42,7 +42,7 @@ the box. It resolves in two stages:
 ```mermaid
 flowchart TD
   A["avm plugin add node"] --> B{"Bare name, no '/'?"}
-  B -->|Yes| C["Fetch registry.json from\ngithub.com/PrajaNova/avm-marketplace"]
+  B -->|Yes| C["Fetch registry.json from\ngithub.com/PrajaNova/avm/tree/main/marketplace"]
   C --> D{"Name found in registry?"}
   D -->|Yes| E["Get its repo field, e.g. PrajaNova/avm + release_tag"]
   D -->|No| F["Fall through to git-clone install\n(asdf-style plugin, or a plugin\nnot yet in the marketplace)"]

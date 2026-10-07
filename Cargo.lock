@@ -71,7 +71,7 @@ dependencies = [
 
 [[package]]
 name = "avm-plugin-android"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "anyhow",
  "avm-plugin-api",
@@ -90,7 +90,7 @@ dependencies = [
 
 [[package]]
 name = "avm-plugin-java"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "anyhow",
  "avm-plugin-api",
@@ -100,7 +100,7 @@ dependencies = [
 
 [[package]]
 name = "avm-plugin-node"
-version = "0.3.2"
+version = "0.3.3"
 dependencies = [
  "anyhow",
  "avm-plugin-api",

@@ -156,14 +156,23 @@ jobs:
         with:
           subject-path: dist/avm-plugin-*
 
-      - name: Publish GitHub release
+      # Immutable releases (repo setting) refuse asset uploads once a
+      # prerelease is published — only drafts stay open for uploads. Create
+      # as a draft, then flip it live once every asset is attached.
+      - name: Publish GitHub release (draft)
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ env.RELEASE_TAG }}
           name: ${{ env.PLUGIN }} v${{ inputs.version }}
           prerelease: ${{ inputs.plugin != '' }}
+          draft: true
           target_commitish: ${{ github.sha }}
           files: |
             dist/avm-plugin-*
             dist/checksums.txt
           generate_release_notes: true
+
+      - name: Publish release (undraft)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release edit "${{ env.RELEASE_TAG }}" --draft=false -R ${{ github.repository }}

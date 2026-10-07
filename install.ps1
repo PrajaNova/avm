@@ -47,6 +47,7 @@ try {
     }
     $line = 'Invoke-Expression ((& avm-bin shell-init pwsh) -join "`n")'
     if (-not (Test-Path $PROFILE) -or -not (Select-String -Path $PROFILE -SimpleMatch $line -Quiet)) {
+        New-Item -ItemType Directory -Force (Split-Path $PROFILE) | Out-Null
         New-Item -ItemType File -Force $PROFILE | Out-Null
         Add-Content $PROFILE "`n# avm`n$line"
     }

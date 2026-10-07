@@ -154,7 +154,7 @@ doesn't distinguish "installed by hand for testing" from "installed via
    `contents: write`, `id-token: write`, and `attestations: write`.
 3. **List it in the marketplace** (optional but recommended): open a PR
    adding an entry to `registry.json` in
-   [PrajaNova/avm-marketplace](https://github.com/PrajaNova/avm-marketplace)
+   [PrajaNova/avm/marketplace](https://github.com/PrajaNova/avm/tree/main/marketplace)
    — `{"name", "description", "section_label", "repo"}`. Once merged,
    `avm plugin add <name>` works with just the bare name instead of a full
    URL, and it shows up in `avm plugin available`.
@@ -182,9 +182,9 @@ most of what a new plugin needs:
 
 | Plugin | What's interesting about it |
 | --- | --- |
-| [avm-plugin-node](https://github.com/PrajaNova/avm-plugin-node) | Simplest full example — `curl`+parse a version index, `curl`+`tar` install. Also shows the one legitimate exception to "plugins are standalone": `avm-cli` links it as a *library* too, for in-process `package.json` script parsing (not part of the `ToolProvider` protocol surface — a separate concern that happens to live in the same crate). |
-| [avm-plugin-java](https://github.com/PrajaNova/avm-plugin-java) | Version index from a third-party aggregator API (foojay Disco), filtered to one vendor (Temurin). `env_vars` returns `JAVA_HOME`. |
-| [avm-plugin-android](https://github.com/PrajaNova/avm-plugin-android) | The most involved `install`: multiple SDK components via `sdkmanager`, a JDK dependency check, wrapper scripts written to `bin/` so `adb`/`sdkmanager`/`avdmanager`/`emulator` all resolve correctly. `env_vars` returns both `ANDROID_HOME` and `ANDROID_SDK_ROOT`. |
+| [avm-plugin-node](https://github.com/PrajaNova/avm/tree/main/plugins/avm-plugin-node) | Simplest full example — `curl`+parse a version index, `curl`+`tar` install. First-party plugins live in the Cargo workspace but execute through the same protocol as third-party plugins. |
+| [avm-plugin-java](https://github.com/PrajaNova/avm/tree/main/plugins/avm-plugin-java) | Version index from a third-party aggregator API (foojay Disco), filtered to one vendor (Temurin). `env_vars` returns `JAVA_HOME`. |
+| [avm-plugin-android](https://github.com/PrajaNova/avm/tree/main/plugins/avm-plugin-android) | The most involved `install`: multiple SDK components via `sdkmanager`, a JDK dependency check, wrapper scripts written to `bin/` so `adb`/`sdkmanager`/`avdmanager`/`emulator` all resolve correctly. `env_vars` returns both `ANDROID_HOME` and `ANDROID_SDK_ROOT`. |
 
 ## Why the protocol looks like this
 

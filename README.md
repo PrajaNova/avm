@@ -4,7 +4,7 @@
 right runtime for every project, and runs the project's aliases and env too.
 It's a single Rust binary for macOS, Linux and Windows.
 
-**📖 Docs, guides and full command reference: [prajanova.github.io/avm-marketplace](https://prajanova.github.io/avm-marketplace/)**
+**📖 Docs, guides and full command reference: [prajanova.github.io/avm](https://prajanova.github.io/avm/)**
 
 ```console
 ~/shop-app $ node -v
@@ -34,7 +34,7 @@ npm install -g @prajanova/avm                                               # an
 irm https://raw.githubusercontent.com/PrajaNova/avm/main/install.ps1 | iex  # Windows
 ```
 
-Then add the shell hook ([details for each shell](https://prajanova.github.io/avm-marketplace/#/docs/guide/shell-setup)):
+Then add the shell hook ([details for each shell](https://prajanova.github.io/avm/#/docs/guide/shell-setup)):
 
 ```bash
 eval "$(avm-bin shell-init)"   # in ~/.zshrc or ~/.bashrc
@@ -50,9 +50,9 @@ avm add dev "npm run dev"  # a project alias → run it with `avm dev`
 
 ## Learn more
 
-- [Getting started](https://prajanova.github.io/avm-marketplace/#/docs/guide/getting-started) · [All commands](https://prajanova.github.io/avm-marketplace/#/docs/manage/commands) · [Configuration](https://prajanova.github.io/avm-marketplace/#/docs/manage/configuration)
-- [Version files](https://prajanova.github.io/avm-marketplace/#/docs/manage/version-files) · [Security & trust](https://prajanova.github.io/avm-marketplace/#/docs/manage/security) · [Comparison with asdf, mise, proto](https://prajanova.github.io/avm-marketplace/#/docs/manage/comparison)
-- [Plugin marketplace](https://prajanova.github.io/avm-marketplace/#/marketplace) · [What's new](https://prajanova.github.io/avm-marketplace/#/changelog) · [Write a plugin](docs/plugins/CREATING_A_PLUGIN.md)
+- [Getting started](https://prajanova.github.io/avm/#/docs/guide/getting-started) · [All commands](https://prajanova.github.io/avm/#/docs/manage/commands) · [Configuration](https://prajanova.github.io/avm/#/docs/manage/configuration)
+- [Version files](https://prajanova.github.io/avm/#/docs/manage/version-files) · [Security & trust](https://prajanova.github.io/avm/#/docs/manage/security) · [Comparison with asdf, mise, proto](https://prajanova.github.io/avm/#/docs/manage/comparison)
+- [Plugin marketplace](https://prajanova.github.io/avm/#/marketplace) · [What's new](https://prajanova.github.io/avm/#/changelog) · [Write a plugin](docs/plugins/CREATING_A_PLUGIN.md)
 
 ## Contributing
 
@@ -63,3 +63,24 @@ report a vulnerability.
 ## License
 
 [MIT](LICENSE)
+
+## Rust workspace
+
+The CLI and first-party plugins share one Cargo workspace:
+
+```text
+crates/avm-cli
+crates/avm-plugin-api
+plugins/avm-plugin-node
+plugins/avm-plugin-java
+plugins/avm-plugin-android
+```
+
+```bash
+cargo build --workspace
+cargo test --workspace
+cargo build -p avm-plugin-node  # one plugin
+```
+
+Plugins remain separate executables; the CLI discovers them at runtime.
+See [Contributing](CONTRIBUTING.md) and [Releasing](docs/ops/RELEASE.md).

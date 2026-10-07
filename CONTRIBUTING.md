@@ -1,6 +1,6 @@
 # Contributing to avm
 
-`avm` is maintained as a Rust workspace. Keep contributions scoped to the current Rust implementation unless a migration note explicitly says otherwise.
+`avm` contains the Rust workspace and the documentation and marketplace frontend.
 
 ## Development setup
 
@@ -8,7 +8,7 @@ Prerequisites:
 
 - Rust stable
 - Docker for the end-to-end suites
-- Node.js 20+ only for npm package wrapper and release tooling
+- Node.js 22+ and pnpm 11 for the marketplace frontend; Node.js also supports npm package wrapper and release tooling
 
 Build:
 
@@ -20,6 +20,7 @@ Run tests:
 
 ```bash
 cargo test --workspace
+bash scripts/check-plugin-releases.sh
 ```
 
 Run the end-to-end suites in a clean container (Docker required; CI runs
@@ -40,7 +41,12 @@ e2e/run.sh core node    # some suites
   - `src/runtime.rs`: plugin discovery, the protocol host, the verified marketplace installer, and the asdf adapter
   - `src/update.rs`: `self-update` and the update notice
 - `crates/avm-plugin-api` is the one crate a plugin depends on: the `ToolProvider` trait, the wire protocol, the runner, and the sha256 helpers.
-- node, java and android are separate repos ([avm-plugin-node](https://github.com/PrajaNova/avm-plugin-node), [avm-plugin-java](https://github.com/PrajaNova/avm-plugin-java), [avm-plugin-android](https://github.com/PrajaNova/avm-plugin-android)), installed at runtime like any third-party plugin.
+- `plugins/avm-plugin-{node,java,android}` are members of this Cargo workspace. They use the local plugin API and remain separate executables, installed at runtime like third-party plugins.
+- `marketplace/` contains the React frontend and `registry.json`. From that directory, run `pnpm install --frozen-lockfile`, `pnpm dev`, or `pnpm build`. CI builds it on every PR.
+
+Build or test a single plugin with `cargo build -p avm-plugin-node` or
+`cargo test -p avm-plugin-node`. All workspace binaries go into the root
+`target/` directory.
 
 More: [Architecture](docs/architecture/ARCHITECTURE.md) · [Creating a plugin](docs/plugins/CREATING_A_PLUGIN.md) · [Releasing](docs/ops/RELEASE.md) · agent/LLM context in [llms.txt](llms.txt).
 

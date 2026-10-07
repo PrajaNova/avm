@@ -3,6 +3,9 @@ resolver = "2"
 members = [
     "crates/avm-cli",
     "crates/avm-plugin-api",
+    "plugins/avm-plugin-node",
+    "plugins/avm-plugin-java",
+    "plugins/avm-plugin-android",
 ]
 
 [workspace.dependencies]

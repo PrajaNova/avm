@@ -13,7 +13,7 @@ pub fn cmd_plugin(cmd: PluginCommands) -> Result<()> {
                 if let Some(entry) = runtime::marketplace_lookup(&source)? {
                     println!("Fetching '{source}' from {}...", entry.repo);
                     let version =
-                        runtime::install_from_marketplace(&source, &entry.repo, &plugin_manager.plugin_dir())?;
+                        runtime::install_from_marketplace(&source, &entry, &plugin_manager.plugin_dir())?;
                     println!("✓ Installed {source} {version}");
                     return Ok(());
                 }
@@ -83,7 +83,7 @@ fn print_installed_plugins(plugin_manager: &PluginManager) -> Result<()> {
 }
 
 fn print_available_plugins() -> Result<()> {
-    println!("Marketplace (github.com/PrajaNova/avm-marketplace):");
+    println!("Marketplace (github.com/PrajaNova/avm/tree/main/marketplace):");
     match runtime::marketplace_registry() {
         Ok(mut entries) => {
             entries.sort_by(|a, b| a.name.cmp(&b.name));

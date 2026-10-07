@@ -7,6 +7,34 @@ on:
       - main
 
 jobs:
+  marketplace:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: marketplace
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11
+          run_install: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: marketplace/pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build marketplace
+        run: pnpm run build
+
   rust:
     runs-on: ubuntu-latest
     steps:
@@ -21,6 +49,15 @@ jobs:
 
       - name: Run Rust tests
         run: cargo test --workspace
+
+      - name: Smoke test plugins
+        run: |
+          target/debug/avm-plugin-node manifest
+          target/debug/avm-plugin-java manifest
+          target/debug/avm-plugin-android manifest
+
+      - name: Check shared-repository plugin releases
+        run: bash scripts/check-plugin-releases.sh
 
       - name: Check changelog
         run: bash scripts/check-changelog.sh
@@ -57,3 +94,13 @@ jobs:
         run: e2e/run.sh
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # GitHub API rate limits on shared runners
+
+  plugins:
+    strategy:
+      fail-fast: false
+      matrix:
+        plugin: [avm-plugin-node, avm-plugin-java, avm-plugin-android]
+    uses: ./.github/workflows/plugin-ci.yml
+    with:
+      plugin: ${{ matrix.plugin }}
+      windows: true

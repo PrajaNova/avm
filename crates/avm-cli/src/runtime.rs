@@ -181,7 +181,7 @@ impl PluginManager {
                      URL instead of `avm plugin add {tool}`?) — nothing to update against"
                 )
             })?;
-            install_from_marketplace(tool, &entry.repo, &self.plugin_dir)?;
+            install_from_marketplace(tool, &entry, &self.plugin_dir)?;
             return Ok(());
         }
 
@@ -479,7 +479,7 @@ impl ToolProvider for PluginProcess {
 }
 
 const DEFAULT_MARKETPLACE_REGISTRY_URL: &str =
-    "https://raw.githubusercontent.com/PrajaNova/avm-marketplace/main/registry.json";
+    "https://raw.githubusercontent.com/PrajaNova/avm/main/marketplace/registry.json";
 const MARKETPLACE_TIMEOUT_SECS: u32 = 20;
 const MARKETPLACE_INSTALL_TIMEOUT_MS: u64 = 300_000;
 const DEFAULT_PLUGIN_PATH_ENV: &str = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin";
@@ -491,6 +491,9 @@ pub struct MarketplaceEntry {
     /// `<owner>/<repo>` — its GitHub Releases are the actual install source.
     /// Never fetched or built from source; only compiled release assets.
     pub repo: String,
+    /// Optional release tag for plugins sharing a repository with other releases.
+    #[serde(default)]
+    pub release_tag: Option<String>,
 }
 
 #[derive(Debug, serde::Deserialize)]
@@ -499,7 +502,7 @@ struct RegistryFile {
 }
 
 /// Fetch and parse `registry.json` from the avm marketplace
-/// (github.com/PrajaNova/avm-marketplace) — the list of known plugin names,
+/// (github.com/PrajaNova/avm/tree/main/marketplace) — the list of known plugin names,
 /// their descriptions, and the GitHub repo each resolves to. Override with
 /// `AVM_MARKETPLACE_URL` (a `raw.githubusercontent.com`-style URL, or a
 /// local file path for tests).
@@ -625,14 +628,15 @@ pub fn fetch_verified_archive(repo: &str, release: &GithubRelease, asset_name: &
     Ok((sha256, verified))
 }
 
-/// Install a marketplace plugin by fetching its **compiled** latest GitHub
-/// Release for the current platform — never source, never built locally.
+/// Install the registry-selected compiled GitHub release (or latest when
+/// no release_tag is set) — never source, never built locally.
 /// `avm-plugin-<name>_<os>_<arch>.tar.gz` (`.zip` on Windows) on `repo`'s
-/// latest release, containing exactly one file named `avm-plugin-<name>`, is
-/// the expected contract (documented in the avm-marketplace repo's README).
-pub fn install_from_marketplace(name: &str, repo: &str, plugin_dir: &Path) -> Result<String> {
+/// selected release, containing exactly one file named `avm-plugin-<name>`, is
+/// the expected contract (documented in marketplace/README.md).
+pub fn install_from_marketplace(name: &str, entry: &MarketplaceEntry, plugin_dir: &Path) -> Result<String> {
     let (os, arch) = marketplace_platform()?;
-    let release = github_release(repo, None)?;
+    let repo = &entry.repo;
+    let release = github_release(repo, entry.release_tag.as_deref())?;
     let asset_name = format!("avm-plugin-{name}_{os}_{arch}.{PLUGIN_ARCHIVE_EXT}");
     if !release.assets.iter().any(|a| a.name == asset_name) {
         let prefix = format!("avm-plugin-{name}_");

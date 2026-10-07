@@ -9,6 +9,7 @@ FROM --platform=linux/amd64 rust:1 AS build
 WORKDIR /src
 COPY Cargo.toml Cargo.lock ./
 COPY crates crates
+COPY plugins plugins
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
     --mount=type=cache,target=/src/target \
     cargo build --release -p avm-cli --bin avm-bin \

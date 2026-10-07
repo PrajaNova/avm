@@ -1,14 +1,13 @@
-use anyhow::{anyhow, Context, Result};
-use std::io::{self, IsTerminal, Read, Write};
-use std::process::Command;
+use anyhow::Result;
+use crossterm::event::{self, Event, KeyCode, KeyEventKind, KeyModifiers};
+use crossterm::terminal::{disable_raw_mode, enable_raw_mode};
+use std::io::{self, IsTerminal, Write};
 
 const HELP: &str = "Type to search, Up/Down to move, Enter to select, Ctrl+C to cancel.";
 const PAGE_SIZE: usize = 10;
 
-/// The picker drives raw mode through `stty`, so it's Unix-only; elsewhere
-/// callers fall back to their non-interactive path.
 pub fn can_select() -> bool {
-    cfg!(unix) && io::stdin().is_terminal() && io::stdout().is_terminal()
+    io::stdin().is_terminal() && io::stdout().is_terminal()
 }
 
 /// Interactive picker: type to filter (substring, case-insensitive),
@@ -31,20 +30,20 @@ pub fn select(title: &str, items: &[String]) -> Result<Option<usize>> {
     loop {
         render(title, items, &filtered, selected, offset, &query)?;
 
-        let mut byte = [0u8; 1];
-        io::stdin().read_exact(&mut byte)?;
-        match byte[0] {
-            b'\n' | b'\r' => {
+        let Event::Key(key) = event::read()? else { continue };
+        if key.kind == KeyEventKind::Release {
+            continue;
+        }
+        match key.code {
+            KeyCode::Enter => {
                 terminal.restore()?;
                 return Ok(filtered.get(selected).copied());
             }
-            3 => {
-                // Ctrl+C
+            KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => {
                 terminal.restore()?;
                 return Ok(None);
             }
-            21 => {
-                // Ctrl+U: clear the whole search query
+            KeyCode::Char('u') if key.modifiers.contains(KeyModifiers::CONTROL) => {
                 if !query.is_empty() {
                     query.clear();
                     filtered = filter_items(items, &query);
@@ -52,26 +51,17 @@ pub fn select(title: &str, items: &[String]) -> Result<Option<usize>> {
                     offset = 0;
                 }
             }
-            127 | 8 => {
-                // Backspace
+            KeyCode::Backspace => {
                 if query.pop().is_some() {
                     filtered = filter_items(items, &query);
                     selected = 0;
                     offset = 0;
                 }
             }
-            27 => {
-                let mut seq = [0u8; 2];
-                if io::stdin().read_exact(&mut seq).is_ok() && seq[0] == b'[' {
-                    match seq[1] {
-                        b'A' => selected = selected.saturating_sub(1),
-                        b'B' if selected + 1 < filtered.len() => selected += 1,
-                        _ => {}
-                    }
-                }
-            }
-            b if (0x20..0x7f).contains(&b) => {
-                query.push(b as char);
+            KeyCode::Up => selected = selected.saturating_sub(1),
+            KeyCode::Down if selected + 1 < filtered.len() => selected += 1,
+            KeyCode::Char(c) => {
+                query.push(c);
                 filtered = filter_items(items, &query);
                 selected = 0;
                 offset = 0;
@@ -157,20 +147,13 @@ impl RawTerminal {
     fn enter() -> Result<Self> {
         write!(io::stdout(), "\x1b[?25l")?;
         io::stdout().flush()?;
-        let status = Command::new("stty")
-            .arg("raw")
-            .arg("-echo")
-            .status()
-            .context("failed to enter raw terminal mode")?;
-        if !status.success() {
-            return Err(anyhow!("failed to enter raw terminal mode"));
-        }
+        enable_raw_mode()?;
         Ok(Self { active: true })
     }
 
     fn restore(&mut self) -> Result<()> {
         if self.active {
-            let _ = Command::new("stty").arg("sane").status();
+            let _ = disable_raw_mode();
             let _ = write!(io::stdout(), "\x1b[?25h\r\n");
             let _ = io::stdout().flush();
             self.active = false;

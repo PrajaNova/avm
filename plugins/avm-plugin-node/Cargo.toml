@@ -1,6 +1,6 @@
 [package]
 name = "avm-plugin-node"
-version = "0.3.2"
+version = "0.3.3"
 edition = "2021"
 description = "avm native provider for Node.js — versions, install, package.json scripts. Speaks avm's plugin protocol (https://github.com/PrajaNova/avm)."
 license = "MIT"

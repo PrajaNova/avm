@@ -80,9 +80,9 @@ pnpm preview
 
 ### GitHub Pages Deployment
 
-CI builds the site on every PR. Deployment is manual via [`.github/workflows/deploy.yml`](../.github/workflows/deploy.yml) in `PrajaNova/avm`.
+CI builds the site on every PR. Deployment is manual via [`.github/workflows/release-web.yml`](../.github/workflows/release-web.yml) in `PrajaNova/avm`.
 
 To enable GitHub Pages in your repository settings:
 1. Navigate to **Settings > Pages** in your GitHub repository.
 2. Under **Build and deployment > Source**, select **GitHub Actions**.
-3. After merging to `main`, run **Actions → Deploy Documentation & Marketplace to GitHub Pages → Run workflow**, or `gh workflow run deploy.yml -R PrajaNova/avm`.
+3. After merging to `main`, run **Actions → Release web (marketplace) → Run workflow**, or `gh workflow run release-web.yml -R PrajaNova/avm`.

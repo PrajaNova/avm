@@ -1,7 +1,7 @@
-name: Deploy Documentation & Marketplace to GitHub Pages
+name: Release web (marketplace)
 
-# Manual only: Actions → Deploy Documentation & Marketplace → Run workflow
-# (or `gh workflow run deploy.yml`). Merging to main doesn't deploy.
+# Manual only: Actions → Release web (marketplace) → Run workflow
+# (or `gh workflow run release-web.yml`). Merging to main doesn't deploy.
 on:
   workflow_dispatch:
 

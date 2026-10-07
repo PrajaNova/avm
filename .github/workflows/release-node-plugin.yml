@@ -1,0 +1,28 @@
+name: Release node plugin
+run-name: Release node plugin v${{ inputs.version }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version matching plugins/avm-plugin-node/Cargo.toml (without v)"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+  id-token: write
+  attestations: write
+
+concurrency:
+  group: release-plugin-node
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    uses: ./.github/workflows/plugin-release.yml
+    with:
+      plugin: node
+      version: ${{ inputs.version }}
+      windows: true
+    secrets: inherit

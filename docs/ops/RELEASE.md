@@ -11,7 +11,7 @@ publishes anything; CI (tests) is the only workflow that runs on its own.
    `[Unreleased]` entries under `## [<version>] - <date>`. Merge to `main`.
 2. Run the release, from `main`:
    - GitHub: **Actions → Release AVM CLI → Run workflow**, enter the version, or
-   - CLI: `gh workflow run release.yml -R PrajaNova/avm -f version=0.4.0`
+   - CLI: `gh workflow run release-avm.yml -R PrajaNova/avm -f version=0.4.0`
 3. The workflow checks that the version matches `package.json`, that the
    CHANGELOG has it, and that the tag doesn't already exist. It then:
    - builds linux amd64/arm64, macOS arm64/Intel and Windows, and
@@ -28,7 +28,7 @@ publishes anything; CI (tests) is the only workflow that runs on its own.
 Follow a run with `gh run watch -R PrajaNova/avm`.
 
 If only the npm step failed, fix the cause, then retry npm alone for the
-same version: `gh workflow run release.yml -R PrajaNova/avm -f version=0.4.0 -f npm_only=true`
+same version: `gh workflow run release-avm.yml -R PrajaNova/avm -f version=0.4.0 -f npm_only=true`
 (or tick **npm_only** in the Run workflow form). Trusted publishing
 requires `package.json` `repository.url` to match `PrajaNova/avm` exactly,
 case included.
@@ -38,15 +38,17 @@ case included.
 | Needed for | What | Where |
 | --- | --- | --- |
 | Homebrew | `HOMEBREW_TAP_GITHUB_TOKEN`: a token with push access to `prajanova/homebrew-tap` | repo → Settings → Secrets → Actions |
-| npm | **Trusted publishing**, no secret: on npmjs.com, open `@prajanova/avm` → Settings → Trusted Publisher → GitHub Actions, organization `PrajaNova`, repository `avm`, workflow `release.yml`, environment empty. Allowed actions: `npm stage publish` only (the workflow never publishes directly) | npmjs.com |
+| npm | **Trusted publishing**, no secret: on npmjs.com, open `@prajanova/avm` → Settings → Trusted Publisher → GitHub Actions, organization `PrajaNova`, repository `avm`, workflow `release-avm.yml`, environment empty. Allowed actions: `npm stage publish` only (the workflow never publishes directly) | npmjs.com |
 
 ## First-party plugins
 
 1. Bump `version` in `plugins/avm-plugin-<name>/Cargo.toml`, refresh the
    root `Cargo.lock`, and merge to `main`.
-2. Run **Actions → Release workspace plugins** in `PrajaNova/avm`, selecting the plugin
-   and version, or:
-   `gh workflow run release-plugins.yml -R PrajaNova/avm -f plugin=node -f version=0.3.2`.
+2. Run the matching workflow in `PrajaNova/avm`:
+   **Actions → Release node plugin / Release java plugin / Release android
+   plugin → Run workflow**, or:
+   `gh workflow run release-node-plugin.yml -R PrajaNova/avm -f version=0.3.2`
+   (swap `node` for `java`/`android` in the workflow name as needed).
 3. After the release succeeds, update that plugin's marketplace entry:
 
    ```json
@@ -74,8 +76,9 @@ field and cannot install plugins from the shared repository: upgrade AVM
 before using the switched entries. Existing installed plugins keep working;
 `avm plugin update` uses the current registry entry.
 
-The original local checkouts were preserved. Once the workspace is merged
-and releases are migrated, the old repositories can be archived.
+The old `avm-plugin-node`/`avm-plugin-java`/`avm-plugin-android` repositories
+have been deleted now that their code and release history live in this
+workspace.
 
 ## Third-party plugins
 
@@ -85,15 +88,11 @@ tags and stable releases.
 
 ## Marketplace site
 
-**Actions → Deploy Documentation & Marketplace to GitHub Pages → Run
-workflow** in `PrajaNova/avm`, or run
-`gh workflow run deploy.yml -R PrajaNova/avm`. Merging to `main` doesn't
-deploy. Enable **Settings → Pages → Source → GitHub Actions** in this
-repository before the first deployment. The site builds from `marketplace/`
-and publishes at `https://prajanova.github.io/avm/`.
+**Actions → Release web (marketplace) → Run workflow** in `PrajaNova/avm`,
+or run `gh workflow run release-web.yml -R PrajaNova/avm`. Merging to
+`main` doesn't deploy. Enable **Settings → Pages → Source → GitHub
+Actions** in this repository before the first deployment. The site builds
+from `marketplace/` and publishes at `https://prajanova.github.io/avm/`.
 
-Merge `marketplace/registry.json` before releasing a CLI that reads the new
-registry URL. Existing CLI releases still read the old marketplace repository:
-keep its registry available and synchronized until those clients upgrade.
-The original local marketplace checkout and its Git history are preserved;
-archive the old repository only after the site and registry migration.
+The old `avm-marketplace` repository has been deleted; `marketplace/registry.json`
+in this repo is now the only copy CLI releases read.

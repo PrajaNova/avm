@@ -1,0 +1,28 @@
+name: Release android plugin
+run-name: Release android plugin v${{ inputs.version }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version matching plugins/avm-plugin-android/Cargo.toml (without v)"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+  id-token: write
+  attestations: write
+
+concurrency:
+  group: release-plugin-android
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    uses: ./.github/workflows/plugin-release.yml
+    with:
+      plugin: android
+      version: ${{ inputs.version }}
+      windows: true
+    secrets: inherit

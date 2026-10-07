@@ -50,7 +50,8 @@ $_avmSep = [IO.Path]::PathSeparator
 $env:PATH = (@($env:AVM_SHIM_DIR) + @($env:PATH -split [regex]::Escape($_avmSep) | Where-Object { $_ -and $_ -ne $env:AVM_SHIM_DIR })) -join $_avmSep
 
 function global:_avm_apply_env {
-  try { (& avm-bin env --shell pwsh 2>$null) -join "`n" | Invoke-Expression } catch {}
+  $_avmEnv = (& avm-bin env --shell pwsh 2>$null) -join "`n"
+  if ($_avmEnv) { try { Invoke-Expression $_avmEnv } catch {} }
 }
 _avm_apply_env
 
@@ -164,4 +165,23 @@ pub fn sh_quote(value: &str) -> String {
         return value.to_string();
     }
     format!("'{}'", value.replace('\'', "'\\''"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // Regression: piping empty `avm-bin env` output straight into
+    // Invoke-Expression throws (it rejects an empty -Command), and that
+    // error isn't caught by try/catch since it's a pipeline binding error,
+    // not a thrown exception — breaks shell-init on every fresh install.
+    #[test]
+    fn pwsh_init_guards_against_empty_env_output() {
+        let script = pwsh_init_script();
+        assert!(
+            !script.contains("Invoke-Expression }"),
+            "must not pipe `avm-bin env` output directly into Invoke-Expression"
+        );
+        assert!(script.contains("if ($_avmEnv)"));
+    }
 }

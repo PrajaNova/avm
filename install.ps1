@@ -46,12 +46,17 @@ try {
         [Environment]::SetEnvironmentVariable('PATH', "$bin;$userPath", 'User')
     }
     $line = 'Invoke-Expression ((& avm-bin shell-init pwsh) -join "`n")'
-    if (-not (Test-Path $PROFILE) -or -not (Select-String -Path $PROFILE -SimpleMatch $line -Quiet)) {
-        New-Item -ItemType Directory -Force (Split-Path $PROFILE) | Out-Null
-        New-Item -ItemType File -Force $PROFILE | Out-Null
-        Add-Content $PROFILE "`n# avm`n$line"
+    try {
+        if (-not (Test-Path $PROFILE) -or -not (Select-String -Path $PROFILE -SimpleMatch $line -Quiet)) {
+            New-Item -ItemType Directory -Force (Split-Path $PROFILE) -ErrorAction Stop | Out-Null
+            New-Item -ItemType File -Force $PROFILE -ErrorAction Stop | Out-Null
+            Add-Content $PROFILE "`n# avm`n$line"
+        }
+        Write-Host "Installed avm-bin to $bin. Open a new PowerShell window to start using avm."
+    } catch {
+        Write-Warning "avm-bin installed to $bin, but couldn't update your PowerShell profile ($PROFILE): $_"
+        Write-Warning "Add this line to your profile manually, or run it each new session:`n  $line"
     }
-    Write-Host "Installed avm-bin to $bin. Open a new PowerShell window to start using avm."
 } finally {
     Remove-Item -Recurse -Force $tmp
 }

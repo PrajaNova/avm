@@ -6,9 +6,16 @@ The format follows Keep a Changelog style, and releases use semantic versioning.
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-10-07
+
+### Changed
 - The documentation site and plugin registry now live in `marketplace/` in this repository. The CLI reads the new registry path, and the manual Pages workflow publishes the site at `https://prajanova.github.io/avm/`.
 
-- First-party Node, Java and Android plugins now share the AVM Cargo workspace under `plugins/`, with local API dependencies and independent namespaced releases published to `PrajaNova/avm` through the manual **Release workspace plugins** workflow. Marketplace entries can select a release with `release_tag`.
+- First-party Node, Java and Android plugins now share the AVM Cargo workspace under `plugins/`, with local API dependencies and independent namespaced releases published to `PrajaNova/avm` through the **Release node/java/android plugin** workflows. Marketplace entries can select a release with `release_tag`.
+
+### Fixed
+- Windows `shell-init`: `avm-bin env --shell pwsh` returning nothing (normal when no tool needs env vars yet) crashed shell setup on every fresh install — an empty string piped into `Invoke-Expression` threw a pipeline binding error that bypassed the surrounding try/catch.
+- `install.ps1`: creating the PowerShell profile failed when its parent directory didn't exist yet; profile setup failures no longer abort the install (the binary is already in place and on PATH by that point).
 
 ## [0.4.0] - 2026-09-29
 

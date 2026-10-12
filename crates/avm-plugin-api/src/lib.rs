@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+pub mod download;
 use std::{collections::HashMap, path::PathBuf};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -200,17 +201,21 @@ pub fn sha256_file(path: &std::path::Path) -> anyhow::Result<String> {
 /// output: `<hex>  <name>` or `<hex> *<name>` per line). Returns the hash on
 /// a match; errors if `name` is unlisted or the hash differs.
 pub fn verify_sha256(path: &std::path::Path, checksums: &str, name: &str) -> anyhow::Result<String> {
-    let expected = checksums
-        .lines()
-        .filter_map(|line| line.split_once(char::is_whitespace))
-        .find(|(_, file)| file.trim_start().trim_start_matches('*') == name)
-        .map(|(hash, _)| hash.to_ascii_lowercase())
-        .ok_or_else(|| anyhow::anyhow!("checksums file has no entry for {name}"))?;
+    let expected = checksum_for(checksums, name)?;
     let actual = sha256_file(path)?;
     if actual != expected {
         anyhow::bail!("checksum mismatch for {name}\n  expected {expected}\n  got      {actual}");
     }
     Ok(actual)
+}
+
+pub fn checksum_for(checksums: &str, name: &str) -> anyhow::Result<String> {
+    checksums
+        .lines()
+        .filter_map(|line| line.split_once(char::is_whitespace))
+        .find(|(_, file)| file.trim_start().trim_start_matches('*') == name)
+        .map(|(hash, _)| hash.to_ascii_lowercase())
+        .ok_or_else(|| anyhow::anyhow!("checksums file has no entry for {name}"))
 }
 
 /// Wire responses a plugin process prints as one JSON document on stdout for
@@ -220,6 +225,24 @@ pub fn verify_sha256(path: &std::path::Path, checksums: &str, name: &str) -> any
 /// and signal success/failure via exit code instead).
 pub mod protocol {
     use super::*;
+
+    #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+    pub struct LockedAsset {
+        pub url: String,
+        pub sha256: String,
+    }
+
+    #[derive(Debug, Serialize, Deserialize)]
+    pub struct ResolveRequest {
+        pub version: String,
+        pub platforms: Vec<String>,
+    }
+
+    #[derive(Debug, Serialize, Deserialize)]
+    pub struct ResolveResponse {
+        pub version: String,
+        pub assets: std::collections::BTreeMap<String, LockedAsset>,
+    }
 
     #[derive(Debug, Clone, Serialize, Deserialize)]
     pub struct VersionsResponse {
@@ -260,6 +283,13 @@ pub trait ToolProvider: Send + Sync {
     }
     fn install(&self, version: &str) -> anyhow::Result<()>;
     fn uninstall(&self, version: &str) -> anyhow::Result<()>;
+    /// Optional reproducible-download capability; older plugins keep working.
+    fn resolve_downloads(&self, _version: &str, _platforms: &[String]) -> anyhow::Result<protocol::ResolveResponse> {
+        anyhow::bail!("{} does not support lockfiles; update the plugin or install without a lockfile", self.name())
+    }
+    fn install_locked(&self, _version: &str, _asset: &protocol::LockedAsset) -> anyhow::Result<()> {
+        anyhow::bail!("{} does not support locked installs; update the plugin", self.name())
+    }
 }
 
 /// Shared CLI dispatch for a plugin executable's `main.rs`. Every plugin
@@ -318,6 +348,15 @@ pub mod runner {
                 })
             }
             "install" => provider.install(require_version(rest)?),
+            "resolve" => {
+                let request: protocol::ResolveRequest = serde_json::from_str(require_version(rest)?)?;
+                print_json(&provider.resolve_downloads(&request.version, &request.platforms)?)
+            }
+            "install-locked" => {
+                let version = require_version(rest)?;
+                let asset = rest.get(1).ok_or_else(|| anyhow::anyhow!("locked asset JSON required"))?;
+                provider.install_locked(version, &serde_json::from_str(asset)?)
+            }
             "uninstall" => provider.uninstall(require_version(rest)?),
             other => Err(anyhow::anyhow!("unknown plugin command: {other}")),
         }

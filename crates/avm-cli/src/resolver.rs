@@ -105,6 +105,14 @@ pub fn load(
     home: &Path,
     plugin_aliases: HashMap<String, ResolvedAlias>,
 ) -> anyhow::Result<ResolvedConfig> {
+    let mut cfg = load_unlocked(cwd, home, plugin_aliases)?;
+    if let Some(lock) = crate::lockfile::load(cwd)? {
+        lock.apply(&mut cfg)?;
+    }
+    Ok(cfg)
+}
+
+pub fn load_unlocked(cwd: &Path, home: &Path, plugin_aliases: HashMap<String, ResolvedAlias>) -> anyhow::Result<ResolvedConfig> {
     let mut local = crate::config::load(cwd)?;
     let global = crate::config::load(home)?;
     let local_file = cwd.join(crate::config::CONFIG_FILE);

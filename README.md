@@ -63,6 +63,20 @@ These commands inherit trusted project env and provider vars, prepend the
 selected tools to PATH, and leave `.avm.json` and lockfiles unchanged. The shell
 hook forwards `exec` and `x` directly to the CLI.
 
+Install every tool selected by project, version-file and global pins:
+
+```bash
+avm install
+avm lock --platform linux_amd64,darwin_arm64,windows_amd64
+avm install --frozen       # CI: require the committed lockfile to match config
+```
+
+Commit `.avm.lock` to keep fuzzy versions on the same exact release. Locking
+fetches download metadata without installing; locked downloads always verify
+their SHA-256. A stale lock fails with instructions to run `avm lock`.
+Node and Java support lockfiles with the updated plugins. Android and legacy
+asdf plugins support ordinary `avm install`, but cannot yet be locked.
+
 ## Learn more
 
 - [Getting started](https://prajanova.github.io/avm/#/docs/guide/getting-started) · [All commands](https://prajanova.github.io/avm/#/docs/manage/commands) · [Configuration](https://prajanova.github.io/avm/#/docs/manage/configuration)

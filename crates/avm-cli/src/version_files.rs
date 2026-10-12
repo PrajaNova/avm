@@ -148,7 +148,7 @@ pub(crate) fn numbers(name: &str) -> Option<Vec<u64>> {
 }
 
 /// The `+N` build number (Java), 0 when there is none.
-fn build(name: &str) -> u64 {
+pub(crate) fn build(name: &str) -> u64 {
     name.split_once('+').and_then(|(_, b)| b.split(|c: char| !c.is_ascii_digit()).next()?.parse().ok()).unwrap_or(0)
 }
 

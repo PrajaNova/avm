@@ -33,15 +33,15 @@ fn cmd_provider_tool(
             use_provider_version(provider_name, provider.as_ref(), version, true)
         }
         [cmd, version] if cmd == "install" => {
-            let resolved = resolve_version_spec(provider.as_ref(), version)?;
+            let resolved = resolve_install_version(provider.as_ref(), version)?;
             install_and_pin(provider_name, provider.as_ref(), &resolved, PinScope::Auto)
         }
         [cmd, version, flag] if cmd == "install" && (flag == "--global" || flag == "-g") => {
-            let resolved = resolve_version_spec(provider.as_ref(), version)?;
+            let resolved = resolve_install_version(provider.as_ref(), version)?;
             install_and_pin(provider_name, provider.as_ref(), &resolved, PinScope::GlobalOnly)
         }
         [cmd, version, flag] if cmd == "install" && flag == "--no-pin" => {
-            let resolved = resolve_version_spec(provider.as_ref(), version)?;
+            let resolved = resolve_install_version(provider.as_ref(), version)?;
             install_and_pin(provider_name, provider.as_ref(), &resolved, PinScope::None)
         }
         [cmd, version] if cmd == "uninstall" => {
@@ -182,7 +182,7 @@ fn install_and_pin(
     scope: PinScope,
 ) -> Result<()> {
     if !provider.is_installed(version) {
-        provider.install(version)?;
+        install_provider_version(provider, version)?;
     }
     shims::reshim()?;
     match scope {
@@ -207,6 +207,15 @@ fn install_and_pin(
     }
     warn_if_shim_is_not_preferred(provider_name);
     Ok(())
+}
+
+fn resolve_install_version(provider: &dyn ToolProvider, spec: &str) -> Result<String> {
+    if let Some(lock) = crate::lockfile::load(&std::env::current_dir()?)? {
+        if let Some(entry) = lock.tools.get(provider.name()).filter(|entry| entry.requested == spec.trim()) {
+            return Ok(entry.resolved.clone());
+        }
+    }
+    resolve_version_spec(provider, spec)
 }
 
 /// Translate a user-supplied version spec into a concrete version string.
@@ -292,7 +301,7 @@ pub fn ensure_provider_version_installed(
     }
 
     println!("Installing {provider_name} {version}...");
-    provider.install(version)?;
+    install_provider_version(provider, version)?;
     println!("✓ Installed {provider_name} {version}");
     Ok(())
 }

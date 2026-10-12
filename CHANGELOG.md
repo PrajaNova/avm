@@ -8,6 +8,7 @@ The format follows Keep a Changelog style, and releases use semantic versioning.
 
 ### Added
 - `avm exec` (alias `avm x`) runs commands with temporary `tool@version` selections, auto-installing missing runtimes without changing pins or lockfiles. `avm run --with` applies the same overrides to aliases; `--no-install` uses installed versions only.
+- `avm install` installs all selected tools without rewriting pins. `avm lock` writes sorted exact versions, plugin identities and per-platform download checksums to `.avm.lock`; `avm install --frozen` rejects missing or stale locks. Node and Java plugins support verified locked downloads; Android and legacy asdf plugins remain available through ordinary installs.
 
 ## [0.4.1] - 2026-10-07
 

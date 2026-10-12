@@ -86,6 +86,20 @@ Env:
     example: 'avm run dev --with node@18 -- --port 3000'
   },
   {
+    command: 'avm install',
+    args: '[--frozen]',
+    category: 'Core',
+    description: 'Installs every selected tool without changing pins. Uses exact versions and verified downloads when .avm.lock exists. --frozen requires an up-to-date lock with an asset for this platform.',
+    example: 'avm install --frozen'
+  },
+  {
+    command: 'avm lock',
+    args: '[--platform linux_amd64,darwin_arm64,windows_amd64]',
+    category: 'Core',
+    description: 'Writes sorted exact versions, plugin identities and per-platform SHA-256 checksums to .avm.lock without installing runtimes. Requires updated native Node or Java plugins; Android and asdf support unlocked installs only.',
+    example: 'avm lock --platform linux_amd64,darwin_arm64'
+  },
+  {
     command: 'avm env',
     args: '[--shell sh|pwsh|cmd]',
     category: 'Env',

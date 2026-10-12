@@ -122,6 +122,8 @@ fn parse_env_value(value: &str) -> String {
 fn run(cli: Cli) -> Result<()> {
     match cli.command {
         Commands::Init => cmd_init(),
+        Commands::Install { frozen } => cmd_install(frozen),
+        Commands::Lock { platform } => cmd_lock(platform),
         Commands::Add(args) => cmd_add(args),
         Commands::Remove(args) => cmd_remove(args),
         Commands::List => cmd_list(),

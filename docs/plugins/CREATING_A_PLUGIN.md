@@ -93,6 +93,22 @@ success purely via exit code — no JSON envelope for those two.
 | `env-vars` | `<version>` | `{"env": {string: string}}` |
 | `install` | `<version>` | *(no JSON — stdio inherited, exit code only)* |
 | `uninstall` | `<version>` | *(no JSON — stdio inherited, exit code only)* |
+| `resolve` (optional) | One JSON argument: `{"version":"20.11.1","platforms":["linux_amd64","darwin_arm64"]}` | `{"version":"20.11.1","assets":{"linux_amd64":{"url":"https://…","sha256":"…"},"darwin_arm64":{"url":"https://…","sha256":"…"}}}` |
+| `install-locked` (optional) | `<version> <asset-json>`; asset has `url` and `sha256` | *(no JSON — stdio inherited, exit code only)* |
+
+For lockfiles, implement `ToolProvider::resolve_downloads` and
+`ToolProvider::install_locked`. The host resolves fuzzy selections first, so
+`resolve` receives an exact release and must return exactly the requested
+platforms without installing anything. Platform names use `darwin`, `linux`
+or `windows` and `amd64` or `arm64`, joined with `_`. Unsupported platforms or
+missing checksums must fail instead of returning unverified assets.
+
+The host verifies a locked archive before passing an absolute local archive
+path in `install-locked`'s asset JSON. Use
+`avm_plugin_api::download::download_verified` to copy and reverify it before
+extraction; this path never honors `AVM_ALLOW_UNVERIFIED`. Keep the existing
+installer's staging, error handling and final layout. Older plugins retain
+ordinary installs through default methods that reject lockfile operations.
 
 A minimal manual test without `avm` involved at all:
 

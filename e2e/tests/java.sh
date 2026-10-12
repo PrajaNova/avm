@@ -6,7 +6,7 @@ P="$W/project"
 check_aliases_and_env "$W" "$P"
 
 log "java: plugin"
-expect_ok "avm plugin add java (sha256-verified)" avm plugin add java
+expect_ok "install java plugin under test" install_test_plugin java
 
 log "java: global 17 (install -g), local 21"
 expect_ok "avm java install 17 -g" avm java install 17 -g

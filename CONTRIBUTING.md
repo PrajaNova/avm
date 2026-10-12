@@ -65,6 +65,15 @@ Ubuntu container (`--rm`), installing avm with this repo's `install.sh`:
 `e2e/run.sh shell` opens the clean container. `e2e/windows.ps1` is the
 Windows suite (CI's `windows` job). CI runs both on every PR.
 
+Local and Windows suites install first-party plugin binaries built from the
+checkout. The release target continues to test published plugins. Rust CI runs
+on Linux, macOS and Windows; `cargo build --workspace && cargo test --workspace`
+also exercises native Node/Java locks with tiny local archives (ZIP on Windows),
+an offline frozen install, plugin fingerprint mismatch and archive tampering.
+The metadata fixture binds a local loopback port. State locking requires Rust
+1.89 or newer. The live download suites require network access and can take up
+to an hour, especially Android.
+
 ## Pull requests
 
 Before opening a PR, run:

@@ -191,3 +191,23 @@ fn untrusted_tool_pins_cannot_escape_managed_directories() {
         assert!(String::from_utf8_lossy(&out.stderr).contains("invalid version spec"));
     }
 }
+
+#[cfg(unix)]
+#[test]
+fn managed_package_binaries_can_have_dotted_names() {
+    use std::os::unix::fs::PermissionsExt;
+    let p = Project::new();
+    let bin = p.0.join("home/.avm/tools/node/20.1.0/bin");
+    let plugin = p.0.join("home/.avm/plugins/avm-plugin-node/bin");
+    fs::create_dir_all(&bin).unwrap();
+    fs::create_dir_all(&plugin).unwrap();
+    for (file, script) in [(bin.join("foo.bar"), "#!/bin/sh\necho managed-package\n"),
+        (plugin.join("avm-plugin"), "#!/bin/sh\necho '{\"env\":{}}'\n")] {
+        fs::write(&file, script).unwrap();
+        fs::set_permissions(file, fs::Permissions::from_mode(0o755)).unwrap();
+    }
+    fs::write(p.0.join("project/.avm.json"), r#"{"tools":{"node":"20.1.0"}}"#).unwrap();
+    let out = p.run(&["exec-shim", "foo.bar"]);
+    assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+    assert_eq!(out.stdout, b"managed-package\n");
+}

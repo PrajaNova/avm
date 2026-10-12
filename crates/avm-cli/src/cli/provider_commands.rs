@@ -218,45 +218,9 @@ fn resolve_install_version(provider: &dyn ToolProvider, spec: &str) -> Result<St
     resolve_version_spec(provider, spec)
 }
 
-/// Translate a user-supplied version spec into a concrete version string.
-/// Supports `latest`, `lts[/channel]`, `<major>`, or a literal version.
+/// Resolve install, use and temporary exec specs with the lockfile's matcher.
 pub fn resolve_version_spec(provider: &dyn ToolProvider, spec: &str) -> Result<String> {
-    let trimmed = spec.trim();
-    if trimmed.is_empty() {
-        return Err(anyhow!("version required"));
-    }
-    if trimmed == "lts" || trimmed.starts_with("lts/") {
-        let channel = trimmed.strip_prefix("lts/").filter(|s| *s != "*");
-        return provider.available_versions(ToolVersionQuery::Recent)?
-            .into_iter()
-            .find(|v| v.is_lts && channel.is_none_or(|c| v.channel.as_deref().is_some_and(|name| name.eq_ignore_ascii_case(c))))
-            .map(|v| v.version)
-            .ok_or_else(|| anyhow!("no versions matching {trimmed}"));
-    }
-    if trimmed == "latest" {
-        let versions = provider
-            .available_versions(ToolVersionQuery::Latest)
-            .context("failed to fetch latest version")?;
-        let pick = versions
-            .into_iter()
-            .next()
-            .ok_or_else(|| anyhow!("no remote versions available"))?;
-        eprintln!("Resolved latest → {}", pick.version);
-        return Ok(pick.version);
-    }
-    // Bare major like "20"
-    if let Ok(major) = trimmed.trim_start_matches('v').parse::<u64>() {
-        let versions = provider
-            .available_versions(ToolVersionQuery::Major(major))
-            .context("failed to fetch versions for major")?;
-        if let Some(pick) = versions.into_iter().next() {
-            eprintln!("Resolved {trimmed} → {}", pick.version);
-            return Ok(pick.version);
-        }
-        // Fall through with the literal value so the provider can complain
-        // with its own error.
-    }
-    Ok(trimmed.to_string())
+    crate::lockfile::resolve_spec(provider, spec.trim())
 }
 
 fn global_pin(tool: &str) -> Result<Option<String>> {
@@ -284,9 +248,10 @@ fn use_provider_version(
     version: &str,
     global: bool,
 ) -> Result<()> {
-    ensure_provider_version_installed(provider_name, provider, version)?;
+    let version = resolve_install_version(provider, version)?;
+    ensure_provider_version_installed(provider_name, provider, &version)?;
     shims::reshim()?;
-    set_tool_version(provider_name, version, global)?;
+    set_tool_version(provider_name, &version, global)?;
     warn_if_shim_is_not_preferred(provider_name);
     Ok(())
 }

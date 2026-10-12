@@ -203,4 +203,10 @@ fn temporary_versions_install_execute_and_leave_pins_unchanged() {
             "{file} changed"
         );
     }
+    assert_eq!(stdout(project.run(&["exec", "node@18.1", "--", "node"], true)), "node-18.1.0\n");
+    fs::remove_file(project.0.join("project/.avm.lock")).unwrap();
+    assert!(project.run(&["node", "use", "18.1"], true).status.success());
+    let cfg: serde_json::Value = serde_json::from_slice(&fs::read(project.0.join("project/.avm.json")).unwrap()).unwrap();
+    assert_eq!(cfg["tools"]["node"], "18.1.0");
+
 }

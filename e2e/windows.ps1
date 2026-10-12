@@ -65,9 +65,9 @@ try {
     Check 'launcher preserves quoted arguments' {
         (Out { cmd /d /c 'avm which "not a real avm alias"' }) -eq "No mapping found for 'not a real avm alias'."
     }
-    Check 'launcher preserves the command exit code' {
-        cmd /d /c 'avm exec --no-install -- cmd /d /c exit 7' | Out-Null
-        $LASTEXITCODE -eq 7
+    Check 'launcher preserves a nonzero CLI exit code' {
+        cmd /d /c 'avm --not-a-real-option' 2>&1 | Out-Null
+        $LASTEXITCODE -eq 2
     }
 } finally { $env:PATH = $savedPath; Pop-Location }
 

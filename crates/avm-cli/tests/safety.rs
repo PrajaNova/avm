@@ -27,6 +27,20 @@ impl Drop for Project {
 }
 
 #[test]
+fn removal_commands_reject_paths_without_deleting_them() {
+    let p = Project::new();
+    let victim = p.0.join("victim");
+    fs::create_dir(&victim).unwrap();
+    fs::write(victim.join("keep"), "important").unwrap();
+    for name in [victim.to_str().unwrap(), "../victim"] {
+        assert!(!p.run(&["plugin", "remove", name]).status.success());
+        assert!(!p.run(&["plugin", "update", name]).status.success());
+        assert!(!p.run(&["shims", "remove", name]).status.success());
+        assert_eq!(fs::read_to_string(victim.join("keep")).unwrap(), "important");
+    }
+}
+
+#[test]
 fn untrusted_tool_pins_cannot_escape_managed_directories() {
     let p = Project::new();
     for spec in [p.0.to_string_lossy().to_string(), "../payload".into(), "C:\\payload".into()] {

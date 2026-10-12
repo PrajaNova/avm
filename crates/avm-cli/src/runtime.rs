@@ -145,6 +145,7 @@ impl PluginManager {
     }
 
     pub fn remove_plugin(&self, name: &str) -> Result<()> {
+        avm_plugin_api::validate_name(name)?;
         if let Some((_, target)) = self.find_any(name) {
             fs::remove_dir_all(target).context("remove plugin")?;
         }
@@ -159,6 +160,7 @@ impl PluginManager {
     ///   - a git-cloned plugin (asdf-style or otherwise) does `git pull`.
     ///   - anything else (a local, non-git source) has nothing to update.
     pub fn update_plugin(&self, name: &str) -> Result<()> {
+        avm_plugin_api::validate_name(name)?;
         let (dir_name, target) = self
             .find_any(name)
             .ok_or_else(|| anyhow!("plugin '{}' not found", name))?;

@@ -123,6 +123,7 @@ mod path_tests {
         for name in ["", ".", "..", "/tmp/payload", "../node", "C:\\payload"] {
             assert!(super::validate_name(name).is_err());
             assert!(super::download::validate_version(name).is_err());
+            assert!(super::remove_version("node", name).is_err());
         }
         for spec in ["/tmp/payload", "../payload", "C:\\payload"] {
             assert!(super::validate_version_spec(spec).is_err());
@@ -151,6 +152,7 @@ pub fn list_installed(tool: &str, is_installed: impl Fn(&str) -> bool) -> anyhow
 }
 
 pub fn remove_version(tool: &str, version: &str) -> anyhow::Result<()> {
+    download::validate_version(version)?;
     let target = tool_dir(tool)?.join(version);
     if target.exists() {
         std::fs::remove_dir_all(&target)

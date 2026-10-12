@@ -153,6 +153,7 @@ pub fn activate_profiles() -> Result<Vec<PathBuf>> {
 }
 
 pub fn remove_shim(tool: &str) -> Result<()> {
+    avm_plugin_api::validate_name(tool)?;
     for name in [tool.to_string(), format!("{tool}.cmd"), format!("{tool}.exe")] {
         let path = shim_dir()?.join(name);
         if path.exists() {

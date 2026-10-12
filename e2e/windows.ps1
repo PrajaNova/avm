@@ -21,7 +21,12 @@ Compress-Archive -Force -Path target/release/avm-bin.exe -DestinationPath "$dist
 $h = (Get-FileHash "$dist\avm_windows_amd64.zip" -Algorithm SHA256).Hash.ToLower()
 "$h  avm_windows_amd64.zip" | Set-Content "$dist\checksums.txt"
 $env:AVM_DOWNLOAD_BASE = $dist
+$PROFILE = Join-Path $env:RUNNER_TEMP 'avm-profile.ps1'
+"# existing user customization" | Set-Content $PROFILE
 & ./install.ps1
+Check 'installer preserves existing profile content' { (Get-Content $PROFILE -Raw).Contains('# existing user customization') }
+& ./install.ps1
+Check 'reinstall adds the profile hook only once' { @(Select-String -Path $PROFILE -SimpleMatch 'shell-init pwsh').Count -eq 1 }
 $env:PATH = "$env:LOCALAPPDATA\avm\bin;$env:PATH"
 Check 'avm-bin.exe installed' { Test-Path "$env:LOCALAPPDATA\avm\bin\avm-bin.exe" }
 Check 'profile hook written' { (Get-Content $PROFILE -Raw) -match 'shell-init pwsh' }

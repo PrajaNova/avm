@@ -5,6 +5,11 @@ version files and global pins, with the existing local-first precedence.
 It does not create pins or change `.avm.json`. Java installs before other tools
 so a selected Android SDK can use the managed JDK.
 
+Project locks contain only local `.avm.json` tools and project version-file
+selections. Personal global pins are neither locked nor installed by a frozen
+install; changing them does not invalidate the project lock. Unlocked installs
+continue to include global selections.
+
 ```bash
 avm lock
 avm lock --platform linux_amd64,darwin_arm64,windows_amd64

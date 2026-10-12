@@ -33,14 +33,9 @@ pub struct PluginPin {
 }
 
 pub fn requested_tools(cfg: &ResolvedConfig) -> BTreeMap<String, String> {
-    let mut tools: BTreeMap<_, _> = cfg.global_tool_specs.clone().into_iter().collect();
-    for (tool, version) in &cfg.local_tools {
-        tools.insert(
-            tool.clone(),
-            cfg.tool_specs.get(tool).unwrap_or(version).clone(),
-        );
-    }
-    tools
+    cfg.local_tools.iter().map(|(tool, version)| {
+        (tool.clone(), cfg.tool_specs.get(tool).unwrap_or(version).clone())
+    }).collect()
 }
 
 pub fn load(dir: &Path) -> Result<Option<Lockfile>> {
@@ -140,8 +135,6 @@ impl Lockfile {
         self.validate_config(cfg)?;
         for (tool, entry) in &self.tools {
             if let Some(version) = cfg.local_tools.get_mut(tool) {
-                *version = entry.resolved.clone();
-            } else if let Some(version) = cfg.global_tools.get_mut(tool) {
                 *version = entry.resolved.clone();
             }
         }

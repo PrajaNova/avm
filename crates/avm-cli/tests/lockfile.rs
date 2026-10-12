@@ -123,6 +123,26 @@ fn failure(output: Output, expected: &str) {
 #[test]
 fn locks_installs_and_rejects_drift_before_installing() {
     let project = Project::new();
+    // A teammate's home pins must not enter or invalidate this project's lock.
+    success(project.run(&["lock"]));
+    let local_lock = fs::read(project.0.join("project/.avm.lock")).unwrap();
+    assert_eq!(project.lock()["tools"].as_object().unwrap().len(), 1);
+    assert!(project.lock()["tools"].get("java").is_none());
+    fs::write(project.0.join("home/.avm.json"), r#"{"tools":{"java":"17","node":"99"}}"#).unwrap();
+    success(project.run(&["install", "--frozen"]));
+    assert!(success(project.run(&["which", "node"])).contains("20.2.0"));
+    assert!(!project.0.join("home/.avm/tools/java").exists());
+    success(project.run(&["node", "use", "22.0.0", "--global"]));
+    success(project.run(&["install", "--frozen"]));
+    assert!(success(project.run(&["which", "node"])).contains("20.2.0"));
+    fs::write(project.0.join("home/.avm.json"), "{}").unwrap();
+    success(project.run(&["install", "--frozen"]));
+    assert_eq!(fs::read(project.0.join("project/.avm.lock")).unwrap(), local_lock);
+    fs::remove_dir_all(project.0.join("home/.avm/tools")).unwrap();
+    fs::remove_file(project.0.join("installs")).unwrap();
+    fs::remove_file(project.0.join("project/.avm.lock")).unwrap();
+    fs::write(project.0.join("home/.avm.json"), r#"{"tools":{"java":"21"}}"#).unwrap();
+    fs::write(project.0.join("project/.avm.json"), r#"{"tools":{"node":"20","java":"21"}}"#).unwrap();
     let config = fs::read(project.0.join("project/.avm.json")).unwrap();
     let global = fs::read(project.0.join("home/.avm.json")).unwrap();
     failure(project.run(&["install", "--frozen"]), "requires .avm.lock");
@@ -153,6 +173,7 @@ fn locks_installs_and_rejects_drift_before_installing() {
     assert!(success(project.run(&["which", "node"])).contains("20.2.0"));
     fs::create_dir(project.0.join("project/child")).unwrap();
     fs::write(project.0.join("project/.nvmrc"), "20\n").unwrap();
+    fs::write(project.0.join("project/.tool-versions"), "java 21\n").unwrap();
     assert!(success(project.run_in(&["which", "node"], "project/child")).contains("20.2.0"));
     success(project.run(&["install", "--frozen"]));
     let installs = fs::read(project.0.join("installs")).unwrap();

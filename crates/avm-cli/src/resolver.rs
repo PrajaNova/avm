@@ -116,15 +116,18 @@ pub fn load(
     if let Some(lock) = crate::lockfile::load(cwd)? {
         lock.apply(&mut cfg)?;
     } else {
-        for (tool, version) in cfg.local_tools.iter_mut().chain(cfg.global_tools.iter_mut()) {
+        for (tool, version) in &mut cfg.local_tools {
             *version = crate::version_files::resolve(tool, version);
         }
+    }
+    for (tool, version) in &mut cfg.global_tools {
+        *version = crate::version_files::resolve(tool, version);
     }
     Ok(cfg)
 }
 
 pub fn load_unlocked(cwd: &Path, home: &Path, plugin_aliases: HashMap<String, ResolvedAlias>) -> anyhow::Result<ResolvedConfig> {
-    let mut local = crate::config::load(cwd)?;
+    let mut local = if cwd == home { crate::config::ConfigLoadResult::default() } else { crate::config::load(cwd)? };
     let global = crate::config::load(home)?;
     let local_file = cwd.join(crate::config::CONFIG_FILE);
     let untrusted = (local_file.exists() && !crate::trust::is_trusted(&local_file, &global.trusted_paths))

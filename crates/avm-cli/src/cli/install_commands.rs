@@ -108,8 +108,14 @@ pub fn cmd_install(frozen: bool) -> Result<()> {
     }
     let platform = host_platform()?;
     let mut plan = Vec::new();
+    let mut requested = lockfile::requested_tools(&cfg);
+    if lock.is_none() {
+        for (tool, spec) in &cfg.global_tool_specs {
+            requested.entry(tool.clone()).or_insert_with(|| spec.clone());
+        }
+    }
     // Validate the whole plan before downloading or installing any tool.
-    for (tool, requested) in lockfile::requested_tools(&cfg) {
+    for (tool, requested) in requested {
         lockfile::validate_tool(&tool)?;
         let provider = provider_by_name(&tool)?;
         let (version, asset) = if let Some(lock) = &lock {

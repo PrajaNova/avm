@@ -99,7 +99,38 @@ pub fn home_dir() -> anyhow::Result<PathBuf> {
 
 /// `~/.avm/tools/<tool>` — where every provider keeps `<version>/` dirs.
 pub fn tool_dir(tool: &str) -> anyhow::Result<PathBuf> {
+    validate_name(tool)?;
     Ok(home_dir()?.join(".avm").join("tools").join(tool))
+}
+
+/// Names used as managed directory or executable names cannot contain paths.
+pub fn validate_name(name: &str) -> anyhow::Result<()> {
+    anyhow::ensure!(!name.is_empty() && name.bytes().all(|c| c.is_ascii_alphanumeric() || c == b'-' || c == b'_'), "invalid managed name: {name}");
+    Ok(())
+}
+
+pub fn validate_version_spec(spec: &str) -> anyhow::Result<()> {
+    let selector = spec.strip_prefix("lts/").unwrap_or(spec);
+    anyhow::ensure!(!selector.is_empty() && selector != "." && selector != ".."
+        && !selector.contains(['/', '\\', ':', '\0']), "invalid version spec: {spec}");
+    Ok(())
+}
+
+#[cfg(test)]
+mod path_tests {
+    #[test]
+    fn managed_paths_reject_untrusted_components() {
+        for name in ["", ".", "..", "/tmp/payload", "../node", "C:\\payload"] {
+            assert!(super::validate_name(name).is_err());
+            assert!(super::download::validate_version(name).is_err());
+        }
+        for spec in ["/tmp/payload", "../payload", "C:\\payload"] {
+            assert!(super::validate_version_spec(spec).is_err());
+        }
+        for spec in ["20", ">=18 <21", "lts/*", "lts/iron"] {
+            assert!(super::validate_version_spec(spec).is_ok());
+        }
+    }
 }
 
 /// Sorted version dirs under `tool_dir(tool)` that pass `is_installed`.

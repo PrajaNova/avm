@@ -139,6 +139,10 @@ pub fn load_unlocked(cwd: &Path, home: &Path, plugin_aliases: HashMap<String, Re
         local_tools.insert(tool, version);
     }
 
+    for (tool, spec) in local_tools.iter().chain(global.tools.iter()) {
+        avm_plugin_api::validate_name(tool)?;
+        avm_plugin_api::validate_version_spec(spec)?;
+    }
     Ok(ResolvedConfig {
         local_aliases: local.aliases,
         global_aliases: global.aliases,

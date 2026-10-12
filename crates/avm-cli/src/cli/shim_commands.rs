@@ -177,6 +177,8 @@ fn resolved_tool_path_prefix(cfg: &ResolvedConfig) -> Option<String> {
 }
 
 fn managed_tool_bin_path(tool: &str, version: &str, binary: &str) -> Option<PathBuf> {
+    avm_plugin_api::download::validate_version(version).ok()?;
+    avm_plugin_api::download::validate_version(binary).ok()?;
     let bin = avm_plugin_api::tool_dir(tool).ok()?.join(version).join("bin");
     // `node` → `node.exe` / `npm.cmd` on Windows.
     shims::command_names(binary).into_iter().map(|name| bin.join(name)).find(|p| p.exists())

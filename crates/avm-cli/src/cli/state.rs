@@ -58,7 +58,7 @@ fn package_json_aliases(cwd: &Path) -> Result<HashMap<String, ResolvedAlias>> {
         .flatten()
         .filter_map(|(name, script)| {
             let alias = ResolvedAlias {
-                command: format!("{manager} {name}"),
+                command: format!("{manager} {}", avm_plugin_api::sh_quote(name)),
                 description: Some(script.as_str()?.to_string()),
                 plugin_name: "node".to_string(),
                 section_name: "Node Scripts".to_string(),

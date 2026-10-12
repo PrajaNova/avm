@@ -70,7 +70,11 @@ pub fn cmd_resolve(args: ResolveArgs) -> Result<()> {
     let alias = cfg
         .resolve_alias(&args.key)
         .ok_or_else(|| alias_not_found_error(&args.key, &cfg))?;
-    println!("{}", build_shell_alias_string(&alias.command, &args.args)?);
+    let script = match alias.argv {
+        Some(argv) => argv.iter().chain(&args.args).map(|arg| sh_quote(arg)).collect::<Vec<_>>().join(" "),
+        None => build_shell_alias_string(&alias.command, &args.args)?,
+    };
+    println!("{script}");
     Ok(())
 }
 
@@ -90,7 +94,6 @@ pub fn cmd_run(args: RunArgs) -> Result<()> {
         None => return Err(alias_not_found_error(alias_key, &cfg)),
     };
 
-    let script = build_shell_alias_string(&alias.command, &args.args)?;
     let env = if args.tools.is_empty() {
         child_env(&cfg)?
     } else {
@@ -99,10 +102,19 @@ pub fn cmd_run(args: RunArgs) -> Result<()> {
     // ponytail: Windows runs aliases through `cmd /C` with sh-style quoting of
     // extra args; a cmd-aware quoter if args with spaces or quotes misbehave.
     let (shell, flag) = if cfg!(windows) { ("cmd", "/C") } else { ("sh", "-c") };
-    let status = Command::new(shell)
-        .arg(flag)
-        .arg(script)
-        .envs(env)
+    let mut command = match alias.argv {
+        Some(argv) => {
+            let mut command = Command::new(&argv[0]);
+            command.args(&argv[1..]).args(&args.args);
+            command
+        }
+        None => {
+            let mut command = Command::new(shell);
+            command.arg(flag).arg(build_shell_alias_string(&alias.command, &args.args)?);
+            command
+        }
+    };
+    let status = command.envs(env)
         .status()
         .with_context(|| format!("failed to run alias via {shell}"))?;
     std::process::exit(status.code().unwrap_or(1));

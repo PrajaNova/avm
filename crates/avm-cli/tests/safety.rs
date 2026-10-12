@@ -123,6 +123,26 @@ fn json_pins_resolve_installed_versions_in_both_scopes() {
     assert_eq!(cfg["tools"]["node"], "20");
 }
 
+#[cfg(unix)]
+#[test]
+fn package_script_names_and_arguments_are_literal_data() {
+    use std::os::unix::fs::PermissionsExt;
+    let p = Project::new();
+    let bin = p.0.join("bin");
+    fs::create_dir(&bin).unwrap();
+    fs::write(bin.join("npm"), "#!/bin/sh\nprintf '%s\\n' \"$@\"\n").unwrap();
+    fs::set_permissions(bin.join("npm"), fs::Permissions::from_mode(0o755)).unwrap();
+    let marker = p.0.join("injected");
+    for name in [format!("hello; touch {}; #", marker.display()), "$1 $(touch injected) 'quoted'".into()] {
+        fs::write(p.0.join("project/package.json"), serde_json::json!({"scripts":{&name:"echo safe"}}).to_string()).unwrap();
+        let out = p.command(&["run", &name, "--", "arg; touch injected"])
+            .env("PATH", std::env::join_paths([bin.clone(), PathBuf::from("/usr/bin"), PathBuf::from("/bin")]).unwrap()).output().unwrap();
+        assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+        assert_eq!(String::from_utf8(out.stdout).unwrap(), format!("run\n{name}\narg; touch injected\n"));
+        assert!(!marker.exists() && !p.0.join("project/injected").exists());
+    }
+}
+
 #[test]
 fn untrusted_tool_pins_cannot_escape_managed_directories() {
     let p = Project::new();

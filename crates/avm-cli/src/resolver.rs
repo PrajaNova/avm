@@ -15,6 +15,7 @@ pub struct ResolvedAliasLookup {
     pub command: String,
     pub source: AliasSource,
     pub plugin_name: Option<String>,
+    pub argv: Option<Vec<String>>,
 }
 
 #[derive(Debug, Clone)]
@@ -43,6 +44,7 @@ impl ResolvedConfig {
                 command: value.clone(),
                 source: AliasSource::Local,
                 plugin_name: None,
+                argv: None,
             });
         }
 
@@ -51,6 +53,7 @@ impl ResolvedConfig {
                 command: value.clone(),
                 source: AliasSource::Global,
                 plugin_name: None,
+                argv: None,
             });
         }
 
@@ -58,6 +61,9 @@ impl ResolvedConfig {
             command: a.command.clone(),
             source: AliasSource::Plugin,
             plugin_name: Some(a.plugin_name.clone()),
+            argv: a.source.as_deref().filter(|prefix| a.plugin_name == "node"
+                && matches!(*prefix, "npm run" | "pnpm run" | "bun run" | "yarn"))
+                .map(|prefix| prefix.split_whitespace().map(str::to_string).chain([key.to_string()]).collect()),
         })
     }
 

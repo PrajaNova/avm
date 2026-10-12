@@ -153,19 +153,7 @@ avm() {
     .to_string()
 }
 
-/// POSIX single-quote escaping: safe for any byte string.
-pub fn sh_quote(value: &str) -> String {
-    if value.is_empty() {
-        return "''".to_string();
-    }
-    if value
-        .bytes()
-        .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'_' | b'-' | b'.' | b'/' | b':' | b'='))
-    {
-        return value.to_string();
-    }
-    format!("'{}'", value.replace('\'', "'\\''"))
-}
+pub use avm_plugin_api::sh_quote;
 
 #[cfg(test)]
 mod tests {

@@ -454,3 +454,17 @@ mod tests {
         assert!(run_timed(std::process::Command::new("true"), 5_000, "true", "AVM_TEST_UNSET").is_ok());
     }
 }
+
+/// POSIX single-quote escaping: safe for any byte string.
+pub fn sh_quote(value: &str) -> String {
+    if value.is_empty() {
+        return "''".to_string();
+    }
+    if value
+        .bytes()
+        .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'_' | b'-' | b'.' | b'/' | b':' | b'='))
+    {
+        return value.to_string();
+    }
+    format!("'{}'", value.replace('\'', "'\\''"))
+}

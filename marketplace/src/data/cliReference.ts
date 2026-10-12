@@ -72,10 +72,38 @@ Env:
     example: 'avm resolve dev'
   },
   {
+    command: 'avm exec',
+    args: '[--no-install] <tool@version>... -- <command> [args...]',
+    category: 'Core',
+    description: 'Runs a command with temporary tool versions (also: avm x), provider env and trusted project env. Installs missing versions without changing pins or lockfiles; --no-install selects installed versions only. Plugins must already be installed.',
+    example: 'avm exec node@18 java@21 -- ./gradlew build'
+  },
+  {
+    command: 'avm run',
+    args: '<alias> [--with <tool@version>]... [--no-install] [-- args...]',
+    category: 'Aliases',
+    description: 'Runs an alias, optionally with temporary tool versions. Repeat --with for multiple tools and place options before alias arguments. Missing versions install automatically unless --no-install is set.',
+    example: 'avm run dev --with node@18 -- --port 3000'
+  },
+  {
+    command: 'avm install',
+    args: '[--frozen]',
+    category: 'Core',
+    description: 'Installs project tools without changing pins, including global selections only when unlocked. Uses exact versions and verified downloads when .avm.lock exists. --frozen validates project selections and requires an asset for this platform.',
+    example: 'avm install --frozen'
+  },
+  {
+    command: 'avm lock',
+    args: '[--platform linux_amd64,darwin_arm64,windows_amd64]',
+    category: 'Core',
+    description: 'Locks project selections, excluding personal global pins, with exact versions, plugin identities and per-platform SHA-256 checksums. Requires updated native Node or Java plugins; Android and asdf support unlocked installs only.',
+    example: 'avm lock --platform linux_amd64,darwin_arm64'
+  },
+  {
     command: 'avm env',
     args: '[--shell sh|pwsh|cmd]',
     category: 'Env',
-    description: 'Prints export statements for merged env and provider vars (JAVA_HOME, ANDROID_HOME, …) in sh, PowerShell, or cmd syntax.',
+    description: 'Prints shell statements for merged env and provider vars (JAVA_HOME, ANDROID_HOME, …). Restores original values when leaving a project. Shell setup refreshes at prompts, on zsh directory changes, and around avm commands.',
     example: 'avm env --shell pwsh',
     outputExample: `$env:NODE_ENV = 'development'
 $env:JAVA_HOME = 'C:\\Users\\dev\\.avm\\tools\\java\\openjdk-17.0.13+11'`

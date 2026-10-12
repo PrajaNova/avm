@@ -22,6 +22,18 @@ pub struct Cli {
 pub enum Commands {
     /// Create a local .avm.json config file.
     Init,
+    /// Install every selected tool without changing its pin.
+    Install {
+        /// Require an up-to-date lockfile with downloads for this platform.
+        #[arg(long)]
+        frozen: bool,
+    },
+    /// Resolve selected tools and write a reproducible .avm.lock.
+    Lock {
+        /// Platforms to lock (default: this host), comma-separated.
+        #[arg(long, value_delimiter = ',')]
+        platform: Vec<String>,
+    },
     /// Add an alias command to local or global config.
     #[command(alias = "aa")]
     Add(AddArgs),
@@ -54,6 +66,9 @@ pub enum Commands {
     Resolve(ResolveArgs),
     /// Run an alias with optional arguments.
     Run(RunArgs),
+    /// Run a command with temporary tool versions, without changing pins.
+    #[command(alias = "x")]
+    Exec(ExecArgs),
     /// Install, list, update, or remove avm plugins.
     Plugin {
         #[command(subcommand)]
@@ -250,8 +265,28 @@ pub struct ResolveArgs {
 #[derive(Args)]
 #[command(disable_help_flag = true)]
 pub struct RunArgs {
-    #[arg(required = true, trailing_var_arg = true, allow_hyphen_values = true)]
+    pub key: String,
+    /// Temporary tool version; repeat for multiple tools, before alias arguments.
+    #[arg(long = "with")]
+    pub tools: Vec<String>,
+    /// Fail if a requested tool version is not installed.
+    #[arg(long)]
+    pub no_install: bool,
+    #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
     pub args: Vec<String>,
+}
+
+#[derive(Args)]
+pub struct ExecArgs {
+    /// Tool specifications, e.g. node@18 java@21.
+    #[arg(required = true)]
+    pub tools: Vec<String>,
+    /// Fail if a requested tool version is not installed.
+    #[arg(long)]
+    pub no_install: bool,
+    /// Command and arguments after --, forwarded verbatim.
+    #[arg(last = true, required = true)]
+    pub command: Vec<String>,
 }
 
 #[derive(Args)]

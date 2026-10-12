@@ -154,29 +154,31 @@ fn cmd_create(args: &[String]) -> Result<()> {
         None => pick_api_level()?,
     };
 
+    let device = match device {
+        Some(device) => Some(device),
+        None => pick_device(&active)?,
+    };
+
     let java_home = active.java_home.as_deref();
     let listing = install::list_packages(&active.sdk, java_home)?;
-    let system_image = install::resolve_system_image_id(&listing, &api)?;
-    let package = install::sysimg_package(&system_image);
+    // A TV/Wear/Automotive profile on a phone image boots phone Android in a
+    // TV-shaped frame, so the image tag must follow the device profile.
+    let (tag, system_image) = resolve_image(&listing, &api, device.as_deref())?;
+    let package = install::sysimg_package(&system_image, tag);
     // `system.img` specifically, not just the package dir: avdmanager refuses a
     // package that an interrupted install left without one ("contains no system images").
     let image = active
         .sdk
         .join("system-images")
         .join(format!("android-{system_image}"))
-        .join("google_apis")
+        .join(tag)
         .join(install::sysimg_abi())
         .join("system.img");
     if !image.exists() {
         println!("Installing {package} (closest match for API {api})...");
         install::accept_licenses(&active.sdk, java_home);
-        install::install_system_image(&active.sdk, java_home, &system_image, &[])?;
+        install::install_system_image(&active.sdk, java_home, &system_image, tag, &[])?;
     }
-
-    let device = match device {
-        Some(device) => Some(device),
-        None => pick_device(&active)?,
-    };
 
     println!("Creating AVD '{name}' ({package})...");
     let mut cmd = tool_command(&active, "avdmanager");
@@ -198,10 +200,43 @@ fn cmd_create(args: &[String]) -> Result<()> {
     }
 
     fix_avd_target_api(&name, &system_image);
+    enable_hw_keyboard(&name);
 
     println!("✓ Created AVD '{name}'");
     println!("  Start it with: avm android avd start {name}");
     Ok(())
+}
+
+/// Candidate system-image tags for a device profile id, best first.
+fn image_tags(device: Option<&str>) -> &'static [&'static str] {
+    match device {
+        Some(d) if d.starts_with("tv_") => &["android-tv", "google-tv"],
+        Some(d) if d.starts_with("wear_") => &["android-wear"],
+        Some(d) if d.starts_with("automotive_") => &["android-automotive", "android-automotive-playstore"],
+        _ => &[install::DEFAULT_TAG],
+    }
+}
+
+fn resolve_image(listing: &str, api: &str, device: Option<&str>) -> Result<(&'static str, String)> {
+    let mut last = None;
+    for &tag in image_tags(device) {
+        match install::resolve_system_image_id(listing, api, tag) {
+            Ok(id) => return Ok((tag, id)),
+            Err(err) => last = Some(err),
+        }
+    }
+    Err(last.unwrap_or_else(|| anyhow!("no system image tag for device")))
+}
+
+/// avdmanager writes `hw.keyboard=no`, so the host keyboard is dead in the
+/// emulator until it's flipped by hand; do it once at creation.
+fn enable_hw_keyboard(name: &str) {
+    let Ok(home) = install::home_dir() else { return };
+    let path = home.join(".android").join("avd").join(format!("{name}.avd")).join("config.ini");
+    let Ok(contents) = std::fs::read_to_string(&path) else { return };
+    let mut lines: Vec<&str> = contents.lines().filter(|l| !l.starts_with("hw.keyboard=")).collect();
+    lines.push("hw.keyboard=yes");
+    let _ = std::fs::write(&path, lines.join("\n") + "\n");
 }
 
 /// avdmanager (a Java tool) parses a system image's declared API level with

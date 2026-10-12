@@ -12,6 +12,30 @@ pub fn load_state() -> Result<ResolvedConfig> {
 
 /// `.env` files skipped at startup because they aren't trusted.
 pub static UNTRUSTED_DOTENV: std::sync::OnceLock<Vec<PathBuf>> = std::sync::OnceLock::new();
+pub const ENV_BASELINE: &str = "_AVM_ENV_BASELINE";
+pub static INHERITED_ENV: std::sync::OnceLock<HashMap<String, String>> = std::sync::OnceLock::new();
+
+pub fn env_baseline() -> Result<BTreeMap<String, Option<String>>> {
+    let baseline: BTreeMap<String, Option<String>> = match std::env::var(ENV_BASELINE) {
+        Ok(raw) => serde_json::from_str(&raw).context("invalid AVM environment baseline")?,
+        Err(_) => BTreeMap::new(),
+    };
+    config::validate_env(&baseline.keys().map(|key| (key.clone(), String::new())).collect())?;
+    Ok(baseline)
+}
+
+pub fn restore_inherited_env() -> Result<()> {
+    for (key, value) in env_baseline()? {
+        match value {
+            Some(value) => std::env::set_var(key, value),
+            None => std::env::remove_var(key),
+        }
+    }
+    let mut inherited = HashMap::new();
+    extend_env(&mut inherited, std::env::vars());
+    let _ = INHERITED_ENV.set(inherited);
+    Ok(())
+}
 
 /// Project files whose aliases/env are currently ignored for lack of trust.
 pub fn untrusted_files(cfg: &ResolvedConfig) -> Vec<PathBuf> {
@@ -58,7 +82,7 @@ fn package_json_aliases(cwd: &Path) -> Result<HashMap<String, ResolvedAlias>> {
         .flatten()
         .filter_map(|(name, script)| {
             let alias = ResolvedAlias {
-                command: format!("{manager} {name}"),
+                command: format!("{manager} {}", avm_plugin_api::sh_quote(name)),
                 description: Some(script.as_str()?.to_string()),
                 plugin_name: "node".to_string(),
                 section_name: "Node Scripts".to_string(),

@@ -23,6 +23,17 @@ avm_shell() {
   eval "$(avm-bin shell-init)"
 }
 
+install_test_plugin() {
+  if [ "${AVM_E2E_INSTALL:-release}" = local ]; then
+    local target="$HOME/.avm/plugins/avm-plugin-$1/bin"
+    mkdir -p "$target"
+    cp "/opt/dist/plugins/avm-plugin-$1/bin/avm-plugin" "$target/avm-plugin"
+    avm-bin shims install
+  else
+    avm plugin add "$1"
+  fi
+}
+
 finish() {
   printf '\n%s: %d passed, %d failed\n' "$SUITE" "$PASS" "$FAIL"
   [ "$FAIL" -eq 0 ]

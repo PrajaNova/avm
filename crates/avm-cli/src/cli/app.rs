@@ -8,7 +8,7 @@ pub fn main() {
             std::env::set_var("HOME", home);
         }
     }
-    if let Err(err) = load_dotenv_env() {
+    if let Err(err) = restore_inherited_env().and_then(|_| load_dotenv_env()) {
         eprintln!("avm: failed to load .env: {err}");
         std::process::exit(1);
     }
@@ -31,6 +31,7 @@ pub fn main() {
             | Commands::ShellInit { .. }
             | Commands::Resolve(_)
             | Commands::Run(_)
+            | Commands::Exec(_)
             | Commands::SelfUpdate { .. }
             | Commands::UpdateCheck
     );
@@ -121,6 +122,8 @@ fn parse_env_value(value: &str) -> String {
 fn run(cli: Cli) -> Result<()> {
     match cli.command {
         Commands::Init => cmd_init(),
+        Commands::Install { frozen } => cmd_install(frozen),
+        Commands::Lock { platform } => cmd_lock(platform),
         Commands::Add(args) => cmd_add(args),
         Commands::Remove(args) => cmd_remove(args),
         Commands::List => cmd_list(),
@@ -129,6 +132,7 @@ fn run(cli: Cli) -> Result<()> {
         Commands::Env { command, shell } => cmd_env(command, shell.unwrap_or_default()),
         Commands::Resolve(args) => cmd_resolve(args),
         Commands::Run(args) => cmd_run(args),
+        Commands::Exec(args) => cmd_exec(args),
         Commands::Plugin { command } => cmd_plugin(command),
         Commands::Create { name } => {
             println!("Start a new plugin from the template repo:");

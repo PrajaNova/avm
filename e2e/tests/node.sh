@@ -6,8 +6,12 @@ P="$W/project"
 check_aliases_and_env "$W" "$P"
 
 log "node: plugin"
-expect_ok "avm plugin add node (sha256-verified)" avm plugin add node
-expect_contains "plugin recorded as verified" "$(cat ~/.avm/plugins/avm-plugin-node/meta.json)" '"verified":true'
+expect_ok "install node plugin under test" install_test_plugin node
+if [ "${AVM_E2E_INSTALL:-release}" = local ]; then
+  expect_ok "plugin matches the checkout build" cmp /opt/dist/plugins/avm-plugin-node/bin/avm-plugin ~/.avm/plugins/avm-plugin-node/bin/avm-plugin
+else
+  expect_contains "plugin recorded as verified" "$(cat ~/.avm/plugins/avm-plugin-node/meta.json)" '"verified":true'
+fi
 
 log "node: global 20 (install -g), local 22"
 expect_ok "avm node install 20 -g" avm node install 20 -g
@@ -53,7 +57,12 @@ expect_contains "--dry-run changes nothing" "$(cat "$O/.avm.json")" '"node": "20
 expect_ok "avm upgrade" in_dir "$O" avm upgrade
 expect_contains ".avm.json pin moved" "$(cat "$O/.avm.json")" "\"node\": \"$in_range\""
 expect_eq "node follows the new pin" "$(cd "$O" && node -v)" "v$in_range"
-expect_contains "plugin outdated" "$(avm plugin outdated)" "up to date"
+plugin_status="$(avm plugin outdated | awk '$1 == "node" {print}')"
+if [ "${AVM_E2E_INSTALL:-release}" = local ]; then
+  expect_contains "checkout plugin has no marketplace release metadata" "$plugin_status" "not from the marketplace"
+else
+  expect_contains "plugin outdated" "$plugin_status" "up to date"
+fi
 
 log "node: prune (#27)"
 mkdir -p "$HOME/.avm/tools/node/1.0.0/bin" # installed before avm recorded use

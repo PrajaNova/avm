@@ -33,15 +33,15 @@ fn cmd_provider_tool(
             use_provider_version(provider_name, provider.as_ref(), version, true)
         }
         [cmd, version] if cmd == "install" => {
-            let resolved = resolve_version_spec(provider.as_ref(), version)?;
+            let resolved = resolve_install_version(provider.as_ref(), version)?;
             install_and_pin(provider_name, provider.as_ref(), &resolved, PinScope::Auto)
         }
         [cmd, version, flag] if cmd == "install" && (flag == "--global" || flag == "-g") => {
-            let resolved = resolve_version_spec(provider.as_ref(), version)?;
+            let resolved = resolve_install_version(provider.as_ref(), version)?;
             install_and_pin(provider_name, provider.as_ref(), &resolved, PinScope::GlobalOnly)
         }
         [cmd, version, flag] if cmd == "install" && flag == "--no-pin" => {
-            let resolved = resolve_version_spec(provider.as_ref(), version)?;
+            let resolved = resolve_install_version(provider.as_ref(), version)?;
             install_and_pin(provider_name, provider.as_ref(), &resolved, PinScope::None)
         }
         [cmd, version] if cmd == "uninstall" => {
@@ -182,7 +182,7 @@ fn install_and_pin(
     scope: PinScope,
 ) -> Result<()> {
     if !provider.is_installed(version) {
-        provider.install(version)?;
+        install_provider_version(provider, version)?;
     }
     shims::reshim()?;
     match scope {
@@ -209,37 +209,18 @@ fn install_and_pin(
     Ok(())
 }
 
-/// Translate a user-supplied version spec into a concrete version string.
-/// Supports `latest`, `<major>` (e.g. `20`), or a literal version like `20.11.0`.
-fn resolve_version_spec(provider: &dyn ToolProvider, spec: &str) -> Result<String> {
-    let trimmed = spec.trim();
-    if trimmed.is_empty() {
-        return Err(anyhow!("version required"));
-    }
-    if trimmed == "latest" {
-        let versions = provider
-            .available_versions(ToolVersionQuery::Latest)
-            .context("failed to fetch latest version")?;
-        let pick = versions
-            .into_iter()
-            .next()
-            .ok_or_else(|| anyhow!("no remote versions available"))?;
-        println!("Resolved latest → {}", pick.version);
-        return Ok(pick.version);
-    }
-    // Bare major like "20"
-    if let Ok(major) = trimmed.trim_start_matches('v').parse::<u64>() {
-        let versions = provider
-            .available_versions(ToolVersionQuery::Major(major))
-            .context("failed to fetch versions for major")?;
-        if let Some(pick) = versions.into_iter().next() {
-            println!("Resolved {trimmed} → {}", pick.version);
-            return Ok(pick.version);
+fn resolve_install_version(provider: &dyn ToolProvider, spec: &str) -> Result<String> {
+    if let Some(lock) = crate::lockfile::load(&std::env::current_dir()?)? {
+        if let Some(entry) = lock.tools.get(provider.name()).filter(|entry| entry.requested == spec.trim()) {
+            return Ok(entry.resolved.clone());
         }
-        // Fall through with the literal value so the provider can complain
-        // with its own error.
     }
-    Ok(trimmed.to_string())
+    resolve_version_spec(provider, spec)
+}
+
+/// Resolve install, use and temporary exec specs with the lockfile's matcher.
+pub fn resolve_version_spec(provider: &dyn ToolProvider, spec: &str) -> Result<String> {
+    crate::lockfile::resolve_spec(provider, spec.trim())
 }
 
 fn global_pin(tool: &str) -> Result<Option<String>> {
@@ -267,9 +248,10 @@ fn use_provider_version(
     version: &str,
     global: bool,
 ) -> Result<()> {
-    ensure_provider_version_installed(provider_name, provider, version)?;
+    let version = resolve_install_version(provider, version)?;
+    ensure_provider_version_installed(provider_name, provider, &version)?;
     shims::reshim()?;
-    set_tool_version(provider_name, version, global)?;
+    set_tool_version(provider_name, &version, global)?;
     warn_if_shim_is_not_preferred(provider_name);
     Ok(())
 }
@@ -284,7 +266,7 @@ pub fn ensure_provider_version_installed(
     }
 
     println!("Installing {provider_name} {version}...");
-    provider.install(version)?;
+    install_provider_version(provider, version)?;
     println!("✓ Installed {provider_name} {version}");
     Ok(())
 }

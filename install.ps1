@@ -55,7 +55,9 @@ try {
     try {
         if (-not (Test-Path $PROFILE) -or -not (Select-String -Path $PROFILE -SimpleMatch $line -Quiet)) {
             New-Item -ItemType Directory -Force (Split-Path $PROFILE) -ErrorAction Stop | Out-Null
-            New-Item -ItemType File -Force $PROFILE -ErrorAction Stop | Out-Null
+            if (-not (Test-Path $PROFILE)) {
+                New-Item -ItemType File $PROFILE -ErrorAction Stop | Out-Null
+            }
             Add-Content $PROFILE "`n# avm`n$line"
         }
         Write-Host "Installed avm-bin to $bin. Open a new PowerShell window to start using avm."

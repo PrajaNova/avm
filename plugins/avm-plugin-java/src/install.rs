@@ -8,13 +8,17 @@ const CURL_TIMEOUT_MS: u64 = 300_000;
 const TAR_TIMEOUT_MS: u64 = 120_000;
 
 pub fn install_java(version: &str) -> Result<()> {
+    install(version, None)
+}
+
+pub fn install(version: &str, locked: Option<&avm_plugin_api::protocol::LockedAsset>) -> Result<()> {
+    avm_plugin_api::download::validate_version(version)?;
     let tools_root = tool_dir("java")?;
+    let _guard = avm_plugin_api::storage::lock(&tools_root.join(format!(".install-{version}")))?;
     let target = tools_root.join(version);
     if target.join("bin").join(crate::JAVA_BIN).exists() {
         return Ok(());
     }
-
-    let package = find_package(strip_avm_prefix(version))?;
 
     // Staged inside tools_root: never counts as installed (no `<version>/bin/java`)
     // and the final rename stays on one filesystem.
@@ -26,14 +30,22 @@ pub fn install_java(version: &str) -> Result<()> {
     fs::create_dir_all(&jdk).context("failed to create java install temp dir")?;
 
     let archive = tmp.join(format!("jdk.{}", crate::versions::ARCHIVE_TYPE));
-    let url = &package.links.pkg_download_redirect;
-    let max_secs = avm_plugin_api::env_timeout_ms("AVM_JAVA_CURL_TIMEOUT", CURL_TIMEOUT_MS) / 1000;
-    let mut curl = Command::new("curl");
-    curl.args(["-fL", "--connect-timeout", "10", "--max-time", &max_secs.to_string(), url, "-o"])
-        .arg(&archive);
-    run_timed(curl, CURL_TIMEOUT_MS, "OpenJDK download", "AVM_JAVA_CURL_TIMEOUT")
-        .with_context(|| format!("failed to download OpenJDK from {url}"))?;
-    if let Err(e) = verify_archive(&package, &archive) {
+    let download = if let Some(asset) = locked {
+        avm_plugin_api::download::download_verified(asset, &archive)
+    } else {
+        (|| {
+            let package = find_package(strip_avm_prefix(version))?;
+            let url = &package.links.pkg_download_redirect;
+            let max_secs = avm_plugin_api::env_timeout_ms("AVM_JAVA_CURL_TIMEOUT", CURL_TIMEOUT_MS) / 1000;
+            let mut curl = Command::new("curl");
+            curl.args(["-fL", "--connect-timeout", "10", "--max-time", &max_secs.to_string(), url, "-o"])
+                .arg(&archive);
+            run_timed(curl, CURL_TIMEOUT_MS, "OpenJDK download", "AVM_JAVA_CURL_TIMEOUT")
+                .with_context(|| format!("failed to download OpenJDK from {url}"))?;
+            verify_archive(&package, &archive)
+        })()
+    };
+    if let Err(e) = download {
         let _ = fs::remove_dir_all(&tmp);
         return Err(e);
     }

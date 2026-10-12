@@ -161,6 +161,7 @@ fn satisfies(version: &[u64], range: &str) -> bool {
     let v = [version.first().copied().unwrap_or(0), version.get(1).copied().unwrap_or(0), version.get(2).copied().unwrap_or(0)];
     range.split("||").any(|set| {
         let set = set.trim();
+        if set.is_empty() { return range.trim().is_empty(); }
         if let Some((lo, hi)) = set.split_once(" - ") {
             return comparator(&v, &format!(">={}", lo.trim())) && comparator(&v, &format!("<={}", hi.trim()));
         }
@@ -174,34 +175,45 @@ fn comparator(v: &[u64; 3], c: &str) -> bool {
         .find_map(|op| c.strip_prefix(op).map(|r| (*op, r)))
         .unwrap_or(("", c));
     // Partial version: `None` for an omitted or wildcard component.
-    let parts: Vec<Option<u64>> = rest.trim_start_matches('v').split('.').map(|p| p.parse().ok()).collect();
+    let mut parts = Vec::new();
+    for part in rest.strip_prefix('v').unwrap_or(rest).split('.') {
+        let value = match part {
+            "*" | "x" | "X" => None,
+            _ => match part.parse::<u64>() {
+                Ok(n) if part.bytes().all(|c| c.is_ascii_digit()) => Some(n),
+                _ => return false,
+            },
+        };
+        if parts.len() == 3 || (value.is_some() && parts.contains(&None)) { return false; }
+        parts.push(value);
+    }
     let given = parts.iter().take_while(|p| p.is_some()).count().min(3);
     let base = [0, 1, 2].map(|i| if i < given { parts[i].unwrap_or(0) } else { 0 });
     // Upper bound one step past the last given component (`1.2` → `1.3.0`).
     let bump = |at: usize| {
         let mut b = base;
-        b[at] += 1;
+        b[at] = b[at].checked_add(1)?;
         for x in b.iter_mut().skip(at + 1) {
             *x = 0;
         }
-        b
+        Some(b)
     };
     let lower_upper = |lo: [u64; 3], hi: Option<[u64; 3]>| *v >= lo && hi.is_none_or(|hi| *v < hi);
     match op {
-        _ if given == 0 => true,
-        "" | "=" if given < 3 => lower_upper(base, Some(bump(given - 1))),
+        _ if given == 0 => matches!(op, "" | "=" | ">=" | "<="),
+        "" | "=" if given < 3 => lower_upper(base, bump(given - 1)),
         "" | "=" => *v == base,
         ">=" => *v >= base,
         "<" => *v < base,
-        ">" if given < 3 => *v >= bump(given - 1),
+        ">" if given < 3 => bump(given - 1).is_some_and(|upper| *v >= upper),
         ">" => *v > base,
-        "<=" if given < 3 => *v < bump(given - 1),
+        "<=" if given < 3 => bump(given - 1).is_none_or(|upper| *v < upper),
         "<=" => *v <= base,
-        "~" => lower_upper(base, Some(bump(if given >= 2 { 1 } else { 0 }))),
+        "~" => lower_upper(base, bump(if given >= 2 { 1 } else { 0 })),
         _ => {
             // `^`: bump the first non-zero given component.
             let at = (0..given).find(|&i| base[i] != 0).unwrap_or(given - 1);
-            lower_upper(base, Some(bump(at)))
+            lower_upper(base, bump(at))
         }
     }
 }
@@ -246,6 +258,13 @@ mod tests {
         assert!(s([0, 2, 5], "^0.2.3") && !s([0, 3, 0], "^0.2.3"));
         assert!(s([2, 0, 0], ">1") && !s([1, 9, 9], ">1") && s([1, 2, 9], "<=1.2") && !s([1, 3, 0], "<=1.2"));
         assert!(s([5, 0, 0], "*") && s([5, 0, 0], ""));
+        for bad in [">=banana", "^banana20", "20..1", "20.x.1", "20.1.2.3", ">=18446744073709551616"] {
+            assert!(!s([20, 1, 2], bad), "{bad}");
+        }
+        assert!(!s([20, 1, 2], "^18446744073709551615"));
+        assert!(s([u64::MAX, 1, 2], "^18446744073709551615"));
+        assert!(!s([u64::MAX, 1, 2], ">18446744073709551615"));
+        assert!(s([u64::MAX, 1, 2], "<=18446744073709551615"));
     }
 
     #[test]

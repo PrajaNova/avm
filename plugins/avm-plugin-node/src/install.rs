@@ -16,6 +16,7 @@ pub fn install(version: &str, locked: Option<&avm_plugin_api::protocol::LockedAs
     avm_plugin_api::download::validate_version(version)?;
     let platform = platform_name()?;
     let tools_root = tool_dir("node")?;
+    let _guard = avm_plugin_api::storage::lock(&tools_root.join(format!(".install-{version}")))?;
     let target = tools_root.join(version);
     if target.join("bin").join(crate::NODE_BIN).exists() {
         return Ok(());

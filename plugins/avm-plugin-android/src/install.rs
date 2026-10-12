@@ -22,10 +22,13 @@ pub fn home_dir() -> Result<PathBuf> {
 }
 
 pub fn sdk_dir(version: &str) -> Result<PathBuf> {
+    avm_plugin_api::download::validate_version(version)?;
     Ok(tool_dir("android")?.join(version).join("sdk"))
 }
 
 pub fn install_android(version: &str) -> Result<()> {
+    avm_plugin_api::download::validate_version(version)?;
+    let _guard = avm_plugin_api::storage::lock(&tool_dir("android")?.join(format!(".install-{version}")))?;
     let target = tool_dir("android")?.join(version);
     let sdk = sdk_dir(version)?;
 

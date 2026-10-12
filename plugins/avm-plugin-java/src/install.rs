@@ -14,6 +14,7 @@ pub fn install_java(version: &str) -> Result<()> {
 pub fn install(version: &str, locked: Option<&avm_plugin_api::protocol::LockedAsset>) -> Result<()> {
     avm_plugin_api::download::validate_version(version)?;
     let tools_root = tool_dir("java")?;
+    let _guard = avm_plugin_api::storage::lock(&tools_root.join(format!(".install-{version}")))?;
     let target = tools_root.join(version);
     if target.join("bin").join(crate::JAVA_BIN).exists() {
         return Ok(());

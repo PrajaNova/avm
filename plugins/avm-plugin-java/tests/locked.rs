@@ -48,15 +48,16 @@ fn resolves_cross_platform_java_and_installs_without_the_live_index() {
         )
         .unwrap();
     }
-    let run = |args: &[String]| {
-        Command::new(env!("CARGO_BIN_EXE_avm-plugin-java"))
+    let command = |args: &[String]| {
+        let mut cmd = Command::new(env!("CARGO_BIN_EXE_avm-plugin-java"));
+        cmd
             .args(args)
             .env("HOME", root.join("home"))
             .env("AVM_JAVA_DISCO_URL", root.join("disco"))
-            .env("AVM_ALLOW_UNVERIFIED", "1")
-            .output()
-            .unwrap()
+            .env("AVM_ALLOW_UNVERIFIED", "1");
+        cmd
     };
+    let run = |args: &[String]| command(args).output().unwrap();
     let request = ResolveRequest {
         version: "openjdk-21.0.1+12".into(),
         platforms: vec![
@@ -87,16 +88,13 @@ fn resolves_cross_platform_java_and_installs_without_the_live_index() {
     assert!(!out.status.success());
     assert!(!root.join("home/.avm/tools/java/openjdk-21.0.1+12").exists());
     asset.sha256 = sha256;
-    let out = run(&[
-        "install-locked".into(),
-        request.version,
-        serde_json::to_string(&asset).unwrap(),
-    ]);
-    assert!(
-        out.status.success(),
-        "{}",
-        String::from_utf8_lossy(&out.stderr)
-    );
+    let args = ["install-locked".into(), "openjdk-21.0.1+12".into(), serde_json::to_string(&asset).unwrap()];
+    let guard = avm_plugin_api::storage::lock(&root.join("home/.avm/tools/java/.install-openjdk-21.0.1+12")).unwrap();
+    let mut children: Vec<_> = (0..2).map(|_| command(&args).spawn().unwrap()).collect();
+    std::thread::sleep(std::time::Duration::from_millis(100));
+    assert!(!root.join("home/.avm/tools/java/openjdk-21.0.1+12").exists());
+    drop(guard);
+    for child in &mut children { assert!(child.wait().unwrap().success()); }
     let java = root.join("home/.avm/tools/java/openjdk-21.0.1+12/bin/java");
     assert_eq!(
         Command::new(java).output().unwrap().stdout,

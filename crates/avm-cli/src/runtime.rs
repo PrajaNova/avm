@@ -220,6 +220,7 @@ pub struct AsdfToolProvider {
 
 impl AsdfToolProvider {
     fn install_path(&self, version: &str) -> Result<PathBuf> {
+        avm_plugin_api::download::validate_version(version)?;
         Ok(tool_dir(&self.name)?.join(version))
     }
 
@@ -347,6 +348,8 @@ impl ToolProvider for AsdfToolProvider {
     }
 
     fn install(&self, version: &str) -> Result<()> {
+        avm_plugin_api::download::validate_version(version)?;
+        let _guard = avm_plugin_api::storage::lock(&tool_dir(&self.name)?.join(format!(".install-{version}")))?;
         if self.is_installed(version) {
             return Ok(());
         }

@@ -31,6 +31,7 @@ pub fn main() {
             | Commands::ShellInit { .. }
             | Commands::Resolve(_)
             | Commands::Run(_)
+            | Commands::Exec(_)
             | Commands::SelfUpdate { .. }
             | Commands::UpdateCheck
     );
@@ -129,6 +130,7 @@ fn run(cli: Cli) -> Result<()> {
         Commands::Env { command, shell } => cmd_env(command, shell.unwrap_or_default()),
         Commands::Resolve(args) => cmd_resolve(args),
         Commands::Run(args) => cmd_run(args),
+        Commands::Exec(args) => cmd_exec(args),
         Commands::Plugin { command } => cmd_plugin(command),
         Commands::Create { name } => {
             println!("Start a new plugin from the template repo:");

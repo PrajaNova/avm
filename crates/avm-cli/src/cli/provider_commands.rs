@@ -210,11 +210,19 @@ fn install_and_pin(
 }
 
 /// Translate a user-supplied version spec into a concrete version string.
-/// Supports `latest`, `<major>` (e.g. `20`), or a literal version like `20.11.0`.
-fn resolve_version_spec(provider: &dyn ToolProvider, spec: &str) -> Result<String> {
+/// Supports `latest`, `lts[/channel]`, `<major>`, or a literal version.
+pub fn resolve_version_spec(provider: &dyn ToolProvider, spec: &str) -> Result<String> {
     let trimmed = spec.trim();
     if trimmed.is_empty() {
         return Err(anyhow!("version required"));
+    }
+    if trimmed == "lts" || trimmed.starts_with("lts/") {
+        let channel = trimmed.strip_prefix("lts/").filter(|s| *s != "*");
+        return provider.available_versions(ToolVersionQuery::Recent)?
+            .into_iter()
+            .find(|v| v.is_lts && channel.is_none_or(|c| v.channel.as_deref().is_some_and(|name| name.eq_ignore_ascii_case(c))))
+            .map(|v| v.version)
+            .ok_or_else(|| anyhow!("no versions matching {trimmed}"));
     }
     if trimmed == "latest" {
         let versions = provider
@@ -224,7 +232,7 @@ fn resolve_version_spec(provider: &dyn ToolProvider, spec: &str) -> Result<Strin
             .into_iter()
             .next()
             .ok_or_else(|| anyhow!("no remote versions available"))?;
-        println!("Resolved latest → {}", pick.version);
+        eprintln!("Resolved latest → {}", pick.version);
         return Ok(pick.version);
     }
     // Bare major like "20"
@@ -233,7 +241,7 @@ fn resolve_version_spec(provider: &dyn ToolProvider, spec: &str) -> Result<Strin
             .available_versions(ToolVersionQuery::Major(major))
             .context("failed to fetch versions for major")?;
         if let Some(pick) = versions.into_iter().next() {
-            println!("Resolved {trimmed} → {}", pick.version);
+            eprintln!("Resolved {trimmed} → {}", pick.version);
             return Ok(pick.version);
         }
         // Fall through with the literal value so the provider can complain

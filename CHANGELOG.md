@@ -6,6 +6,9 @@ The format follows Keep a Changelog style, and releases use semantic versioning.
 
 ## [Unreleased]
 
+### Added
+- `avm exec` (alias `avm x`) runs commands with temporary `tool@version` selections, auto-installing missing runtimes without changing pins or lockfiles. `avm run --with` applies the same overrides to aliases; `--no-install` uses installed versions only.
+
 ## [0.4.1] - 2026-10-07
 
 ### Changed

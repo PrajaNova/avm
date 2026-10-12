@@ -372,6 +372,12 @@ export const DocsPage: React.FC<DocsPageProps> = ({ onCopy }) => {
                   <span className="text-emerald-400 font-bold text-sm block mb-1">3. Pin Local vs Global</span>
                   <pre className="p-3 rounded-xl bg-slate-950 text-slate-300 border border-slate-800"># Pins in ./.avm.json for the current repository:\n$ avm node use 22.14.0\n\n# Pins machine default in ~/.avm.json:\n$ avm node use 22.14.0 --global</pre>
                 </div>
+                <div>
+                  <span className="text-emerald-400 font-bold text-sm block mb-1">4. Try a Version Without Changing Pins</span>
+                  <p className="text-slate-400 font-sans text-xs mb-2">Run a command with temporary tool versions, provider env and trusted project env. Missing runtimes install automatically; plugins must already be installed. Use --no-install to select installed versions only.</p>
+                  <pre className="p-3 rounded-xl bg-slate-950 text-slate-300 border border-slate-800 overflow-x-auto">{'$ avm exec node@18 -- npm test\n$ avm x node@22 java@21 -- ./gradlew build\n$ avm run dev --with node@18 -- --port 3000'}</pre>
+                  <p className="text-slate-400 font-sans text-xs mt-2">Project and global pins and lockfiles stay unchanged. Repeat --with for multiple tools and place it before alias arguments.</p>
+                </div>
               </div>
             </div>
 
@@ -637,7 +643,7 @@ $ avm trust --revoke   # stop trusting this directory`}</pre>
                   { q: "Why doesn't my project's alias run after I clone it?", a: "A project's aliases, env and .env files are ignored until you run avm trust in that directory. It shows what you're enabling first. Editing the file outside avm blocks it again." },
                   { q: 'Can I use globally installed packages across different local version pins?', a: 'Yes! avm supports global package sharing, meaning globally installed tools (like npm -g packages) remain reachable even when a directory pins a different version.' },
                   { q: 'Where are plugins downloaded and installed?', a: 'Plugins are stored in ~/.avm/plugins/avm-plugin-<name>, while downloaded runtimes reside in ~/.avm/tools/<name>/<version>.' },
-                  { q: 'What happens if a requested tool version is not installed?', a: 'avm gracefully prints a clear diagnostic notice and executes your host system binary fallback if available, rather than abruptly aborting.' },
+                  { q: 'What happens if a requested tool version is not installed?', a: 'Plain shimmed commands warn and fall back to a system binary when available. avm exec and avm run --with install missing runtimes automatically; --no-install fails if no installed version matches.' },
                 ].map((item, idx) => (
                   <div key={idx} className="p-5 rounded-2xl bg-slate-900/60 border border-slate-800">
                     <h4 className="font-bold text-white text-base mb-2">{item.q}</h4>

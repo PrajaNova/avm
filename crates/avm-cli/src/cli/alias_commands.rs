@@ -76,7 +76,7 @@ pub fn cmd_resolve(args: ResolveArgs) -> Result<()> {
 
 pub fn cmd_run(args: RunArgs) -> Result<()> {
     let cfg = load_state()?;
-    let alias_key = &args.args[0];
+    let alias_key = &args.key;
     let alias = match cfg.resolve_alias(alias_key) {
         Some(alias) => alias,
         None if ui::can_select() => {
@@ -90,14 +90,19 @@ pub fn cmd_run(args: RunArgs) -> Result<()> {
         None => return Err(alias_not_found_error(alias_key, &cfg)),
     };
 
-    let script = build_shell_alias_string(&alias.command, &args.args[1..])?;
+    let script = build_shell_alias_string(&alias.command, &args.args)?;
+    let env = if args.tools.is_empty() {
+        child_env(&cfg)?
+    } else {
+        temporary_tool_env(&cfg, &args.tools, args.no_install)?
+    };
     // ponytail: Windows runs aliases through `cmd /C` with sh-style quoting of
     // extra args; a cmd-aware quoter if args with spaces or quotes misbehave.
     let (shell, flag) = if cfg!(windows) { ("cmd", "/C") } else { ("sh", "-c") };
     let status = Command::new(shell)
         .arg(flag)
         .arg(script)
-        .envs(child_env(&cfg)?)
+        .envs(env)
         .status()
         .with_context(|| format!("failed to run alias via {shell}"))?;
     std::process::exit(status.code().unwrap_or(1));

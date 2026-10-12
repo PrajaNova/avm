@@ -45,6 +45,10 @@ prompt, on directory changes in zsh, and before and after `avm` commands.
 Leaving a project restores each variable's original value, or unsets it if it
 was originally absent. Re-run shell setup in existing sessions after upgrading.
 
+The Windows installer also adds an `avm` command for `cmd.exe`. It forwards
+CLI commands to the installed binary; automatic shell environment updates
+still require the PowerShell hook.
+
 ## Quick start
 
 ```bash

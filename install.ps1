@@ -45,7 +45,7 @@ try {
     # `avm` there is just a thin passthrough to avm-bin: subcommands
     # (plugin/list/add/env/...) all forward as-is, but the PowerShell-only
     # bare-tool-name resolve+run routing and env auto-reapply don't apply.
-    Set-Content -Path (Join-Path $bin 'avm.bat') -Value "@echo off`r`navm-bin %*"
+    Set-Content -Path (Join-Path $bin 'avm.bat') -Encoding Ascii -Value @('@echo off', '"%~dp0avm-bin.exe" %*')
 
     $userPath = [Environment]::GetEnvironmentVariable('PATH', 'User')
     if (($userPath -split ';') -notcontains $bin) {

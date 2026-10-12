@@ -142,24 +142,9 @@ impl Lockfile {
     }
 
     pub fn save(&self, dir: &Path) -> Result<()> {
-        let path = dir.join(LOCK_FILE);
-        let tmp = dir.join(format!(".avm.lock.{}.tmp", std::process::id()));
         let mut raw = serde_json::to_vec_pretty(self)?;
         raw.push(b'\n');
-        let result = (|| {
-            use std::io::Write;
-            let mut file = fs::OpenOptions::new()
-                .write(true)
-                .create_new(true)
-                .open(&tmp)?;
-            file.write_all(&raw)?;
-            file.sync_all()?;
-            fs::rename(&tmp, &path).context("replace .avm.lock")
-        })();
-        if result.is_err() {
-            let _ = fs::remove_file(&tmp);
-        }
-        result
+        avm_plugin_api::storage::atomic_write(&dir.join(LOCK_FILE), &raw)
     }
 }
 

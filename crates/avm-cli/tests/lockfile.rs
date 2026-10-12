@@ -129,8 +129,10 @@ fn nested_lock_commands_update_the_project_lock() {
     success(project.run_in(&["lock"], "project/packages/web"));
     assert_eq!(project.lock()["tools"]["node"]["resolved"], "20.2.0");
     assert!(!project.0.join("project/packages/web/.avm.lock").exists());
+    fs::set_permissions(project.0.join("project/.avm.lock"), fs::Permissions::from_mode(0o640)).unwrap();
     fs::write(project.0.join("remote"), "20.3.0").unwrap();
     success(project.run_in(&["lock"], "project/packages/web"));
+    assert_eq!(fs::metadata(project.0.join("project/.avm.lock")).unwrap().permissions().mode() & 0o777, 0o640);
     assert_eq!(project.lock()["tools"]["node"]["resolved"], "20.3.0");
     assert!(!project.0.join("project/packages/web/.avm.lock").exists());
     fs::write(project.0.join("project/.avm.lock"), "invalid lock").unwrap();

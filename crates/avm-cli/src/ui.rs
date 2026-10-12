@@ -1,6 +1,9 @@
 use anyhow::Result;
+use crossterm::cursor::{Hide, MoveTo, Show};
 use crossterm::event::{self, Event, KeyCode, KeyEventKind, KeyModifiers};
-use crossterm::terminal::{disable_raw_mode, enable_raw_mode};
+use crossterm::execute;
+use crossterm::style::Print;
+use crossterm::terminal::{disable_raw_mode, enable_raw_mode, Clear, ClearType};
 use std::io::{self, IsTerminal, Write};
 
 const HELP: &str = "Type to search, Up/Down to move, Enter to select, Ctrl+C to cancel.";
@@ -30,7 +33,9 @@ pub fn select(title: &str, items: &[String]) -> Result<Option<usize>> {
     loop {
         render(title, items, &filtered, selected, offset, &query)?;
 
-        let Event::Key(key) = event::read()? else { continue };
+        let Event::Key(key) = event::read()? else {
+            continue;
+        };
         if key.kind == KeyEventKind::Release {
             continue;
         }
@@ -103,7 +108,7 @@ fn render(
 ) -> Result<()> {
     let page_size = PAGE_SIZE;
     let mut stdout = io::stdout();
-    write!(stdout, "\x1b[?25l\x1b[2J\x1b[H")?;
+    execute!(stdout, Clear(ClearType::All), MoveTo(0, 0))?;
     write!(stdout, "{title}\r\n")?;
     write!(stdout, "{HELP}\r\n")?;
     write!(stdout, "Search: {query}\u{2588}\r\n\r\n")?;
@@ -145,17 +150,18 @@ struct RawTerminal {
 
 impl RawTerminal {
     fn enter() -> Result<Self> {
-        write!(io::stdout(), "\x1b[?25l")?;
-        io::stdout().flush()?;
         enable_raw_mode()?;
-        Ok(Self { active: true })
+        let terminal = Self { active: true };
+        execute!(io::stdout(), Hide)?;
+        Ok(terminal)
     }
 
     fn restore(&mut self) -> Result<()> {
         if self.active {
-            let _ = disable_raw_mode();
-            let _ = write!(io::stdout(), "\x1b[?25h\r\n");
-            let _ = io::stdout().flush();
+            let raw_mode = disable_raw_mode();
+            let cursor = execute!(io::stdout(), Show, Print("\r\n"));
+            raw_mode?;
+            cursor?;
             self.active = false;
         }
         Ok(())
@@ -165,5 +171,32 @@ impl RawTerminal {
 impl Drop for RawTerminal {
     fn drop(&mut self) {
         let _ = self.restore();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    #[ignore = "requires a console; follow each prompt with --ignored --nocapture"]
+    fn console_picker_selects_filters_cancels_and_restores_terminal() {
+        assert!(can_select(), "run with --ignored --nocapture in a terminal");
+        let items = vec!["node 20".into(), "node 22".into(), "java 17".into()];
+        for (title, expected) in [
+            ("Navigation: Down then Enter", Some(1)),
+            ("Filter: type 22x, Backspace, Enter", Some(1)),
+            ("Clear: type 17, Ctrl+U, type 22, Enter", Some(1)),
+            ("Cancel: Ctrl+C", None),
+        ] {
+            assert_eq!(select(title, &items).unwrap(), expected);
+            assert!(!crossterm::terminal::is_raw_mode_enabled().unwrap());
+        }
+        {
+            let _terminal = RawTerminal::enter().unwrap();
+            assert!(crossterm::terminal::is_raw_mode_enabled().unwrap());
+        }
+        assert!(!crossterm::terminal::is_raw_mode_enabled().unwrap());
+        assert_eq!(select("Empty", &[]).unwrap(), None);
     }
 }

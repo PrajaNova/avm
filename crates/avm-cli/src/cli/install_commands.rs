@@ -2,7 +2,7 @@ use super::*;
 use crate::lockfile::{self, LockedTool, Lockfile, PluginPin};
 use avm_plugin_api::{
     download::{
-        download_verified, host_platform, validate_asset, validate_platform, validate_version,
+        host_platform, validate_asset, validate_platform, validate_version,
     },
     protocol::LockedAsset,
 };
@@ -161,7 +161,7 @@ pub fn cmd_install(frozen: bool) -> Result<()> {
     for (tool, version, provider, asset) in plan {
         if !provider.is_installed(&version) {
             if let Some(asset) = asset {
-                install_locked(provider.as_ref(), &version, &asset)?;
+                provider.install_locked(&version, &asset)?;
             } else {
                 provider.install(&version)?;
             }
@@ -175,29 +175,6 @@ pub fn cmd_install(frozen: bool) -> Result<()> {
     }
     shims::reshim()?;
     Ok(())
-}
-
-fn install_locked(provider: &dyn ToolProvider, version: &str, asset: &LockedAsset) -> Result<()> {
-    let staging = std::env::temp_dir().join(format!(
-        "avm-locked-{}-{}",
-        std::process::id(),
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)?
-            .as_nanos()
-    ));
-    fs::create_dir(&staging).context("create locked download staging dir")?;
-    let archive = staging.join("archive");
-    let result = download_verified(asset, &archive).and_then(|_| {
-        provider.install_locked(
-            version,
-            &LockedAsset {
-                url: archive.to_string_lossy().into_owned(),
-                sha256: asset.sha256.clone(),
-            },
-        )
-    });
-    let _ = fs::remove_dir_all(&staging);
-    result
 }
 
 fn locked_asset(tool: &str, entry: &LockedTool, platform: &str) -> Result<LockedAsset> {
@@ -238,7 +215,7 @@ pub fn install_provider_version(provider: &dyn ToolProvider, version: &str) -> R
             .filter(|entry| entry.resolved == version)
         {
             let asset = locked_asset(provider.name(), entry, &host_platform()?)?;
-            return install_locked(provider, version, &asset);
+            return provider.install_locked(version, &asset);
         }
     }
     provider.install(version)

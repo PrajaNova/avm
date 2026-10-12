@@ -103,9 +103,9 @@ platforms without installing anything. Platform names use `darwin`, `linux`
 or `windows` and `amd64` or `arm64`, joined with `_`. Unsupported platforms or
 missing checksums must fail instead of returning unverified assets.
 
-The host verifies a locked archive before passing an absolute local archive
-path in `install-locked`'s asset JSON. Use
-`avm_plugin_api::download::download_verified` to copy and reverify it before
+The host passes the original locked URL (or local archive path) and SHA-256
+in `install-locked`'s asset JSON. Plugins must verify it before extraction. Use
+`avm_plugin_api::download::download_verified` to download or copy and verify it before
 extraction; this path never honors `AVM_ALLOW_UNVERIFIED`. Keep the existing
 installer's staging, error handling and final layout. Older plugins retain
 ordinary installs through default methods that reject lockfile operations.

@@ -58,7 +58,9 @@ elif cmd == 'install':
     install(args[0])
 elif cmd == 'install-locked':
     asset = json.loads(args[1])
-    assert hashlib.sha256(pathlib.Path(asset['url']).read_bytes()).hexdigest() == asset['sha256']
+    assert asset['url'] == str(root / 'archive'), 'host must pass the original asset'
+    if hashlib.sha256(pathlib.Path(asset['url']).read_bytes()).hexdigest() != asset['sha256']:
+        sys.exit('checksum mismatch')
     install(args[0])
 else:
     sys.exit(1)

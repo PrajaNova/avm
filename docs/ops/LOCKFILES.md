@@ -65,13 +65,17 @@ hashes are recorded only for the host running `avm lock`, so other hosts check
 the plugin version until they record their own fingerprint. Installs warn
 explicitly when this platform's plugin binary has no pinned hash.
 
-Missing runtimes download from the locked URL and verify the locked SHA-256
-before the plugin runs. Node and Java plugins reverify the local archive before
-extracting it. `AVM_ALLOW_UNVERIFIED` cannot bypass these checks. Already installed
+The host passes the original locked URL and SHA-256 to the plugin. Node and Java
+download directly into their install staging directory and verify the archive
+before extracting it. `AVM_ALLOW_UNVERIFIED` cannot bypass these checks. Already installed
 versions are reused; this is archive verification on installation, not a file
 integrity scan of existing runtimes. Frozen installs validate the entire config
 and plugin plan before beginning installations; a later download failure may
 leave earlier successfully installed tools in place.
+
+The plugin install timeout is 30 minutes by default, covering download,
+verification and extraction. Set `AVM_PLUGIN_INSTALL_TIMEOUT=<seconds>` to
+extend it for slow links or custom plugins.
 
 Node and Java implement the optional `resolve` and `install-locked` protocol.
 Upgrade these plugins before locking. Android installs several packages through

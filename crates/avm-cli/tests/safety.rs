@@ -107,6 +107,23 @@ fn malformed_configs_are_never_replaced_with_empty_state() {
 }
 
 #[test]
+fn json_pins_resolve_installed_versions_in_both_scopes() {
+    let p = Project::new();
+    fs::create_dir_all(p.0.join("home/.avm/tools/node/20.2.0/bin")).unwrap();
+    fs::create_dir_all(p.0.join("home/.avm/tools/node/18.3.0/bin")).unwrap();
+    fs::write(p.0.join("home/.avm.json"), r#"{"tools":{"node":"18"}}"#).unwrap();
+    let global = p.run(&["list"]);
+    assert!(global.status.success());
+    assert!(String::from_utf8_lossy(&global.stdout).contains("node = 18.3.0"));
+    fs::write(p.0.join("project/.avm.json"), r#"{"tools":{"node":"20"}}"#).unwrap();
+    let local = p.run(&["list"]);
+    assert!(local.status.success());
+    assert!(String::from_utf8_lossy(&local.stdout).contains("node = 20.2.0"));
+    let cfg: serde_json::Value = serde_json::from_slice(&fs::read(p.0.join("project/.avm.json")).unwrap()).unwrap();
+    assert_eq!(cfg["tools"]["node"], "20");
+}
+
+#[test]
 fn untrusted_tool_pins_cannot_escape_managed_directories() {
     let p = Project::new();
     for spec in [p.0.to_string_lossy().to_string(), "../payload".into(), "C:\\payload".into()] {

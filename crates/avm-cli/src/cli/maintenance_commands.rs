@@ -36,7 +36,7 @@ fn statuses(cfg: &ResolvedConfig, only: &[String]) -> Result<Vec<Status>> {
         let origin = matches!(source, AliasSource::Local).then(|| cfg.tool_origins.get(&tool)).flatten();
         let requested = match source {
             AliasSource::Local => cfg.tool_specs.get(&tool).cloned().unwrap_or_else(|| current.clone()),
-            _ => current.clone(),
+            _ => cfg.global_tool_specs.get(&tool).cloned().unwrap_or_else(|| current.clone()),
         };
         // An exact pin's "range" is its major line; a spec (`20`, `>=18`) is its own range.
         let range = if requested == current {

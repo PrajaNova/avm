@@ -89,7 +89,7 @@ pub fn resolve(tool: &str, spec: &str) -> String {
         .ok()
         .and_then(|dir| fs::read_dir(dir).ok())
         .map(|entries| {
-            entries.flatten().filter_map(|e| e.file_name().into_string().ok()).filter(|n| !n.starts_with('.')).collect()
+            entries.flatten().filter(|e| e.path().is_dir()).filter_map(|e| e.file_name().into_string().ok()).filter(|n| !n.starts_with('.')).collect()
         })
         .unwrap_or_default();
     pick(tool, spec, installed).unwrap_or_else(|| spec.trim_start_matches('v').to_string())
@@ -98,6 +98,9 @@ pub fn resolve(tool: &str, spec: &str) -> String {
 /// Newest of `installed` (any list of version names) matching `spec`.
 pub(crate) fn pick(tool: &str, spec: &str, installed: Vec<String>) -> Option<String> {
     let spec = spec.trim();
+    if let Some(exact) = installed.iter().find(|v| *v == spec.trim_start_matches('v')) {
+        return Some(exact.clone());
+    }
     // Sorted by version, then build (`17.0.2+8` < `17.0.13+11`), then name.
     let mut candidates: Vec<(Vec<u64>, u64, String)> =
         installed.into_iter().filter_map(|name| Some((numbers(&name)?, build(&name), name))).collect();

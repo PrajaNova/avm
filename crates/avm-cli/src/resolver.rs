@@ -33,6 +33,7 @@ pub struct ResolvedConfig {
     pub tool_origins: HashMap<String, String>,
     /// Each local pin's spec as written (`20`, `lts/*`, `>=18`, `20.11.1`).
     pub tool_specs: HashMap<String, String>,
+    pub global_tool_specs: HashMap<String, String>,
 }
 
 impl ResolvedConfig {
@@ -108,6 +109,10 @@ pub fn load(
     let mut cfg = load_unlocked(cwd, home, plugin_aliases)?;
     if let Some(lock) = crate::lockfile::load(cwd)? {
         lock.apply(&mut cfg)?;
+    } else {
+        for (tool, version) in cfg.local_tools.iter_mut().chain(cfg.global_tools.iter_mut()) {
+            *version = crate::version_files::resolve(tool, version);
+        }
     }
     Ok(cfg)
 }
@@ -149,6 +154,7 @@ pub fn load_unlocked(cwd: &Path, home: &Path, plugin_aliases: HashMap<String, Re
         local_env: local.env,
         global_env: global.env,
         local_tools,
+        global_tool_specs: global.tools.clone(),
         global_tools: global.tools,
         plugin_aliases,
         untrusted,

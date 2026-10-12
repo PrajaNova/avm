@@ -210,6 +210,15 @@ fn locks_installs_and_rejects_drift_before_installing() {
     failure(project.run(&["install", "--frozen"]), "plugin differs");
     fs::write(&plugin, &original_plugin).unwrap();
 
+    let mut unpinned = lock.clone();
+    unpinned["tools"]["node"]["plugin"]["binaries"] = json!({});
+    project.save_lock(&unpinned);
+    let out = project.run(&["install", "--frozen"]);
+    let warning = String::from_utf8_lossy(&out.stderr).into_owned();
+    success(out);
+    assert!(warning.contains(&format!("node plugin binary not pinned for {}", avm_plugin_api::download::host_platform().unwrap())), "{warning}");
+    project.save_lock(&lock);
+
     fs::write(
         project.0.join("project/.avm.json"),
         r#"{"tools":{"node":"21"}}"#,

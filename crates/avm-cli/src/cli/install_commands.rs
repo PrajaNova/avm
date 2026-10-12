@@ -201,6 +201,8 @@ fn locked_asset(tool: &str, entry: &LockedTool, platform: &str) -> Result<Locked
         {
             return Err(anyhow!("{tool} plugin checksum differs from .avm.lock; restore the locked plugin or run `avm lock`"));
         }
+    } else {
+        eprintln!("warning: {tool} plugin binary not pinned for {platform}; only plugin name and version are checked");
     }
     entry.assets.get(platform).cloned().ok_or_else(|| {
         anyhow!(

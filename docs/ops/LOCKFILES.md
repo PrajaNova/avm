@@ -59,7 +59,8 @@ asset for this platform. Installed native plugins must match the locked name
 and version. The host also checks the executable hash on platforms for which
 one was recorded. Cross-platform assets can be resolved remotely; executable
 hashes are recorded only for the host running `avm lock`, so other hosts check
-the plugin version until they record their own fingerprint.
+the plugin version until they record their own fingerprint. Installs warn
+explicitly when this platform's plugin binary has no pinned hash.
 
 Missing runtimes download from the locked URL and verify the locked SHA-256
 before the plugin runs. Node and Java plugins reverify the local archive before

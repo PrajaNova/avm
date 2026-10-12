@@ -279,14 +279,18 @@ pub fn cmd_prune(older_than: Option<String>, include_unrecorded: bool, dry_run: 
     let cutoff = older_than.as_deref().map(parse_days).transpose()?.map(|d| Duration::from_secs(d * 24 * 60 * 60));
 
     // Versions still wanted: global pins, plus pins of every tracked project that still exists.
-    let mut keep: HashSet<(String, String)> = config::load(&home)?.tools.into_iter().collect();
+    let mut keep: HashSet<(String, String)> = config::load(&home)?.tools.into_iter()
+        .flat_map(|(tool, spec)| [(tool.clone(), crate::version_files::resolve(&tool, &spec)), (tool, spec)])
+        .collect();
     let mut live_dirs = BTreeSet::new();
     for dir in tracked_dirs() {
         let path = PathBuf::from(&dir);
         if path.is_dir() {
-            if let Ok(cfg) = crate::resolver::load(&path, &home, HashMap::new()) {
-                keep.extend(cfg.local_tools);
-            }
+            let cfg = crate::resolver::load(&path, &home, HashMap::new())
+                .with_context(|| format!("cannot safely prune: failed to resolve tracked project {}", path.display()))?;
+            keep.extend(cfg.local_tools.into_iter().chain(cfg.global_tools).flat_map(|(tool, spec)| {
+                [(tool.clone(), crate::version_files::resolve(&tool, &spec)), (tool, spec)]
+            }));
             live_dirs.insert(dir);
         }
     }

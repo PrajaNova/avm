@@ -41,6 +41,24 @@ fn removal_commands_reject_paths_without_deleting_them() {
 }
 
 #[test]
+fn prune_aborts_when_a_tracked_project_cannot_resolve() {
+    let p = Project::new();
+    let version = p.0.join("home/.avm/tools/node/20.2.0");
+    fs::create_dir_all(&version).unwrap();
+    fs::write(version.join(".last_used"), "").unwrap();
+    fs::write(p.0.join("home/.avm/tracked-configs.json"), serde_json::json!([p.0.join("project")]).to_string()).unwrap();
+    fs::write(p.0.join("project/.avm.lock"), "invalid lock").unwrap();
+    let out = p.run(&["prune", "--yes"]);
+    assert!(!out.status.success());
+    assert!(String::from_utf8_lossy(&out.stderr).contains("cannot safely prune"));
+    assert!(version.exists());
+    fs::remove_file(p.0.join("project/.avm.lock")).unwrap();
+    fs::write(p.0.join("home/.avm.json"), r#"{"tools":{"node":"20"}}"#).unwrap();
+    assert!(p.run(&["prune", "--yes"]).status.success());
+    assert!(version.exists());
+}
+
+#[test]
 fn untrusted_tool_pins_cannot_escape_managed_directories() {
     let p = Project::new();
     for spec in [p.0.to_string_lossy().to_string(), "../payload".into(), "C:\\payload".into()] {

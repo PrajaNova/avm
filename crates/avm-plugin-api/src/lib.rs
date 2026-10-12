@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 pub mod download;
+pub mod storage;
 use std::{collections::HashMap, path::PathBuf};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

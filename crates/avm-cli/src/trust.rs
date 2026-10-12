@@ -12,11 +12,15 @@ fn store_path() -> Result<PathBuf> {
 }
 
 pub fn list() -> BTreeMap<String, String> {
-    store_path()
-        .ok()
-        .and_then(|path| fs::read(path).ok())
-        .and_then(|raw| serde_json::from_slice(&raw).ok())
-        .unwrap_or_default()
+    read_store().unwrap_or_default()
+}
+
+fn read_store() -> Result<BTreeMap<String, String>> {
+    match fs::read(store_path()?) {
+        Ok(raw) => Ok(serde_json::from_slice(&raw).context("invalid trust store")?),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(BTreeMap::new()),
+        Err(e) => Err(e.into()),
+    }
 }
 
 fn save(store: &BTreeMap<String, String>) -> Result<()> {
@@ -24,7 +28,7 @@ fn save(store: &BTreeMap<String, String>) -> Result<()> {
     if let Some(dir) = path.parent() {
         fs::create_dir_all(dir).context("failed to create avm home")?;
     }
-    fs::write(&path, serde_json::to_vec_pretty(store)?).context("failed to write trusted.json")
+    avm_plugin_api::storage::atomic_write(&path, &serde_json::to_vec_pretty(store)?).context("failed to write trusted.json")
 }
 
 fn key(file: &Path) -> Result<PathBuf> {
@@ -60,7 +64,8 @@ pub fn is_trusted(file: &Path, trusted_paths: &[String]) -> bool {
 pub fn trust(file: &Path) -> Result<()> {
     let file = key(file)?;
     let hash = avm_plugin_api::sha256_file(&file)?;
-    let mut store = list();
+    let _guard = avm_plugin_api::storage::lock(&store_path()?)?;
+    let mut store = read_store()?;
     store.insert(file.to_string_lossy().into_owned(), hash);
     save(&store)
 }
@@ -68,7 +73,8 @@ pub fn trust(file: &Path) -> Result<()> {
 /// Returns whether an entry was removed.
 pub fn revoke(file: &Path) -> Result<bool> {
     let file = key(file)?;
-    let mut store = list();
+    let _guard = avm_plugin_api::storage::lock(&store_path()?)?;
+    let mut store = read_store()?;
     let removed = store.remove(&*file.to_string_lossy()).is_some();
     save(&store)?;
     Ok(removed)

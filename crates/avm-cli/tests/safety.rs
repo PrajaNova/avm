@@ -59,6 +59,40 @@ fn prune_aborts_when_a_tracked_project_cannot_resolve() {
 }
 
 #[test]
+fn concurrent_config_edits_preserve_every_alias() {
+    let p = Project::new();
+    let mut children = Vec::new();
+    for n in 0..24 {
+        children.push(p.command(&["add", "-g", &format!("alias{n}"), "echo ok"])
+            .stdout(std::process::Stdio::null()).spawn().unwrap());
+    }
+    for mut child in children { assert!(child.wait().unwrap().success()); }
+    let config: serde_json::Value = serde_json::from_slice(&fs::read(p.0.join("home/.avm.json")).unwrap()).unwrap();
+    assert_eq!(config["aliases"].as_object().unwrap().len(), 24);
+}
+
+#[test]
+fn concurrent_project_tracking_and_trust_preserve_every_project() {
+    let p = Project::new();
+    let mut children = Vec::new();
+    for n in 0..12 {
+        let dir = p.0.join(format!("project{n}"));
+        fs::create_dir(&dir).unwrap();
+        fs::write(dir.join(".avm.json"), r#"{"tools":{"node":"20"}}"#).unwrap();
+        for args in [vec!["trust", dir.to_str().unwrap()], vec!["list"]] {
+            children.push(p.command(&args).current_dir(&dir)
+                .stdout(std::process::Stdio::null()).spawn().unwrap());
+        }
+    }
+    for mut child in children { assert!(child.wait().unwrap().success()); }
+    for (file, object) in [("trusted.json", true), ("tracked-configs.json", false)] {
+        let value: serde_json::Value = serde_json::from_slice(&fs::read(p.0.join("home/.avm").join(file)).unwrap()).unwrap();
+        let count = if object { value.as_object().unwrap().len() } else { value.as_array().unwrap().len() };
+        assert_eq!(count, 12, "{file}");
+    }
+}
+
+#[test]
 fn untrusted_tool_pins_cannot_escape_managed_directories() {
     let p = Project::new();
     for spec in [p.0.to_string_lossy().to_string(), "../payload".into(), "C:\\payload".into()] {

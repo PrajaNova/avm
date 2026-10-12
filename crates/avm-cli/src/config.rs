@@ -115,7 +115,7 @@ pub fn load(root: &Path) -> Result<ConfigLoadResult> {
 pub fn save(root: &Path, cfg: &ConfigLoadResult) -> Result<()> {
     validate_env(&cfg.env)?;
     let raw = serde_json::to_vec_pretty(cfg)?;
-    fs::write(root.join(CONFIG_FILE), raw).context("failed to save config")
+    avm_plugin_api::storage::atomic_write(&root.join(CONFIG_FILE), &raw).context("failed to save config")
 }
 
 #[cfg(test)]

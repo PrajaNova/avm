@@ -1,8 +1,9 @@
 use serde::{Deserialize, Serialize};
-pub mod download;
-pub mod storage;
-pub mod process;
 use std::{collections::HashMap, path::PathBuf};
+
+pub mod download;
+pub mod process;
+pub mod storage;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Manifest {
@@ -118,24 +119,6 @@ pub fn validate_version_spec(spec: &str) -> anyhow::Result<()> {
     Ok(())
 }
 
-#[cfg(test)]
-mod path_tests {
-    #[test]
-    fn managed_paths_reject_untrusted_components() {
-        for name in ["", ".", "..", "/tmp/payload", "../node", "C:\\payload"] {
-            assert!(super::validate_name(name).is_err());
-            assert!(super::download::validate_version(name).is_err());
-            assert!(super::remove_version("node", name).is_err());
-        }
-        for spec in ["/tmp/payload", "../payload", "C:\\payload"] {
-            assert!(super::validate_version_spec(spec).is_err());
-        }
-        for spec in ["20", ">=18 <21", "lts/*", "lts/iron"] {
-            assert!(super::validate_version_spec(spec).is_ok());
-        }
-    }
-}
-
 /// Sorted version dirs under `tool_dir(tool)` that pass `is_installed`.
 pub fn list_installed(tool: &str, is_installed: impl Fn(&str) -> bool) -> anyhow::Result<Vec<String>> {
     let entries = match std::fs::read_dir(tool_dir(tool)?) {
@@ -165,12 +148,14 @@ pub fn remove_version(tool: &str, version: &str) -> anyhow::Result<()> {
 
 /// Wait for `child` up to `ms`; kills it and returns `None` on timeout.
 pub fn wait_deadline(child: &mut std::process::Child, ms: u64) -> std::io::Result<Option<std::process::ExitStatus>> {
-    let started = std::time::Instant::now();
+    let deadline = std::time::Instant::now()
+        .checked_add(std::time::Duration::from_millis(ms))
+        .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::InvalidInput, "timeout exceeds the clock's range"))?;
     loop {
         if let Some(status) = child.try_wait()? {
             return Ok(Some(status));
         }
-        if started.elapsed().as_millis() >= u128::from(ms) {
+        if std::time::Instant::now() >= deadline {
             #[cfg(unix)] process::terminate_descendants(child.id());
             let _ = child.kill();
             let _ = child.wait();
@@ -418,9 +403,35 @@ pub mod runner {
     }
 }
 
+/// POSIX single-quote escaping: safe for any byte string.
+pub fn sh_quote(value: &str) -> String {
+    if value.is_empty() {
+        return "''".to_string();
+    }
+    if value
+        .bytes()
+        .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'_' | b'-' | b'.' | b'/' | b':' | b'='))
+    {
+        return value.to_string();
+    }
+    format!("'{}'", value.replace('\'', "'\\''"))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn extreme_timeouts_do_not_panic() {
+        #[cfg(unix)] let mut command = std::process::Command::new("true");
+        #[cfg(windows)] let mut command = std::process::Command::new("cmd");
+        #[cfg(windows)] command.args(["/C", "exit 0"]);
+        let mut child = command.spawn().unwrap();
+        if let Err(err) = wait_deadline(&mut child, u64::MAX) {
+            assert_eq!(err.kind(), std::io::ErrorKind::InvalidInput);
+        }
+        assert!(child.wait().unwrap().success());
+    }
 
     #[test]
     fn query_filter() {
@@ -455,16 +466,20 @@ mod tests {
     }
 }
 
-/// POSIX single-quote escaping: safe for any byte string.
-pub fn sh_quote(value: &str) -> String {
-    if value.is_empty() {
-        return "''".to_string();
+#[cfg(test)]
+mod path_tests {
+    #[test]
+    fn managed_paths_reject_untrusted_components() {
+        for name in ["", ".", "..", "/tmp/payload", "../node", "C:\\payload"] {
+            assert!(super::validate_name(name).is_err());
+            assert!(super::download::validate_version(name).is_err());
+            assert!(super::remove_version("node", name).is_err());
+        }
+        for spec in ["/tmp/payload", "../payload", "C:\\payload"] {
+            assert!(super::validate_version_spec(spec).is_err());
+        }
+        for spec in ["20", ">=18 <21", "lts/*", "lts/iron"] {
+            assert!(super::validate_version_spec(spec).is_ok());
+        }
     }
-    if value
-        .bytes()
-        .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'_' | b'-' | b'.' | b'/' | b':' | b'='))
-    {
-        return value.to_string();
-    }
-    format!("'{}'", value.replace('\'', "'\\''"))
 }

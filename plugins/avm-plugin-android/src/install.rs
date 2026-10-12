@@ -56,11 +56,12 @@ pub fn install_android(version: &str) -> Result<()> {
     // repository listing backs both resolvers to pick real packages.
     let listing = list_packages(&sdk, java_home.as_deref())?;
     let build_tools = resolve_build_tools_version(&listing, version)?;
-    let system_image = resolve_system_image_id(&listing, version)?;
+    let system_image = resolve_system_image_id(&listing, version, DEFAULT_TAG)?;
     install_system_image(
         &sdk,
         java_home.as_deref(),
         &system_image,
+        DEFAULT_TAG,
         &[
             "platform-tools".to_string(),
             format!("platforms;android-{version}"),
@@ -156,20 +157,23 @@ pub fn accept_licenses(sdk: &Path, java_home: Option<&Path>) {
     let _ = wait_deadline(&mut child, env_timeout_ms(SDKMANAGER_ENV, SDKMANAGER_TIMEOUT_MS));
 }
 
-pub fn sysimg_package(system_image: &str) -> String {
-    format!("system-images;android-{system_image};google_apis;{}", sysimg_abi())
+/// System-image tag for phones; TV/Wear/Automotive AVDs need their own tag.
+pub const DEFAULT_TAG: &str = "google_apis";
+
+pub fn sysimg_package(system_image: &str, tag: &str) -> String {
+    format!("system-images;android-{system_image};{tag};{}", sysimg_abi())
 }
 
 /// Install `extra` packages plus the emulator and `system_image`. sdkmanager
 /// tracks "installed" by package.xml alone, so an interrupted earlier install
 /// that left package.xml without system.img would make it a silent no-op —
 /// clear such a partial image first to force a real re-fetch.
-pub fn install_system_image(sdk: &Path, java_home: Option<&Path>, system_image: &str, extra: &[String]) -> Result<()> {
-    let package = sysimg_package(system_image);
+pub fn install_system_image(sdk: &Path, java_home: Option<&Path>, system_image: &str, tag: &str, extra: &[String]) -> Result<()> {
+    let package = sysimg_package(system_image, tag);
     let image_dir = sdk
         .join("system-images")
         .join(format!("android-{system_image}"))
-        .join("google_apis")
+        .join(tag)
         .join(sysimg_abi());
     if image_dir.exists() && !image_dir.join("system.img").exists() {
         println!("Found an incomplete {package} install — removing and re-fetching...");
@@ -232,13 +236,13 @@ fn resolve_build_tools_version(listing: &str, api: &str) -> Result<String> {
 /// so the winning candidate's *exact* id is returned. Prefers the highest
 /// same-major image at or below the requested level, then the closest one
 /// above, then the highest available for any major.
-pub fn resolve_system_image_id(listing: &str, api: &str) -> Result<String> {
+pub fn resolve_system_image_id(listing: &str, api: &str, tag: &str) -> Result<String> {
     if let Ok(id) = std::env::var("ANDROID_SYSTEM_IMAGE_API") {
         return Ok(id);
     }
 
     let abi = sysimg_abi();
-    let suffix = format!(";google_apis;{abi}");
+    let suffix = format!(";{tag};{abi}");
     let target = nums(api, 2).ok_or_else(|| anyhow!("cannot parse Android API level '{api}'"))?;
 
     let mut same_major_le = Vec::new();
@@ -275,7 +279,7 @@ pub fn resolve_system_image_id(listing: &str, api: &str) -> Result<String> {
         .or_else(|| same_major_gt.into_iter().min_by_key(|(key, _)| key.clone()))
         .or_else(|| any.into_iter().max_by_key(|(key, _)| key.clone()))
         .map(|(_, id)| id.to_string())
-        .ok_or_else(|| anyhow!("no {abi} system image found for Android API {api} in the SDK repository"))
+        .ok_or_else(|| anyhow!("no {tag} {abi} system image found for Android API {api} in the SDK repository"))
 }
 
 pub fn list_packages(sdk: &Path, java_home: Option<&Path>) -> Result<String> {
@@ -446,7 +450,7 @@ mod tests {
         );
         assert_eq!(resolve_build_tools_version(&listing, "37.2").unwrap(), "36.0.0");
         assert_eq!(resolve_build_tools_version(&listing, "35").unwrap(), "35.0.1");
-        assert_eq!(resolve_system_image_id(&listing, "37.2").unwrap(), "37.0");
-        assert_eq!(resolve_system_image_id(&listing, "36").unwrap(), "36");
+        assert_eq!(resolve_system_image_id(&listing, "37.2", DEFAULT_TAG).unwrap(), "37.0");
+        assert_eq!(resolve_system_image_id(&listing, "36", DEFAULT_TAG).unwrap(), "36");
     }
 }

@@ -12,7 +12,8 @@ struct Project(PathBuf);
 
 impl Project {
     fn new() -> Self {
-        let root = std::env::temp_dir().join(format!("avm-lock-test-{}", std::process::id()));
+        static NEXT: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+        let root = std::env::temp_dir().join(format!("avm-lock-test-{}-{}", std::process::id(), NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)));
         fs::create_dir_all(root.join("home")).unwrap();
         fs::create_dir_all(root.join("project")).unwrap();
         fs::write(root.join("home/.avm.json"), r#"{"tools":{"java":"21"}}"#).unwrap();
@@ -118,6 +119,23 @@ fn failure(output: Output, expected: &str) {
     assert!(!output.status.success());
     let err = String::from_utf8_lossy(&output.stderr);
     assert!(err.contains(expected), "{err}");
+}
+
+#[test]
+fn nested_lock_commands_update_the_project_lock() {
+    let project = Project::new();
+    fs::create_dir_all(project.0.join("project/packages/web")).unwrap();
+    // No existing lock: discover the project config rather than the home config.
+    success(project.run_in(&["lock"], "project/packages/web"));
+    assert_eq!(project.lock()["tools"]["node"]["resolved"], "20.2.0");
+    assert!(!project.0.join("project/packages/web/.avm.lock").exists());
+    fs::write(project.0.join("remote"), "20.3.0").unwrap();
+    success(project.run_in(&["lock"], "project/packages/web"));
+    assert_eq!(project.lock()["tools"]["node"]["resolved"], "20.3.0");
+    assert!(!project.0.join("project/packages/web/.avm.lock").exists());
+    fs::write(project.0.join("project/.avm.lock"), "invalid lock").unwrap();
+    success(project.run_in(&["lock"], "project/packages/web"));
+    assert_eq!(project.lock()["tools"].as_object().unwrap().len(), 1);
 }
 
 #[test]

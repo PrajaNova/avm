@@ -25,7 +25,9 @@ fn plugin_pin(process: &runtime::PluginProcess, platform: &str) -> Result<Plugin
 
 pub fn cmd_lock(mut platforms: Vec<String>) -> Result<()> {
     let cwd = std::env::current_dir()?;
-    let cfg = unlocked_state()?;
+    let home = home_dir()?;
+    let root = lock_root(&cwd, &home)?;
+    let cfg = crate::resolver::load_unlocked(&root, &home, HashMap::new())?;
     let host = host_platform()?;
     if platforms.is_empty() {
         platforms.push(host.clone());
@@ -85,13 +87,29 @@ pub fn cmd_lock(mut platforms: Vec<String>) -> Result<()> {
             },
         );
     }
-    lock.save(&cwd)?;
+    lock.save(&root)?;
     println!(
-        "✓ Locked {} tools in .avm.lock ({})",
+        "✓ Locked {} tools in {} ({})",
         lock.tools.len(),
+        root.join(lockfile::LOCK_FILE).display(),
         platforms.join(", ")
     );
     Ok(())
+}
+
+fn lock_root(cwd: &Path, home: &Path) -> Result<PathBuf> {
+    for file in [lockfile::LOCK_FILE, CONFIG_FILE] {
+        for dir in cwd.ancestors() {
+            if file == CONFIG_FILE && dir == home { break; }
+            match fs::metadata(dir.join(file)) {
+                Ok(meta) if meta.is_file() => return Ok(dir.to_path_buf()),
+                Ok(_) => return Err(anyhow!("{} is not a file", dir.join(file).display())),
+                Err(err) if err.kind() == std::io::ErrorKind::NotFound => continue,
+                Err(err) => return Err(err).context("find project lock directory"),
+            }
+        }
+    }
+    Ok(cwd.to_path_buf())
 }
 
 pub fn cmd_install(frozen: bool) -> Result<()> {

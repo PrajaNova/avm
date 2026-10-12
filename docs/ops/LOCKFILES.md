@@ -17,8 +17,11 @@ avm install --frozen
 ```
 
 `lock` fetches exact release metadata and checksums without downloading or
-installing the runtimes. It writes `.avm.lock` in the current directory through
-a temporary file and rename, only after all tools and platforms resolve.
+installing the runtimes. It updates the nearest existing `.avm.lock`, or creates
+one next to the nearest project `.avm.json` (falling back to the current directory).
+Selections are resolved from that directory, so running from a subdirectory does
+not create a competing lock. The file is replaced atomically only after all tools
+and platforms resolve.
 Tools, platforms and plugin fingerprints are sorted for stable diffs.
 
 ```json

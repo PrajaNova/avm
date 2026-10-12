@@ -86,26 +86,7 @@ pub fn load(root: &Path) -> Result<ConfigLoadResult> {
     let file_path = root.join(CONFIG_FILE);
 
     match fs::read(&file_path) {
-        Ok(raw) => match parse_config(&raw) {
-            Ok(cfg) => Ok(cfg),
-            Err(err) => {
-                // Don't let a corrupt config block every avm command. Back the
-                // file up with a timestamped suffix and continue with an empty
-                // config. The user can copy values back from the .broken file.
-                let stamp = std::time::SystemTime::now()
-                    .duration_since(std::time::UNIX_EPOCH)
-                    .map(|d| d.as_secs())
-                    .unwrap_or(0);
-                let backup = file_path.with_extension(format!("broken-{stamp}.json"));
-                let _ = fs::rename(&file_path, &backup);
-                eprintln!(
-                    "warning: {} was malformed ({err}); backed up to {} and continuing with an empty config.",
-                    file_path.display(),
-                    backup.display()
-                );
-                Ok(ConfigLoadResult::default())
-            }
-        },
+        Ok(raw) => parse_config(&raw).with_context(|| format!("invalid {}; repair the file before continuing", file_path.display())),
         Err(err) if err.kind() == std::io::ErrorKind::NotFound => Ok(ConfigLoadResult::default()),
         Err(err) => Err(err.into()),
     }

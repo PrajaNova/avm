@@ -93,6 +93,20 @@ fn concurrent_project_tracking_and_trust_preserve_every_project() {
 }
 
 #[test]
+fn malformed_configs_are_never_replaced_with_empty_state() {
+    let p = Project::new();
+    let file = p.0.join("home/.avm.json");
+    let raw = br#"{"aliases":{"valuable":"echo saved"}, broken"#;
+    fs::write(&file, raw).unwrap();
+    for args in [vec!["add", "-g", "new", "echo new"], vec!["prune", "--yes"]] {
+        let out = p.run(&args);
+        assert!(!out.status.success());
+        assert!(String::from_utf8_lossy(&out.stderr).contains("repair the file"));
+        assert_eq!(fs::read(&file).unwrap(), raw);
+    }
+}
+
+#[test]
 fn untrusted_tool_pins_cannot_escape_managed_directories() {
     let p = Project::new();
     for spec in [p.0.to_string_lossy().to_string(), "../payload".into(), "C:\\payload".into()] {

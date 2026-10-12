@@ -1,14 +1,16 @@
-use anyhow::{anyhow, Context, Result};
-use std::io::{self, IsTerminal, Read, Write};
-use std::process::Command;
+use anyhow::Result;
+use crossterm::cursor::{Hide, MoveTo, Show};
+use crossterm::event::{self, Event, KeyCode, KeyEventKind, KeyModifiers};
+use crossterm::execute;
+use crossterm::style::Print;
+use crossterm::terminal::{disable_raw_mode, enable_raw_mode, Clear, ClearType};
+use std::io::{self, IsTerminal, Write};
 
 const HELP: &str = "Type to search, Up/Down to move, Enter to select, Ctrl+C to cancel.";
 const PAGE_SIZE: usize = 10;
 
-/// The picker drives raw mode through `stty`, so it's Unix-only; elsewhere
-/// callers fall back to their non-interactive path.
 pub fn can_select() -> bool {
-    cfg!(unix) && io::stdin().is_terminal() && io::stdout().is_terminal()
+    io::stdin().is_terminal() && io::stdout().is_terminal()
 }
 
 /// Interactive picker: type to filter (substring, case-insensitive),
@@ -31,20 +33,22 @@ pub fn select(title: &str, items: &[String]) -> Result<Option<usize>> {
     loop {
         render(title, items, &filtered, selected, offset, &query)?;
 
-        let mut byte = [0u8; 1];
-        io::stdin().read_exact(&mut byte)?;
-        match byte[0] {
-            b'\n' | b'\r' => {
+        let Event::Key(key) = event::read()? else {
+            continue;
+        };
+        if key.kind == KeyEventKind::Release {
+            continue;
+        }
+        match key.code {
+            KeyCode::Enter => {
                 terminal.restore()?;
                 return Ok(filtered.get(selected).copied());
             }
-            3 => {
-                // Ctrl+C
+            KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => {
                 terminal.restore()?;
                 return Ok(None);
             }
-            21 => {
-                // Ctrl+U: clear the whole search query
+            KeyCode::Char('u') if key.modifiers.contains(KeyModifiers::CONTROL) => {
                 if !query.is_empty() {
                     query.clear();
                     filtered = filter_items(items, &query);
@@ -52,26 +56,17 @@ pub fn select(title: &str, items: &[String]) -> Result<Option<usize>> {
                     offset = 0;
                 }
             }
-            127 | 8 => {
-                // Backspace
+            KeyCode::Backspace => {
                 if query.pop().is_some() {
                     filtered = filter_items(items, &query);
                     selected = 0;
                     offset = 0;
                 }
             }
-            27 => {
-                let mut seq = [0u8; 2];
-                if io::stdin().read_exact(&mut seq).is_ok() && seq[0] == b'[' {
-                    match seq[1] {
-                        b'A' => selected = selected.saturating_sub(1),
-                        b'B' if selected + 1 < filtered.len() => selected += 1,
-                        _ => {}
-                    }
-                }
-            }
-            b if (0x20..0x7f).contains(&b) => {
-                query.push(b as char);
+            KeyCode::Up => selected = selected.saturating_sub(1),
+            KeyCode::Down if selected + 1 < filtered.len() => selected += 1,
+            KeyCode::Char(c) => {
+                query.push(c);
                 filtered = filter_items(items, &query);
                 selected = 0;
                 offset = 0;
@@ -113,7 +108,7 @@ fn render(
 ) -> Result<()> {
     let page_size = PAGE_SIZE;
     let mut stdout = io::stdout();
-    write!(stdout, "\x1b[?25l\x1b[2J\x1b[H")?;
+    execute!(stdout, Clear(ClearType::All), MoveTo(0, 0))?;
     write!(stdout, "{title}\r\n")?;
     write!(stdout, "{HELP}\r\n")?;
     write!(stdout, "Search: {query}\u{2588}\r\n\r\n")?;
@@ -155,24 +150,18 @@ struct RawTerminal {
 
 impl RawTerminal {
     fn enter() -> Result<Self> {
-        write!(io::stdout(), "\x1b[?25l")?;
-        io::stdout().flush()?;
-        let status = Command::new("stty")
-            .arg("raw")
-            .arg("-echo")
-            .status()
-            .context("failed to enter raw terminal mode")?;
-        if !status.success() {
-            return Err(anyhow!("failed to enter raw terminal mode"));
-        }
-        Ok(Self { active: true })
+        enable_raw_mode()?;
+        let terminal = Self { active: true };
+        execute!(io::stdout(), Hide)?;
+        Ok(terminal)
     }
 
     fn restore(&mut self) -> Result<()> {
         if self.active {
-            let _ = Command::new("stty").arg("sane").status();
-            let _ = write!(io::stdout(), "\x1b[?25h\r\n");
-            let _ = io::stdout().flush();
+            let raw_mode = disable_raw_mode();
+            let cursor = execute!(io::stdout(), Show, Print("\r\n"));
+            raw_mode?;
+            cursor?;
             self.active = false;
         }
         Ok(())
@@ -182,5 +171,32 @@ impl RawTerminal {
 impl Drop for RawTerminal {
     fn drop(&mut self) {
         let _ = self.restore();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    #[ignore = "requires a console; follow each prompt with --ignored --nocapture"]
+    fn console_picker_selects_filters_cancels_and_restores_terminal() {
+        assert!(can_select(), "run with --ignored --nocapture in a terminal");
+        let items = vec!["node 20".into(), "node 22".into(), "java 17".into()];
+        for (title, expected) in [
+            ("Navigation: Down then Enter", Some(1)),
+            ("Filter: type 22x, Backspace, Enter", Some(1)),
+            ("Clear: type 17, Ctrl+U, type 22, Enter", Some(1)),
+            ("Cancel: Ctrl+C", None),
+        ] {
+            assert_eq!(select(title, &items).unwrap(), expected);
+            assert!(!crossterm::terminal::is_raw_mode_enabled().unwrap());
+        }
+        {
+            let _terminal = RawTerminal::enter().unwrap();
+            assert!(crossterm::terminal::is_raw_mode_enabled().unwrap());
+        }
+        assert!(!crossterm::terminal::is_raw_mode_enabled().unwrap());
+        assert_eq!(select("Empty", &[]).unwrap(), None);
     }
 }

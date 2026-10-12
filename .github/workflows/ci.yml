@@ -49,10 +49,10 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
 
       - name: Build workspace
-        run: cargo build --workspace
+        run: cargo build --workspace --locked
 
       - name: Run Rust tests
-        run: cargo test --workspace
+        run: cargo test --workspace --locked
 
       - name: Smoke test plugins
         run: |
@@ -78,8 +78,8 @@ jobs:
 
       - name: Run Rust tests
         run: |
-          cargo build --workspace
-          cargo test --workspace
+          cargo build --workspace --locked
+          cargo test --workspace --locked
 
       - name: Windows e2e (install.ps1, exe shims, node/java/android)
         shell: pwsh

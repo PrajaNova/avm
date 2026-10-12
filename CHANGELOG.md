@@ -6,8 +6,24 @@ The format follows Keep a Changelog style, and releases use semantic versioning.
 
 ## [Unreleased]
 
+### Fixed
+- Reject tool pins and removal arguments that escape managed directories.
+- Preserve existing PowerShell profiles and malformed configuration files.
+- Serialize config, trust, project-tracking and runtime-install writes; replace JSON atomically.
+- Stop pruning when tracked selections cannot be resolved; keep fuzzy global pins.
+- Resolve fuzzy JSON pins and share version selection across install, use and exec.
+- Reject malformed version ranges and handle numeric bounds without panicking.
+- Terminate timed-out plugin descendants and bound output-pipe waits.
+- Pass package script names as literal arguments and restore shell environment after project changes.
+- Merge Windows environment keys without case collisions and find temporary tools/package managers on the child's PATH.
+
+### Testing
+- Test native Node/Java frozen installs and archive tampering on Linux, macOS and Windows (ZIP), using plugins built from the checkout.
+- Run live Node/Java/Android download suites with the checkout's plugins on Linux and Windows.
+
 ### Added
 - `avm exec` (alias `avm x`) runs commands with temporary `tool@version` selections, auto-installing missing runtimes without changing pins or lockfiles. `avm run --with` applies the same overrides to aliases; `--no-install` uses installed versions only.
+- `avm install` installs all selected tools without rewriting pins. `avm lock` writes sorted exact versions, plugin identities and per-platform download checksums to `.avm.lock`; `avm install --frozen` rejects missing or stale locks. Node and Java plugins support verified locked downloads; Android and legacy asdf plugins remain available through ordinary installs.
 
 ## [0.4.1] - 2026-10-07
 

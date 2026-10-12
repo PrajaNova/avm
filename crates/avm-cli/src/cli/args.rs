@@ -22,6 +22,18 @@ pub struct Cli {
 pub enum Commands {
     /// Create a local .avm.json config file.
     Init,
+    /// Install every selected tool without changing its pin.
+    Install {
+        /// Require an up-to-date lockfile with downloads for this platform.
+        #[arg(long)]
+        frozen: bool,
+    },
+    /// Resolve selected tools and write a reproducible .avm.lock.
+    Lock {
+        /// Platforms to lock (default: this host), comma-separated.
+        #[arg(long, value_delimiter = ',')]
+        platform: Vec<String>,
+    },
     /// Add an alias command to local or global config.
     #[command(alias = "aa")]
     Add(AddArgs),

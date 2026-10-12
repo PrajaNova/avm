@@ -145,6 +145,7 @@ impl PluginManager {
     }
 
     pub fn remove_plugin(&self, name: &str) -> Result<()> {
+        avm_plugin_api::validate_name(name)?;
         if let Some((_, target)) = self.find_any(name) {
             fs::remove_dir_all(target).context("remove plugin")?;
         }
@@ -159,6 +160,7 @@ impl PluginManager {
     ///   - a git-cloned plugin (asdf-style or otherwise) does `git pull`.
     ///   - anything else (a local, non-git source) has nothing to update.
     pub fn update_plugin(&self, name: &str) -> Result<()> {
+        avm_plugin_api::validate_name(name)?;
         let (dir_name, target) = self
             .find_any(name)
             .ok_or_else(|| anyhow!("plugin '{}' not found", name))?;
@@ -218,6 +220,7 @@ pub struct AsdfToolProvider {
 
 impl AsdfToolProvider {
     fn install_path(&self, version: &str) -> Result<PathBuf> {
+        avm_plugin_api::download::validate_version(version)?;
         Ok(tool_dir(&self.name)?.join(version))
     }
 
@@ -293,7 +296,7 @@ impl ToolProvider for AsdfToolProvider {
 
     fn available_versions(&self, query: ToolVersionQuery) -> Result<Vec<ToolVersion>> {
         let output = self.run_asdf_command("list-all", None, ASDF_LIST_TIMEOUT_MS)?;
-        let all = output
+        let mut all: Vec<ToolVersion> = output
             .split_whitespace()
             .map(|version| ToolVersion {
                 version: version.to_string(),
@@ -303,6 +306,12 @@ impl ToolProvider for AsdfToolProvider {
                 is_security: false,
             })
             .collect();
+        // asdf list-all is usually oldest-first; protocol queries are newest-first.
+        all.sort_by(|a, b| {
+            use crate::version_files::{numbers, build};
+            (numbers(&b.version), build(&b.version), &b.version)
+                .cmp(&(numbers(&a.version), build(&a.version), &a.version))
+        });
         let mut versions = query.filter(all, |v| version_major(&v.version).unwrap_or(u64::MAX));
         if matches!(query, ToolVersionQuery::Recent) {
             versions.truncate(10);
@@ -339,6 +348,8 @@ impl ToolProvider for AsdfToolProvider {
     }
 
     fn install(&self, version: &str) -> Result<()> {
+        avm_plugin_api::download::validate_version(version)?;
+        let _guard = avm_plugin_api::storage::lock(&tool_dir(&self.name)?.join(format!(".install-{version}")))?;
         if self.is_installed(version) {
             return Ok(());
         }
@@ -475,6 +486,18 @@ impl ToolProvider for PluginProcess {
 
     fn uninstall(&self, version: &str) -> Result<()> {
         self.run_status(&["uninstall", version])
+    }
+
+    fn resolve_downloads(&self, version: &str, platforms: &[String]) -> Result<avm_plugin_api::protocol::ResolveResponse> {
+        let request = serde_json::to_string(&avm_plugin_api::protocol::ResolveRequest {
+            version: version.to_string(), platforms: platforms.to_vec(),
+        })?;
+        self.call_json(&["resolve", &request])
+    }
+
+    fn install_locked(&self, version: &str, asset: &avm_plugin_api::protocol::LockedAsset) -> Result<()> {
+        let asset = serde_json::to_string(asset)?;
+        self.run_status(&["install-locked", version, &asset])
     }
 }
 
@@ -862,10 +885,9 @@ fn is_git_url(source: &str) -> bool {
 }
 
 fn run_with_timeout(mut cmd: Command, timeout_ms: u64) -> Result<String> {
-    let mut child = cmd
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
+    let started = std::time::Instant::now();
+    cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
+    let (mut child, tree) = avm_plugin_api::process::spawn_isolated(&mut cmd)
         .context("failed to start plugin command")?;
 
     // Pipes have a small OS buffer (~64KB). Waiting for the child to exit
@@ -893,6 +915,14 @@ fn run_with_timeout(mut cmd: Command, timeout_ms: u64) -> Result<String> {
 
     let status = wait_deadline(&mut child, timeout_ms)
         .context("failed while waiting for plugin command")?;
+    drop(tree);
+    // Detached Unix descendants can leave the group; they must not extend our deadline.
+    while !stdout_reader.is_finished() || !stderr_reader.is_finished() {
+        if started.elapsed().as_millis() >= u128::from(timeout_ms) {
+            return Err(anyhow!("plugin command timed out"));
+        }
+        std::thread::sleep(std::time::Duration::from_millis(5));
+    }
     let status = match status {
         Some(status) => status,
         None => {
@@ -913,4 +943,24 @@ fn run_with_timeout(mut cmd: Command, timeout_ms: u64) -> Result<String> {
     }
 
     Ok(out)
+}
+
+#[cfg(test)]
+mod timeout_tests {
+    use super::*;
+    #[test]
+    fn descendants_cannot_hold_plugin_pipes_open() {
+        let started = std::time::Instant::now();
+        #[cfg(unix)] let mut command = Command::new("sh");
+        #[cfg(unix)] command.args(["-c", "sleep 20 & wait"]);
+        #[cfg(windows)] let mut command = Command::new("powershell");
+        #[cfg(windows)] command.args(["-NoProfile", "-Command", "$p = Start-Process ping -ArgumentList '-n','20','127.0.0.1' -NoNewWindow -PassThru; Wait-Process -Id $p.Id"]);
+        assert!(run_with_timeout(command, 1000).unwrap_err().to_string().contains("timed out"));
+        assert!(started.elapsed() < std::time::Duration::from_secs(5));
+        #[cfg(unix)] {
+            let mut command = Command::new("sh");
+            command.args(["-c", "sleep 20 & printf ready"]);
+            assert_eq!(run_with_timeout(command, 1000).unwrap(), "ready");
+        }
+    }
 }

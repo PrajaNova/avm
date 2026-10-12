@@ -22,10 +22,13 @@ pub fn home_dir() -> Result<PathBuf> {
 }
 
 pub fn sdk_dir(version: &str) -> Result<PathBuf> {
+    avm_plugin_api::download::validate_version(version)?;
     Ok(tool_dir("android")?.join(version).join("sdk"))
 }
 
 pub fn install_android(version: &str) -> Result<()> {
+    avm_plugin_api::download::validate_version(version)?;
+    let _guard = avm_plugin_api::storage::lock(&tool_dir("android")?.join(format!(".install-{version}")))?;
     let target = tool_dir("android")?.join(version);
     let sdk = sdk_dir(version)?;
 
@@ -148,7 +151,7 @@ fn sdkmanager(sdk: &Path, java_home: Option<&Path>) -> Command {
 pub fn accept_licenses(sdk: &Path, java_home: Option<&Path>) {
     let mut cmd = sdkmanager(sdk, java_home);
     cmd.arg("--licenses").stdin(Stdio::piped()).stdout(Stdio::null()).stderr(Stdio::null());
-    let Ok(mut child) = cmd.spawn() else { return };
+    let Ok((mut child, _tree)) = avm_plugin_api::process::spawn_isolated(&mut cmd) else { return };
     if let Some(mut stdin) = child.stdin.take() {
         use std::io::Write;
         // sdkmanager prompts once per license; "y\n" repeated satisfies all of them.
@@ -285,7 +288,7 @@ pub fn resolve_system_image_id(listing: &str, api: &str, tag: &str) -> Result<St
 pub fn list_packages(sdk: &Path, java_home: Option<&Path>) -> Result<String> {
     let mut cmd = sdkmanager(sdk, java_home);
     cmd.arg("--list").stdout(Stdio::piped()).stderr(Stdio::null());
-    let mut child = cmd.spawn().context("failed to spawn sdkmanager --list")?;
+    let (mut child, tree) = avm_plugin_api::process::spawn_isolated(&mut cmd).context("failed to spawn sdkmanager --list")?;
     // Drain stdout on a thread so a full pipe can't deadlock the wait below.
     let stdout = child.stdout.take();
     let reader = std::thread::spawn(move || {
@@ -299,6 +302,7 @@ pub fn list_packages(sdk: &Path, java_home: Option<&Path>) -> Result<String> {
 
     let status = wait_deadline(&mut child, env_timeout_ms(SDKMANAGER_ENV, SDKMANAGER_LIST_TIMEOUT_MS))
         .context("failed while waiting for sdkmanager --list")?;
+    drop(tree);
     let output = reader.join().unwrap_or_default();
     match status {
         Some(status) if status.success() => Ok(output),

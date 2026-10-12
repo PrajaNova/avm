@@ -40,6 +40,11 @@ Then add the shell hook ([details for each shell](https://prajanova.github.io/av
 eval "$(avm-bin shell-init)"   # in ~/.zshrc or ~/.bashrc
 ```
 
+Shell setup refreshes project environment variables at the Bash/PowerShell
+prompt, on directory changes in zsh, and before and after `avm` commands.
+Leaving a project restores each variable's original value, or unsets it if it
+was originally absent. Re-run shell setup in existing sessions after upgrading.
+
 ## Quick start
 
 ```bash
@@ -62,6 +67,20 @@ be installed. Repeat `--with` for multiple tools, before any alias arguments.
 These commands inherit trusted project env and provider vars, prepend the
 selected tools to PATH, and leave `.avm.json` and lockfiles unchanged. The shell
 hook forwards `exec` and `x` directly to the CLI.
+
+Install every tool selected by project, version-file and global pins:
+
+```bash
+avm install
+avm lock --platform linux_amd64,darwin_arm64,windows_amd64
+avm install --frozen       # CI: require the committed lockfile to match config
+```
+
+Commit `.avm.lock` to keep fuzzy versions on the same exact release. Locking
+fetches download metadata without installing; locked downloads always verify
+their SHA-256. A stale lock fails with instructions to run `avm lock`.
+Node and Java support lockfiles with the updated plugins. Android and legacy
+asdf plugins support ordinary `avm install`, but cannot yet be locked.
 
 ## Learn more
 

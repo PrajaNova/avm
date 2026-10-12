@@ -378,6 +378,12 @@ export const DocsPage: React.FC<DocsPageProps> = ({ onCopy }) => {
                   <pre className="p-3 rounded-xl bg-slate-950 text-slate-300 border border-slate-800 overflow-x-auto">{'$ avm exec node@18 -- npm test\n$ avm x node@22 java@21 -- ./gradlew build\n$ avm run dev --with node@18 -- --port 3000'}</pre>
                   <p className="text-slate-400 font-sans text-xs mt-2">Project and global pins and lockfiles stay unchanged. Repeat --with for multiple tools and place it before alias arguments.</p>
                 </div>
+                <div>
+                  <span className="text-emerald-400 font-bold text-sm block mb-1">Reproducible Installs for Teams and CI</span>
+                  <p className="text-slate-400 font-sans text-xs mb-2">Install all selected tools without repinning. Lock fuzzy versions to exact releases and commit .avm.lock; frozen installs reject stale config and verify locked archive checksums.</p>
+                  <pre className="p-3 rounded-xl bg-slate-950 text-slate-300 border border-slate-800 overflow-x-auto">{'$ avm install\n$ avm lock --platform linux_amd64,darwin_arm64,windows_amd64\n$ avm install --frozen'}</pre>
+                  <p className="text-slate-400 font-sans text-xs mt-2">Locking fetches metadata without installing runtimes. Upgrade the Node and Java plugins for lockfile support. Android and legacy asdf plugins currently support ordinary installs only.</p>
+                </div>
               </div>
             </div>
 

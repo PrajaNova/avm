@@ -49,6 +49,14 @@ impl ToolProvider for JavaProvider {
         install::install_java(version)
     }
 
+    fn resolve_downloads(&self, version: &str, platforms: &[String]) -> anyhow::Result<avm_plugin_api::protocol::ResolveResponse> {
+        versions::resolve_downloads(version, platforms)
+    }
+
+    fn install_locked(&self, version: &str, asset: &avm_plugin_api::protocol::LockedAsset) -> anyhow::Result<()> {
+        install::install(version, Some(asset))
+    }
+
     fn uninstall(&self, version: &str) -> anyhow::Result<()> {
         avm_plugin_api::remove_version("java", version)
     }

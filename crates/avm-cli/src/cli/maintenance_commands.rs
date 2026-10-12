@@ -36,7 +36,7 @@ fn statuses(cfg: &ResolvedConfig, only: &[String]) -> Result<Vec<Status>> {
         let origin = matches!(source, AliasSource::Local).then(|| cfg.tool_origins.get(&tool)).flatten();
         let requested = match source {
             AliasSource::Local => cfg.tool_specs.get(&tool).cloned().unwrap_or_else(|| current.clone()),
-            _ => current.clone(),
+            _ => cfg.global_tool_specs.get(&tool).cloned().unwrap_or_else(|| current.clone()),
         };
         // An exact pin's "range" is its major line; a spec (`20`, `>=18`) is its own range.
         let range = if requested == current {
@@ -207,20 +207,29 @@ fn tracked_path() -> Result<PathBuf> {
     Ok(shims::avm_home()?.join("tracked-configs.json"))
 }
 
-fn tracked_dirs() -> BTreeSet<String> {
-    tracked_path().ok().and_then(|p| fs::read(p).ok()).and_then(|raw| serde_json::from_slice(&raw).ok()).unwrap_or_default()
+fn tracked_dirs() -> Result<BTreeSet<String>> {
+    match fs::read(tracked_path()?) {
+        Ok(raw) => serde_json::from_slice(&raw).context("invalid tracked-configs.json; cannot safely prune"),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(BTreeSet::new()),
+        Err(e) => Err(e.into()),
+    }
 }
 
 /// Remember a directory whose config pins tools, so `avm prune` keeps them.
 /// Called on every resolution, so it only writes when the directory is new.
 pub fn track_config_dir(dir: &Path) {
     let key = dir.to_string_lossy().into_owned();
-    let mut dirs = tracked_dirs();
-    if dirs.insert(key) {
-        if let Ok(path) = tracked_path() {
-            let _ = path.parent().map(fs::create_dir_all);
-            let _ = fs::write(path, serde_json::to_vec_pretty(&dirs).unwrap_or_default());
+    let result = (|| -> Result<()> {
+        let path = tracked_path()?;
+        let _guard = avm_plugin_api::storage::lock(&path)?;
+        let mut dirs = tracked_dirs()?;
+        if dirs.insert(key) {
+            avm_plugin_api::storage::atomic_write(&path, &serde_json::to_vec_pretty(&dirs)?)?;
         }
+        Ok(())
+    })();
+    if let Err(err) = result {
+        eprintln!("warning: could not track project for prune: {err}");
     }
 }
 
@@ -276,17 +285,23 @@ fn global_packages(tool: &str, version_dir: &Path) -> Vec<String> {
 
 pub fn cmd_prune(older_than: Option<String>, include_unrecorded: bool, dry_run: bool, yes: bool) -> Result<()> {
     let home = home_dir()?;
+    let tracked = tracked_path()?;
+    let _guard = avm_plugin_api::storage::lock(&tracked)?;
     let cutoff = older_than.as_deref().map(parse_days).transpose()?.map(|d| Duration::from_secs(d * 24 * 60 * 60));
 
     // Versions still wanted: global pins, plus pins of every tracked project that still exists.
-    let mut keep: HashSet<(String, String)> = config::load(&home)?.tools.into_iter().collect();
+    let mut keep: HashSet<(String, String)> = config::load(&home)?.tools.into_iter()
+        .flat_map(|(tool, spec)| [(tool.clone(), crate::version_files::resolve(&tool, &spec)), (tool, spec)])
+        .collect();
     let mut live_dirs = BTreeSet::new();
-    for dir in tracked_dirs() {
+    for dir in tracked_dirs()? {
         let path = PathBuf::from(&dir);
         if path.is_dir() {
-            if let Ok(cfg) = crate::resolver::load(&path, &home, HashMap::new()) {
-                keep.extend(cfg.local_tools);
-            }
+            let cfg = crate::resolver::load(&path, &home, HashMap::new())
+                .with_context(|| format!("cannot safely prune: failed to resolve tracked project {}", path.display()))?;
+            keep.extend(cfg.local_tools.into_iter().chain(cfg.global_tools).flat_map(|(tool, spec)| {
+                [(tool.clone(), crate::version_files::resolve(&tool, &spec)), (tool, spec)]
+            }));
             live_dirs.insert(dir);
         }
     }
@@ -358,9 +373,7 @@ pub fn cmd_prune(older_than: Option<String>, include_unrecorded: bool, dry_run: 
         println!("✓ Removed {tool} {version}");
     }
     // Forget projects that no longer exist.
-    if let Ok(path) = tracked_path() {
-        let _ = fs::write(path, serde_json::to_vec_pretty(&live_dirs).unwrap_or_default());
-    }
+    avm_plugin_api::storage::atomic_write(&tracked, &serde_json::to_vec_pretty(&live_dirs)?)?;
     Ok(())
 }
 

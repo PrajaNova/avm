@@ -96,12 +96,14 @@ struct PackagesResponse {
 }
 
 fn package_index() -> Result<Vec<Package>> {
+    package_index_for(host_os_param()?, host_arch_param()?, ARCHIVE_TYPE)
+}
+
+fn package_index_for(os: &str, arch: &str, archive: &str) -> Result<Vec<Package>> {
+    let base = std::env::var("AVM_JAVA_DISCO_URL").unwrap_or_else(|_| DISCO_BASE_URL.to_string());
     let url = format!(
-        "{DISCO_BASE_URL}/packages?distribution={DISTRIBUTION}&operating_system={}&architecture={}&archive_type={}&package_type=jdk&release_status=ga{}",
-        host_os_param()?,
-        host_arch_param()?,
-        ARCHIVE_TYPE,
-        libc_param(),
+        "{base}/packages?distribution={DISTRIBUTION}&operating_system={os}&architecture={arch}&archive_type={archive}&package_type=jdk&release_status=ga{}",
+        if os == "linux" { "&lib_c_type=glibc" } else { "" },
     );
 
     let raw = avm_plugin_api::fetch(&url, 20)?;
@@ -124,20 +126,32 @@ fn host_os_param() -> Result<&'static str> {
 
 /// Linux results include Alpine (musl) builds, listed first for some
 /// versions; they can't run on a glibc distro, so ask for glibc only.
-fn libc_param() -> &'static str {
-    if std::env::consts::OS == "linux" {
-        "&lib_c_type=glibc"
-    } else {
-        ""
-    }
-}
-
 fn host_arch_param() -> Result<&'static str> {
     match std::env::consts::ARCH {
         "aarch64" => Ok("aarch64"),
         "x86_64" => Ok("x64"),
         other => Err(anyhow!("unsupported OpenJDK architecture: {other}")),
     }
+}
+
+pub fn resolve_downloads(version: &str, platforms: &[String]) -> Result<avm_plugin_api::protocol::ResolveResponse> {
+    use avm_plugin_api::protocol::{LockedAsset, ResolveResponse};
+    avm_plugin_api::download::validate_version(version)?;
+    let mut assets = std::collections::BTreeMap::new();
+    for platform in platforms {
+        avm_plugin_api::download::validate_platform(platform)?;
+        let (os, arch) = platform.split_once('_').ok_or_else(|| anyhow!("invalid platform"))?;
+        let os = if os == "darwin" { "macos" } else { os };
+        let arch = if arch == "amd64" { "x64" } else { "aarch64" };
+        let archive = if os == "windows" { "zip" } else { "tar.gz" };
+        let package = package_index_for(os, arch, archive)?.into_iter()
+            .find(|p| p.java_version == strip_avm_prefix(version) || p.distribution_version == strip_avm_prefix(version))
+            .ok_or_else(|| anyhow!("no Temurin {version} build for {platform}"))?;
+        let asset = LockedAsset { sha256: package_sha256(&package)?, url: package.links.pkg_download_redirect };
+        avm_plugin_api::download::validate_asset(&asset)?;
+        assets.insert(platform.clone(), asset);
+    }
+    Ok(ResolveResponse { version: version.to_string(), assets })
 }
 
 #[cfg(test)]

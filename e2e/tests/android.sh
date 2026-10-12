@@ -12,12 +12,12 @@ check_aliases_and_env "$W" "$P"
 
 log "android: a JDK for sdkmanager"
 if ! avm java list 2>/dev/null | grep -q openjdk; then
-  avm plugin add java >/dev/null && avm java install 17 -g >/dev/null
+  install_test_plugin java >/dev/null && avm java install 17 -g >/dev/null
 fi
 expect_contains "a managed JDK is available" "$(avm java list 2>&1)" "openjdk"
 
 log "android: plugin"
-expect_ok "avm plugin add android (sha256-verified)" avm plugin add android
+expect_ok "install android plugin under test" install_test_plugin android
 
 log "android: global $G (install -g), local $L"
 expect_ok "avm android install $G -g" avm android install "$G" -g

@@ -43,7 +43,19 @@ esac
         }
         fs::write(root.join("home/.avm.json"), r#"{"tools":{"node":"16.0.0"},"env":{"SCOPE":"global"},"aliases":{"x":"echo wrong-alias"}}"#).unwrap();
         fs::write(root.join("project/.avm.json"), r#"{"tools":{"node":"20.0.0"},"env":{"SCOPE":"local","PATH":"/usr/bin:/bin"},"aliases":{"check":"node $1; java; printf '%s' \"$SCOPE\""}}"#).unwrap();
-        fs::write(root.join("project/.avm.lock"), "unchanged lock").unwrap();
+        let lock = serde_json::json!({
+            "version": 1,
+            "tools": {"node": {
+                "requested": "20.0.0", "resolved": "20.0.0",
+                "plugin": {"name": "node", "version": "1.0.0", "binaries": {}},
+                "assets": {"linux_amd64": {"url": "/tmp/unused-node-archive", "sha256": "0".repeat(64)}}
+            }}
+        });
+        fs::write(
+            root.join("project/.avm.lock"),
+            serde_json::to_vec(&lock).unwrap(),
+        )
+        .unwrap();
         Self(root)
     }
 
@@ -191,4 +203,10 @@ fn temporary_versions_install_execute_and_leave_pins_unchanged() {
             "{file} changed"
         );
     }
+    assert_eq!(stdout(project.run(&["exec", "node@18.1", "--", "node"], true)), "node-18.1.0\n");
+    fs::remove_file(project.0.join("project/.avm.lock")).unwrap();
+    assert!(project.run(&["node", "use", "18.1"], true).status.success());
+    let cfg: serde_json::Value = serde_json::from_slice(&fs::read(project.0.join("project/.avm.json")).unwrap()).unwrap();
+    assert_eq!(cfg["tools"]["node"], "18.1.0");
+
 }

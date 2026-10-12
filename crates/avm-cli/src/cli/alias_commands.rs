@@ -40,6 +40,17 @@ fn cmd_env_print(shell: Shell) -> Result<()> {
     let cfg = load_state()?;
     let mut env = resolved_tool_env(&cfg)?;
     env.extend(merge_env(&cfg));
+    config::validate_env(&env)?;
+    let mut baseline = env_baseline()?;
+    for (key, value) in &baseline {
+        if !env.contains_key(key) {
+            println!("{}", match value {
+                Some(value) => shell.export(key, value),
+                None => shell.unset(key),
+            });
+        }
+    }
+    baseline.retain(|key, _| env.contains_key(key));
     // No PATH here: this output is `eval`'d straight into the interactive
     // shell on every `avm` invocation (see shell-init's `_avm_apply_env`).
     // Exporting a resolved-tool PATH prefix here would re-clobber the
@@ -51,7 +62,13 @@ fn cmd_env_print(shell: Shell) -> Result<()> {
     let mut keys: Vec<_> = env.keys().collect();
     keys.sort();
     for key in keys {
+        baseline.entry(key.clone()).or_insert_with(|| INHERITED_ENV.get().and_then(|env| env.get(key)).cloned());
         println!("{}", shell.export(key, &env[key]));
+    }
+    if baseline.is_empty() {
+        println!("{}", shell.unset(ENV_BASELINE));
+    } else {
+        println!("{}", shell.export(ENV_BASELINE, &serde_json::to_string(&baseline)?));
     }
     // This output is eval'd with stderr discarded, so the untrusted notice
     // is emitted as shell code, once per shell session per set of files.
@@ -70,7 +87,11 @@ pub fn cmd_resolve(args: ResolveArgs) -> Result<()> {
     let alias = cfg
         .resolve_alias(&args.key)
         .ok_or_else(|| alias_not_found_error(&args.key, &cfg))?;
-    println!("{}", build_shell_alias_string(&alias.command, &args.args)?);
+    let script = match alias.argv {
+        Some(argv) => argv.iter().chain(&args.args).map(|arg| sh_quote(arg)).collect::<Vec<_>>().join(" "),
+        None => build_shell_alias_string(&alias.command, &args.args)?,
+    };
+    println!("{script}");
     Ok(())
 }
 
@@ -90,7 +111,6 @@ pub fn cmd_run(args: RunArgs) -> Result<()> {
         None => return Err(alias_not_found_error(alias_key, &cfg)),
     };
 
-    let script = build_shell_alias_string(&alias.command, &args.args)?;
     let env = if args.tools.is_empty() {
         child_env(&cfg)?
     } else {
@@ -99,10 +119,24 @@ pub fn cmd_run(args: RunArgs) -> Result<()> {
     // ponytail: Windows runs aliases through `cmd /C` with sh-style quoting of
     // extra args; a cmd-aware quoter if args with spaces or quotes misbehave.
     let (shell, flag) = if cfg!(windows) { ("cmd", "/C") } else { ("sh", "-c") };
-    let status = Command::new(shell)
-        .arg(flag)
-        .arg(script)
-        .envs(env)
+    let mut command = match alias.argv {
+        Some(argv) => {
+            #[cfg(windows)]
+            let program = shims::which_in_path(&argv[0], std::ffi::OsStr::new(env.get("PATH").map(String::as_str).unwrap_or("")), true)
+                .ok_or_else(|| anyhow!("package manager '{}' not found in PATH", argv[0]))?;
+            #[cfg(not(windows))]
+            let program = &argv[0];
+            let mut command = Command::new(program);
+            command.args(&argv[1..]).args(&args.args);
+            command
+        }
+        None => {
+            let mut command = Command::new(shell);
+            command.arg(flag).arg(build_shell_alias_string(&alias.command, &args.args)?);
+            command
+        }
+    };
+    let status = command.envs(env)
         .status()
         .with_context(|| format!("failed to run alias via {shell}"))?;
     std::process::exit(status.code().unwrap_or(1));

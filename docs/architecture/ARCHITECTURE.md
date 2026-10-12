@@ -34,6 +34,12 @@ migrated on read.
 Resolution order: local `.avm.json` → global `~/.avm.json` → plugin/provider
 aliases → system command fallback.
 
+`avm exec` (`avm x`) and `avm run --with` overlay temporary tool selections
+in memory. They use the same providers to resolve and install versions, apply
+provider and trusted config env, and prepend the selected executable directories
+to the child PATH. They never save pins or lockfiles. `exec` replaces the process
+on Unix; other platforms wait and return the command's exit code.
+
 ## The plugin marketplace
 
 `avm plugin add <name>` is the only install path — nothing works out of

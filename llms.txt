@@ -17,6 +17,7 @@ env manager by PrajaNova. npm: @prajanova/avm · GitHub: PrajaNova/avm
 ## Commands
 - `avm init` · `avm add [-g] <alias> <command>` · `avm remove [-g] <alias>`
 - `avm run <alias> [args...]` · `avm resolve <alias> [args...]` · `avm which <key>` · `avm list`
+- `avm exec [--no-install] <tool@version>... -- <command> [args...]` (alias `x`) · `avm run <alias> --with <tool@version> [-- args...]`: temporary versions, no pin or lockfile changes.
 - `avm env [--shell sh|pwsh|cmd]` · `avm env add|remove|list`
 - `avm trust [path] [--revoke|--list]`
 - `avm <tool> use|install|uninstall|list|versions` (e.g. `avm node use 20`)

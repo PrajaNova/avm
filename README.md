@@ -48,6 +48,21 @@ avm node use 22            # pin Node 22 for this project (installs it if needed
 avm add dev "npm run dev"  # a project alias → run it with `avm dev`
 ```
 
+Try another runtime without changing project or global pins:
+
+```bash
+avm exec node@18 -- npm test
+avm x node@22 java@21 -- ./gradlew build
+avm run dev --with node@18 -- --port 3000
+```
+
+Missing versions install automatically; `--no-install` uses installed versions
+only, including the newest installed match for fuzzy specs. Plugins must already
+be installed. Repeat `--with` for multiple tools, before any alias arguments.
+These commands inherit trusted project env and provider vars, prepend the
+selected tools to PATH, and leave `.avm.json` and lockfiles unchanged. The shell
+hook forwards `exec` and `x` directly to the CLI.
+
 ## Learn more
 
 - [Getting started](https://prajanova.github.io/avm/#/docs/guide/getting-started) · [All commands](https://prajanova.github.io/avm/#/docs/manage/commands) · [Configuration](https://prajanova.github.io/avm/#/docs/manage/configuration)

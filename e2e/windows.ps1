@@ -14,14 +14,31 @@ function Section($t) { Write-Host "`n== $t" -ForegroundColor Cyan }
 function Out([scriptblock]$b) { (& $b 2>&1 | Out-String).Trim() }
 
 Section 'install with install.ps1 (from this checkout)'
-cargo build --release -p avm-cli --bin avm-bin
+cargo build --release --workspace
+if ($LASTEXITCODE -ne 0) { throw 'workspace build failed' }
 $dist = Join-Path $env:RUNNER_TEMP 'avm-dist'
 New-Item -ItemType Directory -Force $dist | Out-Null
+foreach ($tool in @('node','java','android')) {
+    $pluginBin = Join-Path $dist "plugins\avm-plugin-$tool\bin"
+    New-Item -ItemType Directory -Force $pluginBin | Out-Null
+    Copy-Item "target/release/avm-plugin-$tool.exe" "$pluginBin\avm-plugin.exe"
+}
+function Install-TestPlugin($tool) {
+    $target = Join-Path $HOME ".avm\plugins\avm-plugin-$tool\bin"
+    New-Item -ItemType Directory -Force $target | Out-Null
+    Copy-Item "$dist\plugins\avm-plugin-$tool\bin\avm-plugin.exe" "$target\avm-plugin.exe"
+    avm-bin shims install | Out-Null
+}
 Compress-Archive -Force -Path target/release/avm-bin.exe -DestinationPath "$dist\avm_windows_amd64.zip"
 $h = (Get-FileHash "$dist\avm_windows_amd64.zip" -Algorithm SHA256).Hash.ToLower()
 "$h  avm_windows_amd64.zip" | Set-Content "$dist\checksums.txt"
 $env:AVM_DOWNLOAD_BASE = $dist
+$PROFILE = Join-Path $env:RUNNER_TEMP 'avm-profile.ps1'
+"# existing user customization" | Set-Content $PROFILE
 & ./install.ps1
+Check 'installer preserves existing profile content' { (Get-Content $PROFILE -Raw).Contains('# existing user customization') }
+& ./install.ps1
+Check 'reinstall adds the profile hook only once' { @(Select-String -Path $PROFILE -SimpleMatch 'shell-init pwsh').Count -eq 1 }
 $env:PATH = "$env:LOCALAPPDATA\avm\bin;$env:PATH"
 Check 'avm-bin.exe installed' { Test-Path "$env:LOCALAPPDATA\avm\bin\avm-bin.exe" }
 Check 'profile hook written' { (Get-Content $PROFILE -Raw) -match 'shell-init pwsh' }
@@ -42,9 +59,32 @@ avm env add -g AVM_E2E_SCOPE global | Out-Null
 Push-Location $P; avm env add AVM_E2E_SCOPE local | Out-Null; Pop-Location
 Check 'outside: global env' { (Out { avm-bin env --shell pwsh }) -match "AVM_E2E_SCOPE = 'global'" }
 Check 'project: local env' { Push-Location $P; try { (Out { avm-bin env --shell pwsh }) -match "AVM_E2E_SCOPE = 'local'" } finally { Pop-Location } }
+$env:AVM_E2E_ORIGINAL = 'before-project'
+Push-Location $P
+avm env add AVM_E2E_ORIGINAL project | Out-Null
+avm env add AVM_E2E_TEMP temporary | Out-Null
+Check 'project env reaches the live shell' { $env:AVM_E2E_ORIGINAL -eq 'project' -and $env:AVM_E2E_TEMP -eq 'temporary' }
+Pop-Location
+_avm_apply_env
+Check 'leaving restores original env and unsets new keys' { $env:AVM_E2E_ORIGINAL -eq 'before-project' -and -not (Test-Path Env:AVM_E2E_TEMP) }
+
+Section 'package script names are literal arguments'
+$scriptProject = Join-Path $W 'script-names'
+New-Item -ItemType Directory -Force "$scriptProject\bin" | Out-Null
+"@echo off`necho %*" | Set-Content "$scriptProject\bin\npm.cmd"
+$scriptName = 'hello&echo injected>injected.txt'
+@{ scripts = @{ $scriptName = 'echo safe' } } | ConvertTo-Json -Depth 3 | Set-Content "$scriptProject\package.json"
+$savedPath = $env:PATH
+Push-Location $scriptProject
+try {
+    $env:PATH = "$scriptProject\bin;$savedPath"
+    $scriptOut = Out { avm run $scriptName -- 'two words' }
+    Check 'script name reaches the package manager intact' { $scriptOut.Contains($scriptName) }
+    Check 'script name cannot execute a second command' { -not (Test-Path 'injected.txt') }
+} finally { $env:PATH = $savedPath; Pop-Location }
 
 Section 'node: global 20, local 22, through node.exe shims'
-avm plugin add node
+Install-TestPlugin node
 avm node install 20 -g
 Push-Location $P; avm node install 22; Pop-Location
 Check 'node.exe shim (not .cmd)' { (Test-Path "$env:AVM_SHIM_DIR\node.exe") -and -not (Test-Path "$env:AVM_SHIM_DIR\node.cmd") }
@@ -64,7 +104,7 @@ if (-not (Test-Path "$env:AVM_SHIM_DIR\cowsay.exe")) {
 Check 'global npm package (installed under 20) runs in the project on 22' { Push-Location $P; try { (Out { cowsay moo }) -match 'moo' } finally { Pop-Location } }
 
 Section 'java: global 17, local 21, JAVA_HOME'
-avm plugin add java
+Install-TestPlugin java
 avm java install 17 -g
 Push-Location $P; avm java install 21; Pop-Location
 Check 'outside: managed java 17' { ((Out { java -version }) -match 'version "17') -and ((Out { avm-bin env --shell pwsh }) -match 'JAVA_HOME = .*\\.avm\\tools\\java\\openjdk-17') }
@@ -72,7 +112,7 @@ Check 'project: managed java 21' { Push-Location $P; try { ((Out { java -version
 Check 'java 21 JDK installed under ~/.avm' { @(Get-ChildItem "$tools\java\openjdk-21*\bin\java.exe" -ErrorAction SilentlyContinue).Count -gt 0 }
 
 Section 'android: install, ANDROID_HOME, adb'
-avm plugin add android
+Install-TestPlugin android
 avm android install 35 -g
 Check 'ANDROID_HOME points into ~/.avm' { (Out { avm-bin env --shell pwsh }) -match 'ANDROID_HOME = .*\\.avm\\tools\\android\\35' }
 Check 'adb.exe shim runs the managed adb' { ((Out { adb version }) -match 'Android Debug Bridge') -and (Test-Path "$env:AVM_SHIM_DIR\adb.exe") }

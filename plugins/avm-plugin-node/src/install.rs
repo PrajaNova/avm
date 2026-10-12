@@ -8,9 +8,15 @@ const TAR_TIMEOUT_MS: u64 = 300_000;
 const CURL_OUTER_TIMEOUT_MS: u64 = 180_000;
 
 pub fn install_node(version: &str) -> Result<()> {
+    install(version, None)
+}
+
+pub fn install(version: &str, locked: Option<&avm_plugin_api::protocol::LockedAsset>) -> Result<()> {
     let version = version.trim_start_matches('v');
+    avm_plugin_api::download::validate_version(version)?;
     let platform = platform_name()?;
     let tools_root = tool_dir("node")?;
+    let _guard = avm_plugin_api::storage::lock(&tools_root.join(format!(".install-{version}")))?;
     let target = tools_root.join(version);
     if target.join("bin").join(crate::NODE_BIN).exists() {
         return Ok(());
@@ -28,8 +34,13 @@ pub fn install_node(version: &str) -> Result<()> {
         fs::remove_dir_all(&tmp_root).context("failed to clean previous node install temp dir")?;
     }
     fs::create_dir_all(&tmp_root).context("failed to create node install temp dir")?;
-    fetch_archive(version, &archive_name, &archive_path)?;
-    if let Err(e) = verify_archive(&mirror(), version, &archive_name, &archive_path) {
+    let download = if let Some(asset) = locked {
+        avm_plugin_api::download::download_verified(asset, &archive_path)
+    } else {
+        fetch_archive(version, &archive_name, &archive_path)
+            .and_then(|_| verify_archive(&mirror(), version, &archive_name, &archive_path))
+    };
+    if let Err(e) = download {
         let _ = fs::remove_dir_all(&tmp_root);
         return Err(e);
     }
@@ -109,6 +120,27 @@ fn platform_name() -> Result<&'static str> {
         ("windows", "x86_64") => Ok("win-x64"),
         (os, arch) => Err(anyhow!("unsupported Node.js platform: {os}-{arch}")),
     }
+}
+
+pub fn resolve_downloads(version: &str, platforms: &[String]) -> Result<avm_plugin_api::protocol::ResolveResponse> {
+    use avm_plugin_api::protocol::{LockedAsset, ResolveResponse};
+    let version = version.trim_start_matches('v');
+    avm_plugin_api::download::validate_version(version)?;
+    let base = format!("{}/v{version}", mirror().trim_end_matches('/'));
+    let sums = String::from_utf8(fetch(&format!("{base}/SHASUMS256.txt"), 20)?)?;
+    let mut assets = std::collections::BTreeMap::new();
+    for platform in platforms {
+        avm_plugin_api::download::validate_platform(platform)?;
+        let (os, arch) = platform.split_once('_').ok_or_else(|| anyhow!("invalid platform"))?;
+        let os = if os == "windows" { "win" } else { os };
+        let arch = if arch == "amd64" { "x64" } else { "arm64" };
+        let ext = if os == "win" { "zip" } else { "tar.gz" };
+        let name = format!("node-v{version}-{os}-{arch}.{ext}");
+        let asset = LockedAsset { url: format!("{base}/{name}"), sha256: avm_plugin_api::checksum_for(&sums, &name)? };
+        avm_plugin_api::download::validate_asset(&asset)?;
+        assets.insert(platform.clone(), asset);
+    }
+    Ok(ResolveResponse { version: version.to_string(), assets })
 }
 
 #[cfg(test)]

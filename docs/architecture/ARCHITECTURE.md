@@ -34,6 +34,24 @@ migrated on read.
 Resolution order: local `.avm.json` → global `~/.avm.json` → plugin/provider
 aliases → system command fallback.
 
+`avm exec` (`avm x`) and `avm run --with` overlay temporary tool selections
+in memory. They use the same providers to resolve and install versions, apply
+provider and trusted config env, and prepend the selected executable directories
+to the child PATH. They never save pins or lockfiles. `exec` replaces the process
+on Unix; other platforms wait and return the command's exit code.
+
+`avm install` installs all effective tool selections without changing pins.
+`avm lock` resolves project selections, excluding personal global pins, and
+updates the nearest existing lock or creates one next to the nearest project
+config. Resolution uses the nearest current or ancestor lock;
+changed selections invalidate the lock rather than silently changing versions.
+`avm install --frozen` also requires a lock and download metadata for the host.
+The host checks native plugin versions and recorded executable hashes, then
+passes the original locked asset to `install-locked`. The plugin downloads
+and verifies the archive before extraction.
+Android and asdf plugins support
+ordinary installs but lack the optional locked-download protocol.
+
 ## The plugin marketplace
 
 `avm plugin add <name>` is the only install path — nothing works out of

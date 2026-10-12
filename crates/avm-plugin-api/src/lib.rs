@@ -1,6 +1,10 @@
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, path::PathBuf};
 
+pub mod download;
+pub mod process;
+pub mod storage;
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Manifest {
     pub name: String,
@@ -98,7 +102,21 @@ pub fn home_dir() -> anyhow::Result<PathBuf> {
 
 /// `~/.avm/tools/<tool>` — where every provider keeps `<version>/` dirs.
 pub fn tool_dir(tool: &str) -> anyhow::Result<PathBuf> {
+    validate_name(tool)?;
     Ok(home_dir()?.join(".avm").join("tools").join(tool))
+}
+
+/// Names used as managed directory or executable names cannot contain paths.
+pub fn validate_name(name: &str) -> anyhow::Result<()> {
+    anyhow::ensure!(!name.is_empty() && name.bytes().all(|c| c.is_ascii_alphanumeric() || c == b'-' || c == b'_'), "invalid managed name: {name}");
+    Ok(())
+}
+
+pub fn validate_version_spec(spec: &str) -> anyhow::Result<()> {
+    let selector = spec.strip_prefix("lts/").unwrap_or(spec);
+    anyhow::ensure!(!selector.is_empty() && selector != "." && selector != ".."
+        && !selector.contains(['/', '\\', ':', '\0']), "invalid version spec: {spec}");
+    Ok(())
 }
 
 /// Sorted version dirs under `tool_dir(tool)` that pass `is_installed`.
@@ -119,6 +137,7 @@ pub fn list_installed(tool: &str, is_installed: impl Fn(&str) -> bool) -> anyhow
 }
 
 pub fn remove_version(tool: &str, version: &str) -> anyhow::Result<()> {
+    download::validate_version(version)?;
     let target = tool_dir(tool)?.join(version);
     if target.exists() {
         std::fs::remove_dir_all(&target)
@@ -129,12 +148,15 @@ pub fn remove_version(tool: &str, version: &str) -> anyhow::Result<()> {
 
 /// Wait for `child` up to `ms`; kills it and returns `None` on timeout.
 pub fn wait_deadline(child: &mut std::process::Child, ms: u64) -> std::io::Result<Option<std::process::ExitStatus>> {
-    let deadline = std::time::Instant::now() + std::time::Duration::from_millis(ms);
+    let deadline = std::time::Instant::now()
+        .checked_add(std::time::Duration::from_millis(ms))
+        .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::InvalidInput, "timeout exceeds the clock's range"))?;
     loop {
         if let Some(status) = child.try_wait()? {
             return Ok(Some(status));
         }
         if std::time::Instant::now() >= deadline {
+            #[cfg(unix)] process::terminate_descendants(child.id());
             let _ = child.kill();
             let _ = child.wait();
             return Ok(None);
@@ -155,7 +177,7 @@ pub fn env_timeout_ms(env_var: &str, default_ms: u64) -> u64 {
 /// Spawn `cmd`, fail on non-zero exit or on timeout (`$env_var` seconds, else `default_ms`).
 pub fn run_timed(mut cmd: std::process::Command, default_ms: u64, label: &str, env_var: &str) -> anyhow::Result<()> {
     let ms = env_timeout_ms(env_var, default_ms);
-    let mut child = cmd.spawn().map_err(|e| anyhow::anyhow!("failed to spawn {label}: {e}"))?;
+    let (mut child, _tree) = process::spawn_isolated(&mut cmd).map_err(|e| anyhow::anyhow!("failed to spawn {label}: {e}"))?;
     match wait_deadline(&mut child, ms).map_err(|e| anyhow::anyhow!("failed while waiting for {label}: {e}"))? {
         None => Err(anyhow::anyhow!("{label} timed out after {}s — set {env_var}=<seconds> to extend", ms / 1000)),
         Some(status) if !status.success() => Err(anyhow::anyhow!("{label} failed: {status}")),
@@ -200,17 +222,21 @@ pub fn sha256_file(path: &std::path::Path) -> anyhow::Result<String> {
 /// output: `<hex>  <name>` or `<hex> *<name>` per line). Returns the hash on
 /// a match; errors if `name` is unlisted or the hash differs.
 pub fn verify_sha256(path: &std::path::Path, checksums: &str, name: &str) -> anyhow::Result<String> {
-    let expected = checksums
-        .lines()
-        .filter_map(|line| line.split_once(char::is_whitespace))
-        .find(|(_, file)| file.trim_start().trim_start_matches('*') == name)
-        .map(|(hash, _)| hash.to_ascii_lowercase())
-        .ok_or_else(|| anyhow::anyhow!("checksums file has no entry for {name}"))?;
+    let expected = checksum_for(checksums, name)?;
     let actual = sha256_file(path)?;
     if actual != expected {
         anyhow::bail!("checksum mismatch for {name}\n  expected {expected}\n  got      {actual}");
     }
     Ok(actual)
+}
+
+pub fn checksum_for(checksums: &str, name: &str) -> anyhow::Result<String> {
+    checksums
+        .lines()
+        .filter_map(|line| line.split_once(char::is_whitespace))
+        .find(|(_, file)| file.trim_start().trim_start_matches('*') == name)
+        .map(|(hash, _)| hash.to_ascii_lowercase())
+        .ok_or_else(|| anyhow::anyhow!("checksums file has no entry for {name}"))
 }
 
 /// Wire responses a plugin process prints as one JSON document on stdout for
@@ -220,6 +246,24 @@ pub fn verify_sha256(path: &std::path::Path, checksums: &str, name: &str) -> any
 /// and signal success/failure via exit code instead).
 pub mod protocol {
     use super::*;
+
+    #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+    pub struct LockedAsset {
+        pub url: String,
+        pub sha256: String,
+    }
+
+    #[derive(Debug, Serialize, Deserialize)]
+    pub struct ResolveRequest {
+        pub version: String,
+        pub platforms: Vec<String>,
+    }
+
+    #[derive(Debug, Serialize, Deserialize)]
+    pub struct ResolveResponse {
+        pub version: String,
+        pub assets: std::collections::BTreeMap<String, LockedAsset>,
+    }
 
     #[derive(Debug, Clone, Serialize, Deserialize)]
     pub struct VersionsResponse {
@@ -260,6 +304,13 @@ pub trait ToolProvider: Send + Sync {
     }
     fn install(&self, version: &str) -> anyhow::Result<()>;
     fn uninstall(&self, version: &str) -> anyhow::Result<()>;
+    /// Optional reproducible-download capability; older plugins keep working.
+    fn resolve_downloads(&self, _version: &str, _platforms: &[String]) -> anyhow::Result<protocol::ResolveResponse> {
+        anyhow::bail!("{} does not support lockfiles; update the plugin or install without a lockfile", self.name())
+    }
+    fn install_locked(&self, _version: &str, _asset: &protocol::LockedAsset) -> anyhow::Result<()> {
+        anyhow::bail!("{} does not support locked installs; update the plugin", self.name())
+    }
 }
 
 /// Shared CLI dispatch for a plugin executable's `main.rs`. Every plugin
@@ -318,6 +369,15 @@ pub mod runner {
                 })
             }
             "install" => provider.install(require_version(rest)?),
+            "resolve" => {
+                let request: protocol::ResolveRequest = serde_json::from_str(require_version(rest)?)?;
+                print_json(&provider.resolve_downloads(&request.version, &request.platforms)?)
+            }
+            "install-locked" => {
+                let version = require_version(rest)?;
+                let asset = rest.get(1).ok_or_else(|| anyhow::anyhow!("locked asset JSON required"))?;
+                provider.install_locked(version, &serde_json::from_str(asset)?)
+            }
             "uninstall" => provider.uninstall(require_version(rest)?),
             other => Err(anyhow::anyhow!("unknown plugin command: {other}")),
         }
@@ -343,9 +403,35 @@ pub mod runner {
     }
 }
 
+/// POSIX single-quote escaping: safe for any byte string.
+pub fn sh_quote(value: &str) -> String {
+    if value.is_empty() {
+        return "''".to_string();
+    }
+    if value
+        .bytes()
+        .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'_' | b'-' | b'.' | b'/' | b':' | b'='))
+    {
+        return value.to_string();
+    }
+    format!("'{}'", value.replace('\'', "'\\''"))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn extreme_timeouts_do_not_panic() {
+        #[cfg(unix)] let mut command = std::process::Command::new("true");
+        #[cfg(windows)] let mut command = std::process::Command::new("cmd");
+        #[cfg(windows)] command.args(["/C", "exit 0"]);
+        let mut child = command.spawn().unwrap();
+        if let Err(err) = wait_deadline(&mut child, u64::MAX) {
+            assert_eq!(err.kind(), std::io::ErrorKind::InvalidInput);
+        }
+        assert!(child.wait().unwrap().success());
+    }
 
     #[test]
     fn query_filter() {
@@ -377,5 +463,23 @@ mod tests {
         assert!(run_timed(sleep, 100, "sleep", "AVM_TEST_UNSET").unwrap_err().to_string().contains("timed out"));
         assert!(run_timed(std::process::Command::new("false"), 5_000, "false", "AVM_TEST_UNSET").is_err());
         assert!(run_timed(std::process::Command::new("true"), 5_000, "true", "AVM_TEST_UNSET").is_ok());
+    }
+}
+
+#[cfg(test)]
+mod path_tests {
+    #[test]
+    fn managed_paths_reject_untrusted_components() {
+        for name in ["", ".", "..", "/tmp/payload", "../node", "C:\\payload"] {
+            assert!(super::validate_name(name).is_err());
+            assert!(super::download::validate_version(name).is_err());
+            assert!(super::remove_version("node", name).is_err());
+        }
+        for spec in ["/tmp/payload", "../payload", "C:\\payload"] {
+            assert!(super::validate_version_spec(spec).is_err());
+        }
+        for spec in ["20", ">=18 <21", "lts/*", "lts/iron"] {
+            assert!(super::validate_version_spec(spec).is_ok());
+        }
     }
 }

@@ -17,6 +17,7 @@ pub fn edit_config(
     f: impl FnOnce(&mut ConfigLoadResult) -> Result<()>,
 ) -> Result<()> {
     let root = config_root(global)?;
+    let _guard = avm_plugin_api::storage::lock(&root.join(CONFIG_FILE))?;
     if !create && !root.join(CONFIG_FILE).exists() {
         return Err(if global {
             anyhow!("no {CONFIG_FILE} found in {}", root.display())
@@ -66,6 +67,7 @@ fn print_layered(
 
 pub fn cmd_init() -> Result<()> {
     let root = std::env::current_dir().context("failed to read current directory")?;
+    let _guard = avm_plugin_api::storage::lock(&root.join(CONFIG_FILE))?;
     if root.join(CONFIG_FILE).exists() {
         return Err(anyhow!("{CONFIG_FILE} already exists"));
     }

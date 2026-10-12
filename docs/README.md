@@ -1,5 +1,7 @@
 # avm Docs
 
+- [Lockfiles](ops/LOCKFILES.md) — reproducible installs, frozen CI, plugin support
+  and checksum verification.
 - [Architecture](architecture/ARCHITECTURE.md) — crates, the plugin
   marketplace, the wire protocol, runtime boundaries.
 - [Creating a plugin](plugins/CREATING_A_PLUGIN.md) — the plugin template, the

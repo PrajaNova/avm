@@ -49,6 +49,7 @@ impl ToolProvider for AndroidProvider {
     }
 
     fn install(&self, version: &str) -> Result<()> {
+        // shortcut: sdkmanager chooses component revisions; add locked installs when every component's revision and checksum can be pinned.
         install::install_android(version)
     }
 

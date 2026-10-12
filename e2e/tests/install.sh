@@ -7,7 +7,7 @@ source /e2e/lib.sh
 if [ "${AVM_E2E_INSTALL:-release}" = "local" ]; then
   log "install.sh refuses a tampered or unverifiable archive"
   bad_dist="$(mktemp -d)"
-  cp /opt/dist/* "$bad_dist/"
+  cp /opt/dist/avm_*.tar.gz /opt/dist/checksums.txt "$bad_dist/"
   echo "0000000000000000000000000000000000000000000000000000000000000000  avm_linux_amd64.tar.gz" > "$bad_dist/checksums.txt"
   out="$(HOME="$(mktemp -d)" AVM_DOWNLOAD_BASE="file://$bad_dist" bash /opt/install.sh 2>&1)"
   expect_contains "checksum mismatch is refused" "$out" "checksum mismatch"

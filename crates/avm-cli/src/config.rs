@@ -29,7 +29,7 @@ fn validate_env_key(key: &str) -> bool {
             .all(|(i, c)| c == '_' || c.is_ascii_alphabetic() || (i > 0 && c.is_ascii_digit()))
 }
 
-fn validate_env(env: &HashMap<String, String>) -> Result<()> {
+pub(crate) fn validate_env(env: &HashMap<String, String>) -> Result<()> {
     match env.keys().find(|key| !validate_env_key(key)) {
         Some(key) => Err(anyhow!("invalid env key: {key}")),
         None => Ok(()),
@@ -86,26 +86,7 @@ pub fn load(root: &Path) -> Result<ConfigLoadResult> {
     let file_path = root.join(CONFIG_FILE);
 
     match fs::read(&file_path) {
-        Ok(raw) => match parse_config(&raw) {
-            Ok(cfg) => Ok(cfg),
-            Err(err) => {
-                // Don't let a corrupt config block every avm command. Back the
-                // file up with a timestamped suffix and continue with an empty
-                // config. The user can copy values back from the .broken file.
-                let stamp = std::time::SystemTime::now()
-                    .duration_since(std::time::UNIX_EPOCH)
-                    .map(|d| d.as_secs())
-                    .unwrap_or(0);
-                let backup = file_path.with_extension(format!("broken-{stamp}.json"));
-                let _ = fs::rename(&file_path, &backup);
-                eprintln!(
-                    "warning: {} was malformed ({err}); backed up to {} and continuing with an empty config.",
-                    file_path.display(),
-                    backup.display()
-                );
-                Ok(ConfigLoadResult::default())
-            }
-        },
+        Ok(raw) => parse_config(&raw).with_context(|| format!("invalid {}; repair the file before continuing", file_path.display())),
         Err(err) if err.kind() == std::io::ErrorKind::NotFound => Ok(ConfigLoadResult::default()),
         Err(err) => Err(err.into()),
     }
@@ -115,7 +96,7 @@ pub fn load(root: &Path) -> Result<ConfigLoadResult> {
 pub fn save(root: &Path, cfg: &ConfigLoadResult) -> Result<()> {
     validate_env(&cfg.env)?;
     let raw = serde_json::to_vec_pretty(cfg)?;
-    fs::write(root.join(CONFIG_FILE), raw).context("failed to save config")
+    avm_plugin_api::storage::atomic_write(&root.join(CONFIG_FILE), &raw).context("failed to save config")
 }
 
 #[cfg(test)]

@@ -23,7 +23,7 @@ pub fn aliases_from_package_json(cwd: &Path) -> Result<HashMap<String, ResolvedA
         .iter()
         .filter_map(|(name, value)| {
             let alias = ResolvedAlias {
-                command: format!("{run_prefix} {name}"),
+                command: format!("{run_prefix} {}", avm_plugin_api::sh_quote(name)),
                 description: Some(value.as_str()?.to_string()),
                 plugin_name: "node".to_string(),
                 section_name: "Node Scripts".to_string(),

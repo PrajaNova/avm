@@ -15,6 +15,7 @@ pub struct ResolvedAliasLookup {
     pub command: String,
     pub source: AliasSource,
     pub plugin_name: Option<String>,
+    pub argv: Option<Vec<String>>,
 }
 
 #[derive(Debug, Clone)]
@@ -33,6 +34,7 @@ pub struct ResolvedConfig {
     pub tool_origins: HashMap<String, String>,
     /// Each local pin's spec as written (`20`, `lts/*`, `>=18`, `20.11.1`).
     pub tool_specs: HashMap<String, String>,
+    pub global_tool_specs: HashMap<String, String>,
 }
 
 impl ResolvedConfig {
@@ -42,6 +44,7 @@ impl ResolvedConfig {
                 command: value.clone(),
                 source: AliasSource::Local,
                 plugin_name: None,
+                argv: None,
             });
         }
 
@@ -50,6 +53,7 @@ impl ResolvedConfig {
                 command: value.clone(),
                 source: AliasSource::Global,
                 plugin_name: None,
+                argv: None,
             });
         }
 
@@ -57,6 +61,9 @@ impl ResolvedConfig {
             command: a.command.clone(),
             source: AliasSource::Plugin,
             plugin_name: Some(a.plugin_name.clone()),
+            argv: a.source.as_deref().filter(|prefix| a.plugin_name == "node"
+                && matches!(*prefix, "npm run" | "pnpm run" | "bun run" | "yarn"))
+                .map(|prefix| prefix.split_whitespace().map(str::to_string).chain([key.to_string()]).collect()),
         })
     }
 
@@ -105,7 +112,22 @@ pub fn load(
     home: &Path,
     plugin_aliases: HashMap<String, ResolvedAlias>,
 ) -> anyhow::Result<ResolvedConfig> {
-    let mut local = crate::config::load(cwd)?;
+    let mut cfg = load_unlocked(cwd, home, plugin_aliases)?;
+    if let Some(lock) = crate::lockfile::load(cwd)? {
+        lock.apply(&mut cfg)?;
+    } else {
+        for (tool, version) in &mut cfg.local_tools {
+            *version = crate::version_files::resolve(tool, version);
+        }
+    }
+    for (tool, version) in &mut cfg.global_tools {
+        *version = crate::version_files::resolve(tool, version);
+    }
+    Ok(cfg)
+}
+
+pub fn load_unlocked(cwd: &Path, home: &Path, plugin_aliases: HashMap<String, ResolvedAlias>) -> anyhow::Result<ResolvedConfig> {
+    let mut local = if cwd == home { crate::config::ConfigLoadResult::default() } else { crate::config::load(cwd)? };
     let global = crate::config::load(home)?;
     let local_file = cwd.join(crate::config::CONFIG_FILE);
     let untrusted = (local_file.exists() && !crate::trust::is_trusted(&local_file, &global.trusted_paths))
@@ -131,12 +153,17 @@ pub fn load(
         local_tools.insert(tool, version);
     }
 
+    for (tool, spec) in local_tools.iter().chain(global.tools.iter()) {
+        avm_plugin_api::validate_name(tool)?;
+        avm_plugin_api::validate_version_spec(spec)?;
+    }
     Ok(ResolvedConfig {
         local_aliases: local.aliases,
         global_aliases: global.aliases,
         local_env: local.env,
         global_env: global.env,
         local_tools,
+        global_tool_specs: global.tools.clone(),
         global_tools: global.tools,
         plugin_aliases,
         untrusted,

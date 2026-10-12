@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 pub mod download;
 pub mod storage;
+pub mod process;
 use std::{collections::HashMap, path::PathBuf};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -164,12 +165,13 @@ pub fn remove_version(tool: &str, version: &str) -> anyhow::Result<()> {
 
 /// Wait for `child` up to `ms`; kills it and returns `None` on timeout.
 pub fn wait_deadline(child: &mut std::process::Child, ms: u64) -> std::io::Result<Option<std::process::ExitStatus>> {
-    let deadline = std::time::Instant::now() + std::time::Duration::from_millis(ms);
+    let started = std::time::Instant::now();
     loop {
         if let Some(status) = child.try_wait()? {
             return Ok(Some(status));
         }
-        if std::time::Instant::now() >= deadline {
+        if started.elapsed().as_millis() >= u128::from(ms) {
+            #[cfg(unix)] process::terminate_descendants(child.id());
             let _ = child.kill();
             let _ = child.wait();
             return Ok(None);
@@ -190,7 +192,7 @@ pub fn env_timeout_ms(env_var: &str, default_ms: u64) -> u64 {
 /// Spawn `cmd`, fail on non-zero exit or on timeout (`$env_var` seconds, else `default_ms`).
 pub fn run_timed(mut cmd: std::process::Command, default_ms: u64, label: &str, env_var: &str) -> anyhow::Result<()> {
     let ms = env_timeout_ms(env_var, default_ms);
-    let mut child = cmd.spawn().map_err(|e| anyhow::anyhow!("failed to spawn {label}: {e}"))?;
+    let (mut child, _tree) = process::spawn_isolated(&mut cmd).map_err(|e| anyhow::anyhow!("failed to spawn {label}: {e}"))?;
     match wait_deadline(&mut child, ms).map_err(|e| anyhow::anyhow!("failed while waiting for {label}: {e}"))? {
         None => Err(anyhow::anyhow!("{label} timed out after {}s — set {env_var}=<seconds> to extend", ms / 1000)),
         Some(status) if !status.success() => Err(anyhow::anyhow!("{label} failed: {status}")),

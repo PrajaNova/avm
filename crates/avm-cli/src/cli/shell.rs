@@ -18,6 +18,13 @@ impl Default for Shell {
 }
 
 impl Shell {
+    pub fn unset(self, key: &str) -> String {
+        match self {
+            Shell::Sh => format!("unset {key}"),
+            Shell::Pwsh => format!("Remove-Item Env:{key} -ErrorAction SilentlyContinue"),
+            Shell::Cmd => format!("set \"{key}=\""),
+        }
+    }
     pub fn export(self, key: &str, value: &str) -> String {
         match self {
             Shell::Sh => format!("export {key}={}", sh_quote(value)),
@@ -55,7 +62,11 @@ function global:_avm_apply_env {
 }
 _avm_apply_env
 
+if (-not $global:_avm_original_prompt) { $global:_avm_original_prompt = (Get-Command prompt).ScriptBlock }
+function global:prompt { _avm_apply_env; & $global:_avm_original_prompt }
+
 function global:avm {
+  _avm_apply_env
   $builtins = 'init','install','lock','add','list','ls','remove','rm','which','env','trust','self-update','outdated','upgrade','prune','help','shell-init','plugin','resolve','run','exec','x','shims','exec-shim','node','java','--help','-h'
   if ($args.Count -gt 0 -and @('-v','--version') -contains $args[0]) {
     & avm-bin --version
@@ -104,13 +115,31 @@ fi
 rehash 2>/dev/null || hash -r 2>/dev/null || true
 
 # Apply provider/config env vars (ANDROID_HOME, JAVA_HOME, ...) to the live
-# shell. Safe to call repeatedly; only exports what `avm env` prints.
+# shell, restoring the original values of variables no longer selected.
 _avm_apply_env() {
   eval "$(command avm-bin env 2>/dev/null)" 2>/dev/null || true
 }
 _avm_apply_env
 
+if [ -n "${ZSH_VERSION:-}" ]; then
+  typeset -ga chpwd_functions
+  chpwd_functions=("${(@)chpwd_functions:#_avm_apply_env}" _avm_apply_env)
+elif [ -n "${BASH_VERSION:-}" ]; then
+  if [[ $(declare -p PROMPT_COMMAND 2>/dev/null) == "declare -a"* ]]; then
+    case " ${PROMPT_COMMAND[*]} " in
+      *"_avm_apply_env"*) ;;
+      *) PROMPT_COMMAND=(_avm_apply_env "${PROMPT_COMMAND[@]}") ;;
+    esac
+  else
+    case "${PROMPT_COMMAND:-}" in
+      *"_avm_apply_env"*) ;;
+      *) PROMPT_COMMAND="_avm_apply_env${PROMPT_COMMAND:+; $PROMPT_COMMAND}" ;;
+    esac
+  fi
+fi
+
 avm() {
+  _avm_apply_env
   if [ $# -eq 0 ]; then
     command avm-bin "$@"
     return $?

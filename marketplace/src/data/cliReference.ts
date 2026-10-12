@@ -103,7 +103,7 @@ Env:
     command: 'avm env',
     args: '[--shell sh|pwsh|cmd]',
     category: 'Env',
-    description: 'Prints export statements for merged env and provider vars (JAVA_HOME, ANDROID_HOME, …) in sh, PowerShell, or cmd syntax.',
+    description: 'Prints shell statements for merged env and provider vars (JAVA_HOME, ANDROID_HOME, …). Restores original values when leaving a project. Shell setup refreshes at prompts, on zsh directory changes, and around avm commands.',
     example: 'avm env --shell pwsh',
     outputExample: `$env:NODE_ENV = 'development'
 $env:JAVA_HOME = 'C:\\Users\\dev\\.avm\\tools\\java\\openjdk-17.0.13+11'`

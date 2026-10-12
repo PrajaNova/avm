@@ -143,6 +143,44 @@ fn package_script_names_and_arguments_are_literal_data() {
     }
 }
 
+#[cfg(unix)]
+#[test]
+fn shell_environment_restores_original_values_when_leaving_projects() {
+    let p = Project::new();
+    fs::write(p.0.join("home/.avm.json"), serde_json::json!({"aliases":{"check":r#"test "$AVM_TEST_EXISTING" = "original ' value" && test "${AVM_TEST_NEW+x}" != x"#}}).to_string()).unwrap();
+    fs::write(p.0.join("project/.avm.json"), r#"{"env":{"AVM_TEST_EXISTING":"project","AVM_TEST_NEW":"temporary"}}"#).unwrap();
+    let bin = std::path::Path::new(env!("CARGO_BIN_EXE_avm-bin")).parent().unwrap();
+    let script = format!(r#"
+export PATH={}:$PATH
+eval "$(avm-bin shell-init)"
+[ "$AVM_TEST_EXISTING" = project ] && [ "$AVM_TEST_NEW" = temporary ] || exit 10
+cd ..
+avm list >/dev/null
+[ "$AVM_TEST_EXISTING" = "original ' value" ] && [ "${{AVM_TEST_NEW+x}}" != x ] || exit 11
+cd project
+_avm_apply_env
+[ "$AVM_TEST_EXISTING" = project ] && [ "$AVM_TEST_NEW" = temporary ] || exit 12
+avm env remove AVM_TEST_NEW >/dev/null
+[ "${{AVM_TEST_NEW+x}}" != x ] || exit 13
+cd ..
+command avm-bin run check || exit 14
+printf restored
+"#, avm_plugin_api::sh_quote(&bin.to_string_lossy()));
+    for shell in ["bash", "zsh"] {
+        fs::write(p.0.join("project/.avm.json"), r#"{"env":{"AVM_TEST_EXISTING":"project","AVM_TEST_NEW":"temporary"}}"#).unwrap();
+        let output = Command::new(shell).args(["-c", &script])
+            .current_dir(p.0.join("project"))
+            .env("HOME", p.0.join("home")).env("AVM_HOME", p.0.join("home/.avm"))
+            .env("AVM_TRUST_ALL", "1").env("AVM_NO_UPDATE_CHECK", "1")
+            .env("AVM_TEST_EXISTING", "original ' value").env_remove("AVM_TEST_NEW")
+            .output();
+        if shell == "zsh" && output.as_ref().is_err_and(|e| e.kind() == std::io::ErrorKind::NotFound) { continue; }
+        let out = output.unwrap();
+        assert!(out.status.success(), "{shell}: {} {:?}", String::from_utf8_lossy(&out.stderr), out.status);
+        assert_eq!(out.stdout, b"restored");
+    }
+}
+
 #[test]
 fn untrusted_tool_pins_cannot_escape_managed_directories() {
     let p = Project::new();

@@ -29,7 +29,7 @@ fn validate_env_key(key: &str) -> bool {
             .all(|(i, c)| c == '_' || c.is_ascii_alphabetic() || (i > 0 && c.is_ascii_digit()))
 }
 
-fn validate_env(env: &HashMap<String, String>) -> Result<()> {
+pub(crate) fn validate_env(env: &HashMap<String, String>) -> Result<()> {
     match env.keys().find(|key| !validate_env_key(key)) {
         Some(key) => Err(anyhow!("invalid env key: {key}")),
         None => Ok(()),

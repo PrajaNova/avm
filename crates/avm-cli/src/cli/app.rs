@@ -8,7 +8,7 @@ pub fn main() {
             std::env::set_var("HOME", home);
         }
     }
-    if let Err(err) = load_dotenv_env() {
+    if let Err(err) = restore_inherited_env().and_then(|_| load_dotenv_env()) {
         eprintln!("avm: failed to load .env: {err}");
         std::process::exit(1);
     }

@@ -47,6 +47,14 @@ avm env add -g AVM_E2E_SCOPE global | Out-Null
 Push-Location $P; avm env add AVM_E2E_SCOPE local | Out-Null; Pop-Location
 Check 'outside: global env' { (Out { avm-bin env --shell pwsh }) -match "AVM_E2E_SCOPE = 'global'" }
 Check 'project: local env' { Push-Location $P; try { (Out { avm-bin env --shell pwsh }) -match "AVM_E2E_SCOPE = 'local'" } finally { Pop-Location } }
+$env:AVM_E2E_ORIGINAL = 'before-project'
+Push-Location $P
+avm env add AVM_E2E_ORIGINAL project | Out-Null
+avm env add AVM_E2E_TEMP temporary | Out-Null
+Check 'project env reaches the live shell' { $env:AVM_E2E_ORIGINAL -eq 'project' -and $env:AVM_E2E_TEMP -eq 'temporary' }
+Pop-Location
+_avm_apply_env
+Check 'leaving restores original env and unsets new keys' { $env:AVM_E2E_ORIGINAL -eq 'before-project' -and -not (Test-Path Env:AVM_E2E_TEMP) }
 
 Section 'node: global 20, local 22, through node.exe shims'
 avm plugin add node

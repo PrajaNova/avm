@@ -40,6 +40,17 @@ fn cmd_env_print(shell: Shell) -> Result<()> {
     let cfg = load_state()?;
     let mut env = resolved_tool_env(&cfg)?;
     env.extend(merge_env(&cfg));
+    config::validate_env(&env)?;
+    let mut baseline = env_baseline()?;
+    for (key, value) in &baseline {
+        if !env.contains_key(key) {
+            println!("{}", match value {
+                Some(value) => shell.export(key, value),
+                None => shell.unset(key),
+            });
+        }
+    }
+    baseline.retain(|key, _| env.contains_key(key));
     // No PATH here: this output is `eval`'d straight into the interactive
     // shell on every `avm` invocation (see shell-init's `_avm_apply_env`).
     // Exporting a resolved-tool PATH prefix here would re-clobber the
@@ -51,7 +62,13 @@ fn cmd_env_print(shell: Shell) -> Result<()> {
     let mut keys: Vec<_> = env.keys().collect();
     keys.sort();
     for key in keys {
+        baseline.entry(key.clone()).or_insert_with(|| INHERITED_ENV.get().and_then(|env| env.get(key)).cloned());
         println!("{}", shell.export(key, &env[key]));
+    }
+    if baseline.is_empty() {
+        println!("{}", shell.unset(ENV_BASELINE));
+    } else {
+        println!("{}", shell.export(ENV_BASELINE, &serde_json::to_string(&baseline)?));
     }
     // This output is eval'd with stderr discarded, so the untrusted notice
     // is emitted as shell code, once per shell session per set of files.

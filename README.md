@@ -40,6 +40,11 @@ Then add the shell hook ([details for each shell](https://prajanova.github.io/av
 eval "$(avm-bin shell-init)"   # in ~/.zshrc or ~/.bashrc
 ```
 
+Shell setup refreshes project environment variables at the Bash/PowerShell
+prompt, on directory changes in zsh, and before and after `avm` commands.
+Leaving a project restores each variable's original value, or unsets it if it
+was originally absent. Re-run shell setup in existing sessions after upgrading.
+
 ## Quick start
 
 ```bash

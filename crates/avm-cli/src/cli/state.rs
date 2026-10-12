@@ -31,7 +31,9 @@ pub fn restore_inherited_env() -> Result<()> {
             None => std::env::remove_var(key),
         }
     }
-    let _ = INHERITED_ENV.set(std::env::vars().collect());
+    let mut inherited = HashMap::new();
+    extend_env(&mut inherited, std::env::vars());
+    let _ = INHERITED_ENV.set(inherited);
     Ok(())
 }
 

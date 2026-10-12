@@ -121,15 +121,24 @@ fn normalize_shim_tool(tool: &str) -> &str {
 }
 
 pub fn merge_env(cfg: &ResolvedConfig) -> HashMap<String, String> {
-    let mut merged = cfg.global_env.clone();
-    merged.extend(cfg.local_env.clone());
+    let mut merged = HashMap::new();
+    extend_env(&mut merged, cfg.global_env.clone());
+    extend_env(&mut merged, cfg.local_env.clone());
     merged
+}
+
+pub fn extend_env(env: &mut HashMap<String, String>, values: impl IntoIterator<Item = (String, String)>) {
+    for (key, value) in values {
+        let key = if cfg!(windows) { key.to_ascii_uppercase() } else { key };
+        env.insert(key, value);
+    }
 }
 
 /// Env for a child process: inherited env, then provider env, then the
 /// managed-tool PATH prefix, then `.avm.json` env (which wins).
 pub fn child_env(cfg: &ResolvedConfig) -> Result<HashMap<String, String>> {
-    let mut env: HashMap<String, String> = std::env::vars().collect();
+    let mut env = HashMap::new();
+    extend_env(&mut env, std::env::vars());
     env.extend(resolved_tool_env(cfg)?);
     if let Some(path) = resolved_tool_path_prefix(cfg) {
         env.insert("PATH".to_string(), path);
@@ -147,7 +156,7 @@ pub fn resolved_tool_env(cfg: &ResolvedConfig) -> Result<HashMap<String, String>
         // Unknown/uninstalled providers just contribute nothing.
         if let Ok(provider) = provider_by_name(&tool) {
             if let Ok(vars) = provider.env_vars(&version) {
-                env.extend(vars);
+                extend_env(&mut env, vars);
             }
         }
     }
@@ -189,5 +198,18 @@ pub fn alias_source_label(source: &AliasSource) -> &'static str {
         AliasSource::Local => "local",
         AliasSource::Global => "global",
         AliasSource::Plugin => "plugin",
+    }
+}
+
+#[cfg(test)]
+mod env_tests {
+    use super::*;
+    #[test]
+    fn windows_environment_keys_merge_case_insensitively() {
+        let mut env = HashMap::new();
+        extend_env(&mut env, [("Path".into(), "system".into())]);
+        extend_env(&mut env, [("PATH".into(), "managed".into())]);
+        assert_eq!(env["PATH"], "managed");
+        assert_eq!(env.len(), if cfg!(windows) { 1 } else { 2 });
     }
 }

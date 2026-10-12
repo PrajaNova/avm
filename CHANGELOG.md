@@ -15,6 +15,7 @@ The format follows Keep a Changelog style, and releases use semantic versioning.
 - Reject malformed version ranges and handle numeric bounds without panicking.
 - Terminate timed-out plugin descendants and bound output-pipe waits.
 - Pass package script names as literal arguments and restore shell environment after project changes.
+- Merge Windows environment keys without case collisions and find temporary tools/package managers on the child's PATH.
 
 ### Testing
 - Test native Node/Java frozen installs and archive tampering on Linux, macOS and Windows (ZIP), using plugins built from the checkout.

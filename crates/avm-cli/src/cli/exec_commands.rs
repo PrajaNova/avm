@@ -7,6 +7,11 @@ pub fn cmd_exec(args: ExecArgs) -> Result<()> {
         .command
         .split_first()
         .ok_or_else(|| anyhow!("command required after --"))?;
+    #[cfg(windows)]
+    let program = if Path::new(program).components().count() == 1 {
+        shims::which_in_path(program, std::ffi::OsStr::new(env.get("PATH").map(String::as_str).unwrap_or("")), false)
+            .ok_or_else(|| anyhow!("command '{program}' not found in PATH"))?
+    } else { PathBuf::from(program) };
     let mut command = Command::new(program);
     command.args(arguments).envs(env);
     #[cfg(unix)]
@@ -92,7 +97,7 @@ pub fn temporary_tool_env(
         if !paths.contains(&bin.to_path_buf()) {
             paths.push(bin.to_path_buf());
         }
-        provider_env.extend(provider.env_vars(&version)?);
+        extend_env(&mut provider_env, provider.env_vars(&version)?);
         cfg.local_tools.insert(tool.to_string(), version);
     }
     let mut env = child_env(&cfg)?;

@@ -114,10 +114,13 @@ fn path_exts() -> Vec<String> {
 
 /// First executable `bin` on PATH, optionally skipping avm's own shims.
 pub fn which(bin: &str, skip_shims: bool) -> Option<PathBuf> {
+    which_in_path(bin, &std::env::var_os("PATH")?, skip_shims)
+}
+
+pub fn which_in_path(bin: &str, paths: &std::ffi::OsStr, skip_shims: bool) -> Option<PathBuf> {
     let shim_dir = shim_dir().ok().and_then(|dir| dir.canonicalize().ok());
-    let paths = std::env::var_os("PATH")?;
     let names = command_names(bin);
-    std::env::split_paths(&paths)
+    std::env::split_paths(paths)
         .flat_map(|dir| names.iter().map(move |name| dir.join(name)))
         .filter(|candidate| is_executable(candidate))
         .find(|candidate| {

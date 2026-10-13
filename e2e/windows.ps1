@@ -46,6 +46,31 @@ Invoke-Expression ((& avm-bin shell-init pwsh) -join "`n")
 Check 'avm -v' { (Out { avm -v }) -match '^avm ' }
 Check 'avm --version' { (Out { avm --version }) -match '^avm ' }
 
+Section 'cmd.exe launcher'
+Check 'avm.bat installed' { Test-Path "$env:LOCALAPPDATA\avm\bin\avm.bat" }
+Check 'cmd.exe can run avm' { (Out { cmd /d /c 'avm --version' }) -match '^avm ' }
+$cmdRoot = Join-Path $env:RUNNER_TEMP 'avm cmd tests'
+$cmdBin = Join-Path $cmdRoot 'bin with spaces'
+$cmdProject = Join-Path $cmdRoot 'project'
+New-Item -ItemType Directory -Force $cmdBin, $cmdProject | Out-Null
+Copy-Item "$env:LOCALAPPDATA\avm\bin\avm.bat", "$env:LOCALAPPDATA\avm\bin\avm-bin.exe" $cmdBin
+Copy-Item "$env:SystemRoot\System32\hostname.exe" "$cmdProject\avm-bin.exe"
+$savedPath = $env:PATH
+Push-Location $cmdProject
+try {
+    $env:PATH = "$cmdBin;$savedPath"
+    Check 'launcher uses its sibling exe in a path with spaces, ignoring the current directory exe' {
+        (Out { cmd /d /c 'avm --version' }) -match '^avm '
+    }
+    Check 'launcher preserves quoted arguments' {
+        (Out { cmd /d /c 'avm which "not a real avm alias"' }) -eq "No mapping found for 'not a real avm alias'."
+    }
+    Check 'launcher preserves a nonzero CLI exit code' {
+        cmd /d /c 'avm --not-a-real-option' 2>&1 | Out-Null
+        $LASTEXITCODE -eq 2
+    }
+} finally { $env:PATH = $savedPath; Pop-Location }
+
 $W = Join-Path $HOME 'winproj'; $P = Join-Path $W 'project'
 New-Item -ItemType Directory -Force $P | Out-Null
 Set-Location $W

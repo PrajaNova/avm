@@ -22,6 +22,8 @@ The format follows Keep a Changelog style, and releases use semantic versioning.
 - Run live Node/Java/Android download suites with the checkout's plugins on Linux and Windows.
 
 ### Added
+- Hierarchical `.avm.json` configs merge parent values with nearest-directory precedence and support `root: true`. `which` and `list` show exact origins; merged config caching keeps prompt resolution fast.
+- `.avm.local.json` personal overrides and `.avm.<profile>.json` profiles selected with `AVM_ENV` or `--env` (comma-separated, later profiles win). `init` gitignores personal overrides, and each file requires its own trust.
 - `avm exec` (alias `avm x`) runs commands with temporary `tool@version` selections, auto-installing missing runtimes without changing pins or lockfiles. `avm run --with` applies the same overrides to aliases; `--no-install` uses installed versions only.
 - `avm install` installs all selected tools without rewriting pins. `avm lock` writes sorted exact versions, plugin identities and per-platform download checksums to `.avm.lock`; `avm install --frozen` rejects missing or stale locks. Node and Java plugins support verified locked downloads; Android and legacy asdf plugins remain available through ordinary installs.
 

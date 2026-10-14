@@ -5,7 +5,7 @@ export const CLI_COMMANDS: CliCommand[] = [
   {
     command: 'avm init',
     category: 'Core',
-    description: 'Initializes an .avm.json configuration file in the current working directory.',
+    description: 'Initializes an .avm.json configuration file and adds .avm.local.json to .gitignore in the current working directory.',
     example: 'avm init',
     outputExample: '✓ Created .avm.json in current directory'
   },
@@ -43,7 +43,7 @@ Env:
     command: 'avm which',
     args: '<alias-or-tool>',
     category: 'Core',
-    description: 'Shows where an alias or tool version comes from: local or global .avm.json, or the version file that pinned it (.nvmrc, .tool-versions, …).',
+    description: 'Shows the exact file an alias or tool version comes from, including parent configs, profiles, personal overrides, and version files (.nvmrc, .tool-versions, …).',
     example: 'avm which node',
     outputExample: `tool 'node': 22.14.0 (from ./.nvmrc)`
   },
@@ -101,9 +101,9 @@ Env:
   },
   {
     command: 'avm env',
-    args: '[--shell sh|pwsh|cmd]',
+    args: '[--shell sh|pwsh|cmd] [--env <profiles>]',
     category: 'Env',
-    description: 'Prints shell statements for merged env and provider vars (JAVA_HOME, ANDROID_HOME, …). Restores original values when leaving a project. Shell setup refreshes at prompts, on zsh directory changes, and around avm commands.',
+    description: 'Prints shell statements for merged env and provider vars (JAVA_HOME, ANDROID_HOME, …). Loads parent configs, then nearest-directory base, profiles (AVM_ENV=ci,staging or --env ci,staging; later names win), and .avm.local.json overrides. Restores original values when leaving a project. Shell setup refreshes at prompts, on zsh directory changes, and around avm commands.',
     example: 'avm env --shell pwsh',
     outputExample: `$env:NODE_ENV = 'development'
 $env:JAVA_HOME = 'C:\\Users\\dev\\.avm\\tools\\java\\openjdk-17.0.13+11'`

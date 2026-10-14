@@ -20,8 +20,8 @@ hash -r
 expect_contains "node outside the project is 20" "$(node -v)" "v20."
 expect_contains "node in the project is 22" "$(cd "$P" && node -v)" "v22."
 expect_contains "npm works through the shim" "$(cd "$P" && npm -v)" "."
-expect_contains "avm which node (project)" "$(cd "$P" && avm which node)" "(local)"
-expect_contains "avm which node (outside)" "$(avm which node)" "(global)"
+expect_contains "avm which node (project)" "$(cd "$P" && avm which node)" "from $P/.avm.json"
+expect_contains "avm which node (outside)" "$(avm which node)" "from $HOME/.avm.json"
 
 log "node: global npm package survives a version switch"
 (cd "$W" && npm install -g cowsay >/dev/null 2>&1)

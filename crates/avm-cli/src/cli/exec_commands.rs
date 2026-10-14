@@ -185,5 +185,10 @@ mod tests {
             panic!("expected run")
         };
         assert_eq!(args.args, ["--port", "3000"]);
+        let cli = Cli::try_parse_from(["avm", "--env", "ci", "run", "dev", "--", "--env", "target"]).unwrap();
+        assert_eq!(cli.profiles.as_deref(), Some("ci"));
+        let Commands::Run(args) = cli.command else { panic!("expected run") };
+        assert_eq!(args.args, ["--env", "target"]);
+
     }
 }

@@ -33,7 +33,8 @@ fn statuses(cfg: &ResolvedConfig, only: &[String]) -> Result<Vec<Status>> {
             .into_iter()
             .map(|v| v.version)
             .collect();
-        let origin = matches!(source, AliasSource::Local).then(|| cfg.tool_origins.get(&tool)).flatten();
+        let origin = matches!(source, AliasSource::Local).then(|| cfg.tool_origins.get(&tool)).flatten()
+            .filter(|file| std::env::current_dir().ok().is_none_or(|cwd| Path::new(file.as_str()) != cwd.join(CONFIG_FILE)));
         let requested = match source {
             AliasSource::Local => cfg.tool_specs.get(&tool).cloned().unwrap_or_else(|| current.clone()),
             _ => cfg.global_tool_specs.get(&tool).cloned().unwrap_or_else(|| current.clone()),
@@ -302,6 +303,21 @@ pub fn cmd_prune(older_than: Option<String>, include_unrecorded: bool, dry_run: 
             keep.extend(cfg.local_tools.into_iter().chain(cfg.global_tools).flat_map(|(tool, spec)| {
                 [(tool.clone(), crate::version_files::resolve(&tool, &spec)), (tool, spec)]
             }));
+            // Keep pins in inactive profiles too: switching AVM_ENV must not
+            // make prune delete a runtime another profile still selects.
+            for ancestor in path.ancestors().take_while(|p| *p != home) {
+                let mut files: Vec<_> = fs::read_dir(ancestor)?.map(|e| e.map(|e| e.path())).collect::<io::Result<_>>()?;
+                files.sort();
+                for file in files.into_iter().filter(|p| p.file_name().and_then(|n| n.to_str())
+                    .is_some_and(|n| n.starts_with(".avm.") && n.ends_with(".json"))) {
+                    for (tool, spec) in config::load_file(&file)?.tools {
+                        avm_plugin_api::validate_name(&tool)?;
+                        avm_plugin_api::validate_version_spec(&spec)?;
+                        keep.insert((tool.clone(), crate::version_files::resolve(&tool, &spec)));
+                    }
+                }
+                if config::load(ancestor)?.root { break; }
+            }
             live_dirs.insert(dir);
         }
     }

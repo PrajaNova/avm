@@ -17,7 +17,7 @@ impl Project {
             .env("AVM_HOME", self.0.join("home/.avm"))
             .env("AVM_PLUGIN_DIR", self.0.join("home/.avm/plugins"))
             .env("AVM_NO_UPDATE_CHECK", "1")
-            .env("AVM_TRUST_ALL", "0");
+            .env("AVM_TRUST_ALL", "0").env_remove("AVM_ENV");
         cmd
     }
     fn run(&self, args: &[&str]) -> Output { self.command(args).output().unwrap() }
@@ -210,4 +210,188 @@ fn managed_package_binaries_can_have_dotted_names() {
     let out = p.run(&["exec-shim", "foo.bar"]);
     assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
     assert_eq!(out.stdout, b"managed-package\n");
+}
+
+fn stdout(out: Output) -> String {
+    assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+    String::from_utf8(out.stdout).unwrap()
+}
+
+#[test]
+fn hierarchical_profiles_merge_and_report_origins() {
+    let p = Project::new();
+    let repo = p.0.join("project");
+    let nested = repo.join("apps/tv");
+    fs::create_dir_all(&nested).unwrap();
+    fs::write(p.0.join("home/.avm.json"), r#"{"aliases":{"global":"echo global"},"env":{"GLOBAL":"yes"},"tools":{"java":"17"}}"#).unwrap();
+    fs::write(repo.join(".avm.json"), r#"{"root":true,"aliases":{"build":"echo root","parent":"echo inherited"},"env":{"BASE":"yes","MODE":"root"},"tools":{"node":"18"}}"#).unwrap();
+    fs::write(repo.join(".avm.local.json"), r#"{"env":{"MODE":"parent-local"}}"#).unwrap();
+    fs::write(nested.join(".avm.json"), r#"{"aliases":{"build":"echo child"},"env":{"MODE":"child"},"tools":{"node":"20"}}"#).unwrap();
+    fs::write(nested.join(".avm.ci.json"), r#"{"env":{"MODE":"ci","CI_ONLY":"yes"},"tools":{"node":"22"}}"#).unwrap();
+    fs::write(nested.join(".avm.staging.json"), r#"{"aliases":{"build":"echo staging"},"env":{"MODE":"staging"}}"#).unwrap();
+    let run = |args: &[&str]| stdout(p.command(args).current_dir(&nested).env("AVM_TRUST_ALL", "1").env("AVM_ENV", "ci,staging").output().unwrap());
+    let list = run(&["list"]);
+    for text in ["build → echo staging", "parent → echo inherited", "global → echo global", "BASE=yes", "MODE=staging", "CI_ONLY=yes", "GLOBAL=yes", "node = 22", "java = 17", ".avm.staging.json", ".avm.ci.json"] {
+        assert!(list.contains(text), "missing {text}: {list}");
+    }
+    assert!(run(&["which", "build"]).contains(".avm.staging.json"));
+    assert_eq!(run(&["run", "parent"]).trim(), "inherited");
+    assert!(run(&["which", "node"]).contains(".avm.ci.json"));
+    let suggestion = p.command(&["resolve", "paren"]).current_dir(&nested).env("AVM_TRUST_ALL", "1").output().unwrap();
+    assert!(String::from_utf8_lossy(&suggestion.stderr).contains("avm parent"));
+    fs::write(nested.join(".avm.local.json"), r#"{"env":{"MODE":"personal"},"tools":{"node":"24"}}"#).unwrap();
+    assert!(run(&["env", "--shell", "sh"]).contains("MODE=personal"));
+    assert!(run(&["which", "node"]).contains(".avm.local.json"));
+    fs::remove_file(nested.join(".avm.local.json")).unwrap();
+    assert!(run(&["env", "--shell", "sh", "--env", "ci"]).contains("MODE=ci"));
+    assert!(run(&["--env", "", "env", "--shell", "sh"]).contains("MODE=child"));
+    // A root marker containing no maps is still a structured config.
+    fs::write(nested.join(".avm.json"), r#"{"root":true}"#).unwrap();
+    let list = run(&["--env", "", "list"]);
+    assert!(!list.contains("parent →"));
+    assert!(list.contains("global →"));
+    fs::write(repo.join(".avm.json"), "malformed above root").unwrap();
+    assert!(run(&["--env", "", "env", "--shell", "sh"]).contains("GLOBAL"));
+}
+
+#[test]
+fn trust_and_cache_invalidation_apply_to_each_layer() {
+    let p = Project::new();
+    let repo = p.0.join("project");
+    let child = repo.join("child");
+    fs::create_dir(&child).unwrap();
+    fs::write(repo.join(".avm.json"), r#"{"root":true,"aliases":{"build":"echo parent"},"env":{"MODE":"parent"}}"#).unwrap();
+    let profile = child.join(".avm.ci.json");
+    fs::write(&profile, r#"{"aliases":{"build":"echo profile"},"env":{"MODE":"profile"},"tools":{"node":"22"}}"#).unwrap();
+    let run = |args: &[&str]| stdout(p.command(args).current_dir(&child).env("AVM_ENV", "ci").output().unwrap());
+    stdout(p.run(&["trust"]));
+    assert!(run(&["which", "build"]).contains("echo parent"));
+    assert!(run(&["which", "node"]).contains(".avm.ci.json"));
+    run(&["trust"]);
+    assert!(run(&["which", "build"]).contains("echo profile"));
+    assert!(run(&["env", "--shell", "sh"]).contains("MODE=profile")); // warm the cache
+    let old_mtime = fs::metadata(&profile).unwrap().modified().unwrap();
+    fs::write(&profile, r#"{"aliases":{"build":"echo changed"},"env":{"MODE":"changed"},"tools":{"node":"22"}}"#).unwrap();
+    fs::File::options().write(true).open(&profile).unwrap().set_times(fs::FileTimes::new().set_modified(old_mtime)).unwrap();
+    assert!(run(&["which", "build"]).contains("echo parent"));
+    run(&["trust"]);
+    assert!(run(&["which", "build"]).contains("echo changed"));
+    run(&["trust", "--revoke", profile.to_str().unwrap()]);
+    assert!(run(&["which", "build"]).contains("echo parent"));
+    fs::write(&profile, "invalid json").unwrap();
+    assert!(!p.command(&["env"]).current_dir(&child).env("AVM_ENV", "ci").output().unwrap().status.success());
+    fs::remove_file(&profile).unwrap();
+    assert!(run(&["env", "--shell", "sh"]).contains("MODE=parent"));
+    // Broken cache is disposable.
+    for entry in fs::read_dir(p.0.join("home/.avm/cache")).unwrap() {
+        fs::write(entry.unwrap().path(), "invalid cache").unwrap();
+    }
+    assert!(run(&["env", "--shell", "sh"]).contains("MODE=parent"));
+}
+
+#[test]
+fn init_gitignores_personal_config_and_preserves_root_on_edit() {
+    let p = Project::new();
+    fs::write(p.0.join("project/.gitignore"), "target").unwrap();
+    stdout(p.run(&["init"]));
+    assert_eq!(fs::read_to_string(p.0.join("project/.gitignore")).unwrap(), "target\n.avm.local.json\n");
+    fs::write(p.0.join("project/.avm.json"), r#"{"root":true}"#).unwrap();
+    stdout(p.run(&["add", "build", "echo build"]));
+    let cfg: serde_json::Value = serde_json::from_slice(&fs::read(p.0.join("project/.avm.json")).unwrap()).unwrap();
+    assert_eq!(cfg["root"], true);
+    for profile in ["../secret", "ci,,staging", "prod/path", ".", "ci\\prod"] {
+        let out = p.run(&["env", "--env", profile]);
+        assert!(!out.status.success());
+        assert!(String::from_utf8_lossy(&out.stderr).contains("invalid environment profile"));
+    }
+}
+
+#[test]
+#[ignore = "benchmark: run with cargo test -p avm-cli --release cached_env_prompt_benchmark -- --ignored --nocapture"]
+fn cached_env_prompt_benchmark() {
+    let p = Project::new();
+    let mut dir = p.0.join("project");
+    for depth in 0..6 {
+        fs::create_dir_all(&dir).unwrap();
+        fs::write(dir.join(".avm.json"), serde_json::json!({"root":depth == 0,"env":{format!("LAYER_{depth}"):depth.to_string()}}).to_string()).unwrap();
+        stdout(p.run(&["trust", dir.to_str().unwrap()]));
+        dir = dir.join("child");
+    }
+    fs::create_dir_all(&dir).unwrap();
+    let run = || {
+        let start = std::time::Instant::now();
+        stdout(p.command(&["env"]).current_dir(&dir).output().unwrap());
+        start.elapsed().as_secs_f64() * 1000.0
+    };
+    for _ in 0..10 { run(); }
+    let mut ms: Vec<_> = (0..100).map(|_| run()).collect();
+    ms.sort_by(f64::total_cmp);
+    println!("cached avm env, six config layers, 100 subprocesses: median {:.2} ms, p95 {:.2} ms", ms[50], ms[95]);
+    assert!(ms[50] < 5.0, "median prompt overhead {:.2} ms exceeds 5 ms", ms[50]);
+}
+
+#[test]
+fn prune_keeps_inactive_profile_pins() {
+    let p = Project::new();
+    let home = p.0.join("home/.avm");
+    for version in ["20.1.0", "22.1.0", "24.1.0"] {
+        fs::create_dir_all(home.join("tools/node").join(version)).unwrap();
+    }
+    let repo = p.0.join("project");
+    fs::write(repo.join(".avm.json"), r#"{"root":true,"tools":{"node":"20"}}"#).unwrap();
+    fs::write(repo.join(".avm.ci.json"), r#"{"tools":{"node":"22"}}"#).unwrap();
+    fs::write(home.join("tracked-configs.json"), serde_json::json!([repo]).to_string()).unwrap();
+    let out = stdout(p.run(&["prune", "--dry-run", "--include-unrecorded"]));
+    assert!(out.contains("node 24.1.0"));
+    assert!(!out.contains("node 20.1.0") && !out.contains("node 22.1.0"));
+    fs::write(repo.join(".avm.ci.json"), "broken profile").unwrap();
+    assert!(!p.run(&["prune", "--yes", "--include-unrecorded"]).status.success());
+    assert!(home.join("tools/node/24.1.0").exists());
+}
+
+#[cfg(unix)]
+#[test]
+fn shell_wrapper_forwards_profile_options() {
+    let p = Project::new();
+    fs::write(p.0.join("project/.avm.json"), r#"{"root":true,"aliases":{"build":"echo base"}}"#).unwrap();
+    fs::write(p.0.join("project/.avm.ci.json"), r#"{"aliases":{"build":"echo ci"}}"#).unwrap();
+    let bin = std::path::Path::new(env!("CARGO_BIN_EXE_avm-bin")).parent().unwrap();
+    let script = format!(r#"
+export PATH={}:$PATH
+eval "$(avm-bin shell-init)"
+case "$(avm --env ci which build)" in *"echo ci"*) ;; *) exit 10 ;; esac
+case "$(avm --env=ci which build)" in *"echo ci"*) ;; *) exit 11 ;; esac
+[ "$(avm --env ci run build)" = ci ] || exit 12
+[ "$(avm run build)" = base ] || exit 13
+"#, avm_plugin_api::sh_quote(&bin.to_string_lossy()));
+    for shell in ["bash", "zsh"] {
+        let mut settings = p.command(&[]);
+        settings.env("AVM_TRUST_ALL", "1");
+        let mut cmd = Command::new(shell);
+        cmd.args(["-c", &script]).current_dir(settings.get_current_dir().unwrap()).envs(settings.get_envs().filter_map(|(k, v)| v.map(|v| (k, v))));
+        cmd.env_remove("AVM_ENV");
+        let output = cmd.output();
+        if shell == "zsh" && output.as_ref().is_err_and(|e| e.kind() == std::io::ErrorKind::NotFound) { continue; }
+        stdout(output.unwrap());
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn upgrade_keeps_inherited_pins_at_their_source() {
+    use std::os::unix::fs::PermissionsExt;
+    let p = Project::new();
+    let plugin = p.0.join("home/.avm/plugins/avm-plugin-node/bin");
+    fs::create_dir_all(&plugin).unwrap();
+    let executable = plugin.join("avm-plugin");
+    fs::write(&executable, "#!/bin/sh\necho '{\"versions\":[{\"version\":\"22.1.0\",\"label\":\"22\",\"is_lts\":true,\"is_security\":false},{\"version\":\"20.2.0\",\"label\":\"20\",\"is_lts\":true,\"is_security\":false}]}'\n").unwrap();
+    fs::set_permissions(&executable, fs::Permissions::from_mode(0o755)).unwrap();
+    fs::write(p.0.join("project/.avm.json"), r#"{"root":true,"tools":{"node":"20.1.0"}}"#).unwrap();
+    let local = stdout(p.run(&["upgrade", "--bump", "--dry-run"]));
+    assert!(local.contains("20.1.0 → 22.1.0 (local pin)"), "{local}");
+    let child = p.0.join("project/child");
+    fs::create_dir(&child).unwrap();
+    let inherited = stdout(p.command(&["upgrade", "--bump", "--dry-run"]).current_dir(&child).output().unwrap());
+    assert!(inherited.contains("edit it to move to 22.1.0"), "{inherited}");
+    assert!(!child.join(".avm.json").exists());
 }

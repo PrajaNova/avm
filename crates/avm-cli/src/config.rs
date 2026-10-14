@@ -8,6 +8,8 @@ pub const CONFIG_FILE: &str = ".avm.json";
 
 #[derive(Debug, Clone, Default, Serialize)]
 pub struct ConfigLoadResult {
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub root: bool,
     pub aliases: HashMap<String, String>,
     pub env: HashMap<String, String>,
     pub tools: HashMap<String, String>,
@@ -19,7 +21,7 @@ pub struct ConfigLoadResult {
     pub idiomatic_version_files: Option<bool>,
 }
 
-const SECTIONS: &[&str] = &["aliases", "env", "tools", "trusted_paths", "idiomatic_version_files"];
+const SECTIONS: &[&str] = &["aliases", "env", "tools", "trusted_paths", "idiomatic_version_files", "root"];
 
 fn validate_env_key(key: &str) -> bool {
     !key.is_empty()
@@ -52,7 +54,11 @@ fn parse_config(raw: &[u8]) -> Result<ConfigLoadResult> {
                 });
             }
 
-            let cfg = ConfigLoadResult {
+            let mut cfg = ConfigLoadResult {
+                root: match object.get("root") {
+                    None => false,
+                    Some(v) => v.as_bool().ok_or_else(|| anyhow!("root must be a boolean"))?,
+                },
                 aliases: parse_string_map(object.get("aliases"), "aliases")?,
                 env: parse_string_map(object.get("env"), "env")?,
                 tools: parse_string_map(object.get("tools"), "tools")?,
@@ -63,6 +69,9 @@ fn parse_config(raw: &[u8]) -> Result<ConfigLoadResult> {
                 idiomatic_version_files: object.get("idiomatic_version_files").and_then(|v| v.as_bool()),
             };
             validate_env(&cfg.env)?;
+            if cfg!(windows) {
+                cfg.env = cfg.env.into_iter().map(|(key, value)| (key.to_ascii_uppercase(), value)).collect();
+            }
             Ok(cfg)
         }
         serde_json::Value::Null => Ok(ConfigLoadResult::default()),
@@ -83,9 +92,11 @@ fn parse_string_map(
 
 /// Load `<root>/.avm.json`; a missing file is an empty config.
 pub fn load(root: &Path) -> Result<ConfigLoadResult> {
-    let file_path = root.join(CONFIG_FILE);
+    load_file(&root.join(CONFIG_FILE))
+}
 
-    match fs::read(&file_path) {
+pub fn load_file(file_path: &Path) -> Result<ConfigLoadResult> {
+    match fs::read(file_path) {
         Ok(raw) => parse_config(&raw).with_context(|| format!("invalid {}; repair the file before continuing", file_path.display())),
         Err(err) if err.kind() == std::io::ErrorKind::NotFound => Ok(ConfigLoadResult::default()),
         Err(err) => Err(err.into()),
@@ -97,6 +108,24 @@ pub fn save(root: &Path, cfg: &ConfigLoadResult) -> Result<()> {
     validate_env(&cfg.env)?;
     let raw = serde_json::to_vec_pretty(cfg)?;
     avm_plugin_api::storage::atomic_write(&root.join(CONFIG_FILE), &raw).context("failed to save config")
+}
+
+/// Low to high precedence within a directory. Profiles cannot name paths.
+pub fn file_names(profiles: &str) -> Result<Vec<String>> {
+    let mut names = vec![CONFIG_FILE.to_string()];
+    if !profiles.is_empty() {
+        for profile in profiles.split(',') {
+            let profile = profile.trim();
+            if profile.is_empty() || !profile.bytes().all(|c| c.is_ascii_alphanumeric() || b"_-".contains(&c)) {
+                return Err(anyhow!("invalid environment profile: {profile}"));
+            }
+            if profile != "local" {
+                names.push(format!(".avm.{profile}.json"));
+            }
+        }
+    }
+    names.push(".avm.local.json".to_string());
+    Ok(names)
 }
 
 #[cfg(test)]
@@ -113,6 +142,8 @@ mod tests {
         let settings = parse_config(br#"{"trusted_paths":["~/work/**"],"idiomatic_version_files":false}"#).unwrap();
         assert!(settings.aliases.is_empty() && settings.trusted_paths == ["~/work/**"]);
         assert_eq!(settings.idiomatic_version_files, Some(false));
+        assert!(parse_config(br#"{"root":true}"#).unwrap().root);
+        assert!(parse_config(br#"{"root":"yes"}"#).is_err());
         assert!(!String::from_utf8(serde_json::to_vec(&ConfigLoadResult::default()).unwrap()).unwrap().contains("trusted"));
     }
 }

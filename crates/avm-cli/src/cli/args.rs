@@ -14,6 +14,10 @@ pub struct Cli {
     #[arg(short = 'v', long = "version", action = clap::ArgAction::Version)]
     pub version: Option<bool>,
 
+    /// Config profiles, comma-separated; overrides AVM_ENV.
+    #[arg(long = "env", global = true)]
+    pub profiles: Option<String>,
+
     #[command(subcommand)]
     pub command: Commands,
 }

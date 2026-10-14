@@ -48,7 +48,7 @@ pub fn untrusted_files(cfg: &ResolvedConfig) -> Vec<PathBuf> {
 
 pub fn untrusted_notice(files: &[PathBuf]) -> String {
     let names: Vec<String> = files.iter().map(|f| f.display().to_string()).collect();
-    format!("avm: {} not trusted, so its aliases and env are ignored. Run 'avm trust' to enable it.", names.join(", "))
+    format!("avm: {} not trusted, so its aliases and env are ignored. Review each file, then run 'avm trust <file>' to enable it.", names.join(", "))
 }
 
 pub fn home_dir() -> Result<PathBuf> {

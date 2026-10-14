@@ -33,14 +33,16 @@ pub fn main() {
     // eval'd `env`/`shell-init`, or the alias path the shell hook drives.
     let notify = !matches!(
         cli.command,
-        Commands::ExecShim(_)
-            | Commands::Env { .. }
-            | Commands::ShellInit { .. }
-            | Commands::Resolve(_)
-            | Commands::Run(_)
-            | Commands::Exec(_)
-            | Commands::SelfUpdate { .. }
-            | Commands::UpdateCheck
+        Some(
+            Commands::ExecShim(_)
+                | Commands::Env { .. }
+                | Commands::ShellInit { .. }
+                | Commands::Resolve(_)
+                | Commands::Run(_)
+                | Commands::Exec(_)
+                | Commands::SelfUpdate { .. }
+                | Commands::UpdateCheck
+        )
     );
     if let Err(err) = run(cli) {
         eprintln!("avm: {err:#}");
@@ -127,7 +129,10 @@ fn parse_env_value(value: &str) -> String {
 }
 
 fn run(cli: Cli) -> Result<()> {
-    match cli.command {
+    let Some(command) = cli.command else {
+        return cmd_home();
+    };
+    match command {
         Commands::Init => cmd_init(),
         Commands::Install { frozen } => cmd_install(frozen),
         Commands::Lock { platform } => cmd_lock(platform),

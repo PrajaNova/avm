@@ -61,7 +61,8 @@ winning value. Alias suggestions include trusted aliases from every layer.
 
 The existing `eval "$(avm-bin shell-init)"` setup remains the way to activate AVM.
 Its prompt hooks use the same layered resolution as aliases and plain shimmed
-tools. Set `AVM_ENV` in the shell to switch the prompt and shim profile together.
+tools. They run when the directory changes and around `avm` commands, not on every
+Bash/PowerShell prompt. Set `AVM_ENV` in the shell to switch the prompt and shim profile together.
 `avm env --env production` only prints the exports for that invocation; select
 `AVM_ENV=production` for subsequent commands to use the same profile.
 

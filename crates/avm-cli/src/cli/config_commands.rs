@@ -206,7 +206,7 @@ pub fn cmd_trust(args: TrustArgs) -> Result<()> {
 }
 
 pub fn cmd_list() -> Result<()> {
-    let cfg = load_state()?;
+    let cfg = load_state_with_aliases()?;
     let mut printed = false;
     let untrusted = untrusted_files(&cfg);
     if !untrusted.is_empty() {

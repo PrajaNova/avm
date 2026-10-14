@@ -421,3 +421,78 @@ fn shims_install_leaves_unchanged_shims_untouched() {
     assert!(p.run(&["shims", "install"]).status.success());
     assert_eq!(fs::metadata(&node).unwrap().ino(), inode);
 }
+
+#[test]
+fn broken_package_json_never_blocks_env_or_shims() {
+    let p = Project::new();
+    fs::write(p.0.join("project/package.json"), "{ not json").unwrap();
+    assert!(p.run(&["env"]).status.success());
+    assert!(!String::from_utf8_lossy(&p.run(&["exec-shim", "definitely-not-a-command", "--"]).stderr).contains("package.json"));
+    // Alias commands warn and carry on instead of failing.
+    let out = p.run(&["list"]);
+    assert!(out.status.success());
+    assert!(String::from_utf8_lossy(&out.stderr).contains("ignoring package.json"));
+}
+
+#[test]
+fn package_json_with_bom_still_provides_script_aliases() {
+    let p = Project::new();
+    fs::write(p.0.join("project/package.json"), b"\xef\xbb\xbf{\"scripts\":{\"dev\":\"echo hi\"}}").unwrap();
+    let out = p.run(&["resolve", "dev"]);
+    assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+}
+
+/// A protocol plugin whose `env-vars` call is counted in `<root>/spawns`.
+#[cfg(unix)]
+fn fake_env_plugins(p: &Project, tools: &[&str]) -> PathBuf {
+    use std::os::unix::fs::PermissionsExt;
+    let counter = p.0.join("spawns");
+    for tool in tools {
+        let bin = p.0.join(format!("home/.avm/plugins/avm-plugin-{tool}/bin"));
+        fs::create_dir_all(&bin).unwrap();
+        let script = format!("#!/bin/sh\nif [ \"$1\" = env-vars ]; then echo x >> '{}'; echo '{{\"env\":{{\"{}_HOME\":\"/opt/{tool}\"}}}}'; fi\n", counter.display(), tool.to_uppercase());
+        fs::write(bin.join("avm-plugin"), script).unwrap();
+        fs::set_permissions(bin.join("avm-plugin"), fs::Permissions::from_mode(0o755)).unwrap();
+    }
+    let pins: serde_json::Map<_, _> = tools.iter().map(|t| (t.to_string(), serde_json::json!("1"))).collect();
+    fs::write(p.0.join("project/.avm.json"), serde_json::json!({"tools": pins}).to_string()).unwrap();
+    counter
+}
+
+#[cfg(unix)]
+#[test]
+fn plugin_env_vars_are_cached_after_the_first_prompt() {
+    let p = Project::new();
+    let counter = fake_env_plugins(&p, &["node", "java", "android"]);
+    for _ in 0..3 {
+        let out = stdout(p.run(&["env"]));
+        assert!(out.contains("JAVA_HOME") && out.contains("ANDROID_HOME"), "{out}");
+    }
+    assert_eq!(fs::read_to_string(counter).unwrap().lines().count(), 3, "one plugin spawn per tool, ever");
+}
+
+#[cfg(unix)]
+#[test]
+#[ignore = "benchmark: run with cargo test -p avm-cli --release pinned_tools_prompt_benchmark -- --ignored --nocapture"]
+fn pinned_tools_prompt_benchmark() {
+    let p = Project::new();
+    fake_env_plugins(&p, &["node", "java", "android"]);
+    let run = || {
+        let start = std::time::Instant::now();
+        stdout(p.run(&["env"]));
+        start.elapsed().as_secs_f64() * 1000.0
+    };
+    for _ in 0..10 { run(); }
+    let mut ms: Vec<_> = (0..100).map(|_| run()).collect();
+    ms.sort_by(f64::total_cmp);
+    println!("avm env, 3 pinned tools, 100 subprocesses: median {:.2} ms, p95 {:.2} ms", ms[50], ms[95]);
+    assert!(ms[50] < 10.0, "median prompt overhead {:.2} ms exceeds 10 ms", ms[50]);
+}
+
+#[test]
+fn bare_avm_without_a_terminal_prints_help_instead_of_failing() {
+    let p = Project::new();
+    let out = p.run(&[]);
+    assert!(out.status.success());
+    assert!(String::from_utf8_lossy(&out.stdout).contains("Usage: avm"));
+}

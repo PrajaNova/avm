@@ -18,8 +18,9 @@ pub struct Cli {
     #[arg(long = "env", global = true)]
     pub profiles: Option<String>,
 
+    /// Without a command, a terminal gets a picker of this project's aliases and tools.
     #[command(subcommand)]
-    pub command: Commands,
+    pub command: Option<Commands>,
 }
 
 #[derive(Subcommand)]

@@ -1,6 +1,6 @@
 use super::*;
 
-fn cmd_provider_tool(
+pub fn cmd_provider_tool(
     args: Vec<String>,
     cfg: &ResolvedConfig,
 ) -> Result<()> {
@@ -312,6 +312,11 @@ fn warn_if_shim_is_not_preferred(tool: &str) {
 ///
 /// Nothing is available out of the box — `avm plugin add node` (etc.) is
 /// required, same as `brew install` or a Claude Code marketplace install.
+/// Whether a plugin for `name` is installed locally (no network, unlike `provider_by_name`).
+pub fn is_installed_plugin(name: &str) -> bool {
+    PluginManager::new().is_ok_and(|plugins| plugins.protocol_provider(name).is_some() || plugins.asdf_provider(name).is_some())
+}
+
 pub fn provider_by_name(name: &str) -> Result<Box<dyn ToolProvider>> {
     let plugin_manager = PluginManager::new()?;
     if let Some(provider) = plugin_manager.protocol_provider(name) {
@@ -397,8 +402,23 @@ fn select_tool_version(
     provider: &dyn ToolProvider,
     versions: Vec<avm_plugin_api::ToolVersion>,
 ) -> Result<()> {
-    let labels: Vec<String> = versions.iter().map(|v| v.label.clone()).collect();
-    match ui::select(&format!("Available {provider_name} versions"), &labels)? {
+    // One listing for the ✓ marks; asking `is_installed` per row would spawn a plugin per version.
+    let installed: HashSet<String> = provider.installed_versions().unwrap_or_default().into_iter().collect();
+    let selected_version = load_state().ok().and_then(|cfg| cfg.resolve_tool(provider_name)).map(|(version, _)| version);
+    let labels: Vec<String> = versions
+        .iter()
+        .map(|v| {
+            let mark = if selected_version.as_deref() == Some(v.version.as_str()) {
+                "●"
+            } else if installed.contains(&v.version) {
+                "✓"
+            } else {
+                " "
+            };
+            format!("{mark} {}", v.label)
+        })
+        .collect();
+    match ui::select(&format!("Available {provider_name} versions (✓ installed, ● selected)"), &labels)? {
         Some(selected) => {
             confirm_tool_version_selection(provider_name, provider, &versions[selected].version)
         }
@@ -414,33 +434,14 @@ fn confirm_tool_version_selection(
     provider: &dyn ToolProvider,
     version: &str,
 ) -> Result<()> {
-    let cwd = std::env::current_dir().context("failed to read current directory")?;
-    let has_local_config = cwd.join(CONFIG_FILE).exists();
-
-    if has_local_config {
-        print!("Use {provider_name} {version} locally or globally? [l/g/c]: ");
-        io::stdout().flush()?;
-        let mut answer = String::new();
-        io::stdin().read_line(&mut answer)?;
-        match answer.trim().to_ascii_lowercase().as_str() {
-            "l" | "local" => use_provider_version(provider_name, provider, version, false),
-            "g" | "global" => use_provider_version(provider_name, provider, version, true),
-            _ => {
-                println!("Cancelled.");
-                Ok(())
-            }
-        }
-    } else {
-        print!("No local .avm.json found. Set {provider_name} {version} globally? [y/N]: ");
-        io::stdout().flush()?;
-        let mut answer = String::new();
-        io::stdin().read_line(&mut answer)?;
-        match answer.trim().to_ascii_lowercase().as_str() {
-            "y" | "yes" => use_provider_version(provider_name, provider, version, true),
-            _ => {
-                println!("Cancelled.");
-                Ok(())
-            }
+    // Local first: it creates `.avm.json` when the project has none, so a project
+    // that only has `.nvmrc` can be pinned from here without `avm init`.
+    let scopes = ["Local: this project (writes .avm.json)".to_string(), "Global: every project".to_string()];
+    match ui::select(&format!("Use {provider_name} {version} where?"), &scopes)? {
+        Some(choice) => use_provider_version(provider_name, provider, version, choice == 1),
+        None => {
+            println!("Cancelled.");
+            Ok(())
         }
     }
 }

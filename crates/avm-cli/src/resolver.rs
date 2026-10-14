@@ -91,13 +91,17 @@ impl ResolvedConfig {
         merged
     }
 
-    pub fn suggest_aliases(&self, query: &str) -> Vec<String> {
-        let candidates: BTreeSet<&String> = self
-            .local_aliases
+    /// Every alias name from every source, sorted.
+    pub fn alias_names(&self) -> BTreeSet<&String> {
+        self.local_aliases
             .keys()
             .chain(self.global_aliases.keys())
             .chain(self.plugin_aliases.keys())
-            .collect();
+            .collect()
+    }
+
+    pub fn suggest_aliases(&self, query: &str) -> Vec<String> {
+        let candidates = self.alias_names();
         let mut scored: Vec<(&String, f64)> = candidates
             .into_iter()
             .map(|key| (key, alias_match_score(query, key)))
@@ -120,7 +124,10 @@ pub fn load(
         lock.apply(&mut cfg)?;
     } else {
         for (tool, version) in &mut cfg.local_tools {
-            *version = crate::version_files::resolve(tool, version);
+            // Version-file pins were already resolved (their spec differs) in `load_unlocked`.
+            if cfg.tool_specs.get(tool) == Some(version) {
+                *version = crate::version_files::resolve(tool, version);
+            }
         }
     }
     for (tool, version) in &mut cfg.global_tools {

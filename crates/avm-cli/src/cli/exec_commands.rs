@@ -162,7 +162,7 @@ mod tests {
                 "--help",
             ])
             .unwrap();
-            let Commands::Exec(args) = cli.command else {
+            let Some(Commands::Exec(args)) = cli.command else {
                 panic!("expected exec")
             };
             assert!(args.no_install);
@@ -174,20 +174,20 @@ mod tests {
             "avm", "run", "dev", "--with", "node@18", "--with", "java@21", "--", "--help",
         ])
         .unwrap();
-        let Commands::Run(args) = cli.command else {
+        let Some(Commands::Run(args)) = cli.command else {
             panic!("expected run")
         };
         assert_eq!(args.key, "dev");
         assert_eq!(args.tools, ["node@18", "java@21"]);
         assert_eq!(args.args, ["--help"]);
         let cli = Cli::try_parse_from(["avm", "run", "dev", "--port", "3000"]).unwrap();
-        let Commands::Run(args) = cli.command else {
+        let Some(Commands::Run(args)) = cli.command else {
             panic!("expected run")
         };
         assert_eq!(args.args, ["--port", "3000"]);
         let cli = Cli::try_parse_from(["avm", "--env", "ci", "run", "dev", "--", "--env", "target"]).unwrap();
         assert_eq!(cli.profiles.as_deref(), Some("ci"));
-        let Commands::Run(args) = cli.command else { panic!("expected run") };
+        let Some(Commands::Run(args)) = cli.command else { panic!("expected run") };
         assert_eq!(args.args, ["--env", "target"]);
 
     }

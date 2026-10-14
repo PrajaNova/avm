@@ -1,7 +1,7 @@
 use super::*;
 
 pub fn cmd_which(key: &str) -> Result<()> {
-    let cfg = load_state()?;
+    let cfg = load_state_with_aliases()?;
     if let Some(alias) = cfg.resolve_alias(key) {
         match alias.source {
             AliasSource::Local => println!("local alias '{key}': {} (from {})", alias.command, cfg.alias_origins.get(key).map(String::as_str).unwrap_or("unknown")),
@@ -83,7 +83,7 @@ fn cmd_env_print(shell: Shell) -> Result<()> {
 }
 
 pub fn cmd_resolve(args: ResolveArgs) -> Result<()> {
-    let cfg = load_state()?;
+    let cfg = load_state_with_aliases()?;
     let alias = cfg
         .resolve_alias(&args.key)
         .ok_or_else(|| alias_not_found_error(&args.key, &cfg))?;
@@ -96,13 +96,19 @@ pub fn cmd_resolve(args: ResolveArgs) -> Result<()> {
 }
 
 pub fn cmd_run(args: RunArgs) -> Result<()> {
-    let cfg = load_state()?;
+    let cfg = load_state_with_aliases()?;
     let alias_key = &args.key;
     let alias = match cfg.resolve_alias(alias_key) {
         Some(alias) => alias,
+        // `avm android versions`: a plugin command, not an alias.
+        None if is_installed_plugin(alias_key) => {
+            let mut plugin_args = vec![args.key.clone()];
+            plugin_args.extend(args.args);
+            return cmd_provider_tool(plugin_args, &cfg);
+        }
         None if ui::can_select() => {
             let suggestions = cfg.suggest_aliases(alias_key);
-            let Some(selected) = select_alias_suggestion(alias_key, &suggestions)? else {
+            let Some(selected) = select_alias_suggestion(alias_key, &cfg, &suggestions)? else {
                 return Ok(());
             };
             cfg.resolve_alias(&selected)
@@ -178,12 +184,20 @@ fn build_shell_alias_string(template: &str, args: &[String]) -> Result<String> {
     Ok(output)
 }
 
-fn select_alias_suggestion(query: &str, suggestions: &[String]) -> Result<Option<String>> {
+/// `name  command  [source]`, so the picker shows what each alias will run.
+fn alias_label(cfg: &ResolvedConfig, name: &str) -> String {
+    match cfg.resolve_alias(name) {
+        Some(alias) => format!("{name}  {}  [{}]", alias.command, alias_source_label(&alias.source)),
+        None => name.to_string(),
+    }
+}
+
+fn select_alias_suggestion(query: &str, cfg: &ResolvedConfig, suggestions: &[String]) -> Result<Option<String>> {
     if suggestions.is_empty() {
         return Err(anyhow!("alias '{query}' not found"));
     }
 
-    let labels: Vec<String> = suggestions.iter().map(|s| format!("avm {s}")).collect();
+    let labels: Vec<String> = suggestions.iter().map(|s| alias_label(cfg, s)).collect();
     match ui::select(&format!("Alias '{query}' not found"), &labels)? {
         Some(index) => Ok(Some(suggestions[index].clone())),
         None => {
@@ -207,4 +221,46 @@ fn alias_not_found_error(key: &str, cfg: &ResolvedConfig) -> anyhow::Error {
         ));
     }
     anyhow!(message)
+}
+
+enum HomeChoice {
+    Alias(String),
+    Tool(String),
+    Help,
+}
+
+/// Bare `avm` on a terminal: one picker over this project's aliases and tools, so
+/// running a script or changing a version needs no remembered command.
+pub fn cmd_home() -> Result<()> {
+    use clap::CommandFactory;
+    let print_help = || Cli::command().print_help().map_err(Into::into);
+    if !ui::can_select() {
+        return print_help();
+    }
+    let cfg = load_state_with_aliases()?;
+    let mut tools: Vec<_> = cfg.resolve_tools_with_source().into_iter().collect();
+    tools.sort_by(|a, b| a.0.cmp(&b.0));
+    let mut choices = Vec::new();
+    let mut labels = Vec::new();
+    for name in cfg.alias_names() {
+        labels.push(alias_label(&cfg, name));
+        choices.push(HomeChoice::Alias(name.clone()));
+    }
+    for (tool, (version, _)) in tools {
+        labels.push(format!("{tool} {version}  [versions, install, pin]"));
+        choices.push(HomeChoice::Tool(tool));
+    }
+    if choices.is_empty() {
+        return print_help();
+    }
+    labels.push("help  [all commands]".to_string());
+    choices.push(HomeChoice::Help);
+    match ui::select("avm: what do you want to run?", &labels)? {
+        Some(index) => match choices.swap_remove(index) {
+            HomeChoice::Alias(key) => cmd_run(RunArgs { key, tools: Vec::new(), no_install: false, args: Vec::new() }),
+            HomeChoice::Tool(tool) => cmd_plugin_command(vec![tool]),
+            HomeChoice::Help => print_help(),
+        },
+        None => Ok(()),
+    }
 }

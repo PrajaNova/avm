@@ -47,7 +47,7 @@ pub enum ToolVersionQuery {
 
 impl ToolVersionQuery {
     /// Wire form used as a plugin process's `--query` argument (see
-    /// `docs/migration/PLUGIN_PROTOCOL.md`). Shared by the host (building the
+    /// `docs/plugins/CREATING_A_PLUGIN.md`). Shared by the host (building the
     /// argument) and plugin executables (parsing it), so both sides always
     /// agree on the format without duplicating it.
     pub fn to_arg(&self) -> String {
@@ -240,7 +240,7 @@ pub fn checksum_for(checksums: &str, name: &str) -> anyhow::Result<String> {
 }
 
 /// Wire responses a plugin process prints as one JSON document on stdout for
-/// its "read" commands. See `docs/migration/PLUGIN_PROTOCOL.md` for the full
+/// its "read" commands. See `docs/plugins/CREATING_A_PLUGIN.md` for the full
 /// contract, including why `install`/`uninstall` are deliberately NOT part
 /// of this JSON envelope (they stream human progress with stdio inherited
 /// and signal success/failure via exit code instead).
@@ -317,7 +317,7 @@ pub trait ToolProvider: Send + Sync {
 /// (builtin or third-party) that wraps a `ToolProvider` implementation calls
 /// `runner::run(manifest, &provider)` from `main` — this is the plugin-side
 /// half of the contract `avm_runtime::PluginProcess` speaks from the host.
-/// See `docs/migration/PLUGIN_PROTOCOL.md` for the wire format.
+/// See `docs/plugins/CREATING_A_PLUGIN.md` for the wire format.
 pub mod runner {
     use super::*;
     use std::process::ExitCode;

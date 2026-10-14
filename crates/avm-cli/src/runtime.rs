@@ -202,7 +202,7 @@ impl PluginManager {
     }
 
     /// A user-installed plugin speaking the native protocol
-    /// (`docs/migration/PLUGIN_PROTOCOL.md`): a plugin directory named
+    /// (`docs/plugins/CREATING_A_PLUGIN.md`): a plugin directory named
     /// `avm-plugin-<name>` with an executable `bin/avm-plugin` is surfaced
     /// as tool `<name>`.
     pub fn protocol_provider(&self, name: &str) -> Option<PluginProcess> {
@@ -371,7 +371,7 @@ impl ToolProvider for AsdfToolProvider {
 }
 
 /// Host-side runner for avm's native plugin protocol (see
-/// `docs/migration/PLUGIN_PROTOCOL.md`): a plugin is a standalone executable
+/// `docs/plugins/CREATING_A_PLUGIN.md`): a plugin is a standalone executable
 /// speaking a small JSON-on-stdout contract for "read" calls, and plain
 /// exit-code + inherited stdio for `install`/`uninstall` so progress streams
 /// live. This implements the same `ToolProvider` trait as `AsdfToolProvider`

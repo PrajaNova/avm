@@ -38,7 +38,12 @@ pub fn env_baseline() -> Result<BTreeMap<String, Option<String>>> {
         Ok(raw) => serde_json::from_str(&raw).context("invalid AVM environment baseline")?,
         Err(_) => BTreeMap::new(),
     };
-    config::validate_env(&baseline.keys().map(|key| (key.clone(), String::new())).collect())?;
+    config::validate_env(
+        &baseline
+            .keys()
+            .map(|key| (key.clone(), String::new()))
+            .collect(),
+    )?;
     Ok(baseline)
 }
 
@@ -82,8 +87,8 @@ fn package_json_aliases(cwd: &Path) -> Result<HashMap<String, ResolvedAlias>> {
     }
     let raw = fs::read_to_string(&package_json).context("failed to read package.json")?;
     // Windows editors often save a BOM, which JSON parsers reject.
-    let parsed: serde_json::Value =
-        serde_json::from_str(raw.trim_start_matches('\u{feff}')).context("failed to parse package.json")?;
+    let parsed: serde_json::Value = serde_json::from_str(raw.trim_start_matches('\u{feff}'))
+        .context("failed to parse package.json")?;
 
     let manager = if cwd.join("bun.lockb").exists() || cwd.join("bun.lock").exists() {
         "bun run"

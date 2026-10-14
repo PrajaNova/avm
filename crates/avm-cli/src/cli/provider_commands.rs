@@ -1,9 +1,6 @@
 use super::*;
 
-pub fn cmd_provider_tool(
-    args: Vec<String>,
-    cfg: &ResolvedConfig,
-) -> Result<()> {
+pub fn cmd_provider_tool(args: Vec<String>, cfg: &ResolvedConfig) -> Result<()> {
     let (provider_name, parts) = args
         .split_first()
         .ok_or_else(|| anyhow!("plugin name required"))?;
@@ -38,7 +35,12 @@ pub fn cmd_provider_tool(
         }
         [cmd, version, flag] if cmd == "install" && (flag == "--global" || flag == "-g") => {
             let resolved = resolve_install_version(provider.as_ref(), version)?;
-            install_and_pin(provider_name, provider.as_ref(), &resolved, PinScope::GlobalOnly)
+            install_and_pin(
+                provider_name,
+                provider.as_ref(),
+                &resolved,
+                PinScope::GlobalOnly,
+            )
         }
         [cmd, version, flag] if cmd == "install" && flag == "--no-pin" => {
             let resolved = resolve_install_version(provider.as_ref(), version)?;
@@ -135,7 +137,10 @@ fn interactive_uninstall(provider_name: &str, provider: &dyn ToolProvider) -> Re
         println!("No installed {provider_name} versions to remove.");
         return Ok(());
     }
-    match ui::select(&format!("Uninstall which {provider_name} version?"), &installed)? {
+    match ui::select(
+        &format!("Uninstall which {provider_name} version?"),
+        &installed,
+    )? {
         Some(i) => {
             provider.uninstall(&installed[i])?;
             println!("✓ Removed {provider_name} {}", installed[i]);
@@ -197,9 +202,7 @@ fn install_and_pin(
             set_tool_version(provider_name, version, false)?;
             if global_pin(provider_name)?.is_none() {
                 set_tool_version(provider_name, version, true)?;
-                println!(
-                    "✓ Installed {provider_name} {version} (local + global pin set)"
-                );
+                println!("✓ Installed {provider_name} {version} (local + global pin set)");
             } else {
                 println!("✓ Installed {provider_name} {version} (local pin set)");
             }
@@ -211,7 +214,11 @@ fn install_and_pin(
 
 fn resolve_install_version(provider: &dyn ToolProvider, spec: &str) -> Result<String> {
     if let Some(lock) = crate::lockfile::load(&std::env::current_dir()?)? {
-        if let Some(entry) = lock.tools.get(provider.name()).filter(|entry| entry.requested == spec.trim()) {
+        if let Some(entry) = lock
+            .tools
+            .get(provider.name())
+            .filter(|entry| entry.requested == spec.trim())
+        {
             return Ok(entry.resolved.clone());
         }
     }
@@ -314,7 +321,9 @@ fn warn_if_shim_is_not_preferred(tool: &str) {
 /// required, same as `brew install` or a Claude Code marketplace install.
 /// Whether a plugin for `name` is installed locally (no network, unlike `provider_by_name`).
 pub fn is_installed_plugin(name: &str) -> bool {
-    PluginManager::new().is_ok_and(|plugins| plugins.protocol_provider(name).is_some() || plugins.asdf_provider(name).is_some())
+    PluginManager::new().is_ok_and(|plugins| {
+        plugins.protocol_provider(name).is_some() || plugins.asdf_provider(name).is_some()
+    })
 }
 
 pub fn provider_by_name(name: &str) -> Result<Box<dyn ToolProvider>> {
@@ -342,7 +351,10 @@ fn print_provider_status(
 ) -> Result<()> {
     println!("Plugin: {provider_name}");
     if let Some((version, source)) = cfg.resolve_tool(provider_name) {
-        println!("Selected version: {version} ({})", alias_source_label(&source));
+        println!(
+            "Selected version: {version} ({})",
+            alias_source_label(&source)
+        );
     } else {
         println!("Selected version: none");
     }
@@ -403,8 +415,15 @@ fn select_tool_version(
     versions: Vec<avm_plugin_api::ToolVersion>,
 ) -> Result<()> {
     // One listing for the ✓ marks; asking `is_installed` per row would spawn a plugin per version.
-    let installed: HashSet<String> = provider.installed_versions().unwrap_or_default().into_iter().collect();
-    let selected_version = load_state().ok().and_then(|cfg| cfg.resolve_tool(provider_name)).map(|(version, _)| version);
+    let installed: HashSet<String> = provider
+        .installed_versions()
+        .unwrap_or_default()
+        .into_iter()
+        .collect();
+    let selected_version = load_state()
+        .ok()
+        .and_then(|cfg| cfg.resolve_tool(provider_name))
+        .map(|(version, _)| version);
     let labels: Vec<String> = versions
         .iter()
         .map(|v| {
@@ -418,7 +437,10 @@ fn select_tool_version(
             format!("{mark} {}", v.label)
         })
         .collect();
-    match ui::select(&format!("Available {provider_name} versions (✓ installed, ● selected)"), &labels)? {
+    match ui::select(
+        &format!("Available {provider_name} versions (✓ installed, ● selected)"),
+        &labels,
+    )? {
         Some(selected) => {
             confirm_tool_version_selection(provider_name, provider, &versions[selected].version)
         }
@@ -436,7 +458,10 @@ fn confirm_tool_version_selection(
 ) -> Result<()> {
     // Local first: it creates `.avm.json` when the project has none, so a project
     // that only has `.nvmrc` can be pinned from here without `avm init`.
-    let scopes = ["Local: this project (writes .avm.json)".to_string(), "Global: every project".to_string()];
+    let scopes = [
+        "Local: this project (writes .avm.json)".to_string(),
+        "Global: every project".to_string(),
+    ];
     match ui::select(&format!("Use {provider_name} {version} where?"), &scopes)? {
         Some(choice) => use_provider_version(provider_name, provider, version, choice == 1),
         None => {

@@ -108,23 +108,39 @@ pub fn tool_dir(tool: &str) -> anyhow::Result<PathBuf> {
 
 /// Names used as managed directory or executable names cannot contain paths.
 pub fn validate_name(name: &str) -> anyhow::Result<()> {
-    anyhow::ensure!(!name.is_empty() && name.bytes().all(|c| c.is_ascii_alphanumeric() || c == b'-' || c == b'_'), "invalid managed name: {name}");
+    anyhow::ensure!(
+        !name.is_empty()
+            && name
+                .bytes()
+                .all(|c| c.is_ascii_alphanumeric() || c == b'-' || c == b'_'),
+        "invalid managed name: {name}"
+    );
     Ok(())
 }
 
 pub fn validate_version_spec(spec: &str) -> anyhow::Result<()> {
     let selector = spec.strip_prefix("lts/").unwrap_or(spec);
-    anyhow::ensure!(!selector.is_empty() && selector != "." && selector != ".."
-        && !selector.contains(['/', '\\', ':', '\0']), "invalid version spec: {spec}");
+    anyhow::ensure!(
+        !selector.is_empty()
+            && selector != "."
+            && selector != ".."
+            && !selector.contains(['/', '\\', ':', '\0']),
+        "invalid version spec: {spec}"
+    );
     Ok(())
 }
 
 /// Sorted version dirs under `tool_dir(tool)` that pass `is_installed`.
-pub fn list_installed(tool: &str, is_installed: impl Fn(&str) -> bool) -> anyhow::Result<Vec<String>> {
+pub fn list_installed(
+    tool: &str,
+    is_installed: impl Fn(&str) -> bool,
+) -> anyhow::Result<Vec<String>> {
     let entries = match std::fs::read_dir(tool_dir(tool)?) {
         Ok(entries) => entries,
         Err(err) if err.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
-        Err(err) => return Err(anyhow::Error::new(err).context(format!("failed to read {tool} tools dir"))),
+        Err(err) => {
+            return Err(anyhow::Error::new(err).context(format!("failed to read {tool} tools dir")))
+        }
     };
     let mut versions: Vec<String> = entries
         .flatten()
@@ -147,16 +163,25 @@ pub fn remove_version(tool: &str, version: &str) -> anyhow::Result<()> {
 }
 
 /// Wait for `child` up to `ms`; kills it and returns `None` on timeout.
-pub fn wait_deadline(child: &mut std::process::Child, ms: u64) -> std::io::Result<Option<std::process::ExitStatus>> {
+pub fn wait_deadline(
+    child: &mut std::process::Child,
+    ms: u64,
+) -> std::io::Result<Option<std::process::ExitStatus>> {
     let deadline = std::time::Instant::now()
         .checked_add(std::time::Duration::from_millis(ms))
-        .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::InvalidInput, "timeout exceeds the clock's range"))?;
+        .ok_or_else(|| {
+            std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                "timeout exceeds the clock's range",
+            )
+        })?;
     loop {
         if let Some(status) = child.try_wait()? {
             return Ok(Some(status));
         }
         if std::time::Instant::now() >= deadline {
-            #[cfg(unix)] process::terminate_descendants(child.id());
+            #[cfg(unix)]
+            process::terminate_descendants(child.id());
             let _ = child.kill();
             let _ = child.wait();
             return Ok(None);
@@ -175,11 +200,22 @@ pub fn env_timeout_ms(env_var: &str, default_ms: u64) -> u64 {
 }
 
 /// Spawn `cmd`, fail on non-zero exit or on timeout (`$env_var` seconds, else `default_ms`).
-pub fn run_timed(mut cmd: std::process::Command, default_ms: u64, label: &str, env_var: &str) -> anyhow::Result<()> {
+pub fn run_timed(
+    mut cmd: std::process::Command,
+    default_ms: u64,
+    label: &str,
+    env_var: &str,
+) -> anyhow::Result<()> {
     let ms = env_timeout_ms(env_var, default_ms);
-    let (mut child, _tree) = process::spawn_isolated(&mut cmd).map_err(|e| anyhow::anyhow!("failed to spawn {label}: {e}"))?;
-    match wait_deadline(&mut child, ms).map_err(|e| anyhow::anyhow!("failed while waiting for {label}: {e}"))? {
-        None => Err(anyhow::anyhow!("{label} timed out after {}s — set {env_var}=<seconds> to extend", ms / 1000)),
+    let (mut child, _tree) = process::spawn_isolated(&mut cmd)
+        .map_err(|e| anyhow::anyhow!("failed to spawn {label}: {e}"))?;
+    match wait_deadline(&mut child, ms)
+        .map_err(|e| anyhow::anyhow!("failed while waiting for {label}: {e}"))?
+    {
+        None => Err(anyhow::anyhow!(
+            "{label} timed out after {}s — set {env_var}=<seconds> to extend",
+            ms / 1000
+        )),
         Some(status) if !status.success() => Err(anyhow::anyhow!("{label} failed: {status}")),
         Some(_) => Ok(()),
     }
@@ -189,14 +225,25 @@ pub fn run_timed(mut cmd: std::process::Command, default_ms: u64, label: &str, e
 pub fn fetch(url_or_path: &str, max_time_secs: u32) -> anyhow::Result<Vec<u8>> {
     let local = std::path::Path::new(url_or_path);
     if local.exists() {
-        return std::fs::read(local).map_err(|e| anyhow::anyhow!("failed to read {}: {e}", local.display()));
+        return std::fs::read(local)
+            .map_err(|e| anyhow::anyhow!("failed to read {}: {e}", local.display()));
     }
     let output = std::process::Command::new("curl")
-        .args(["-fsSL", "--connect-timeout", "10", "--max-time", &max_time_secs.to_string(), url_or_path])
+        .args([
+            "-fsSL",
+            "--connect-timeout",
+            "10",
+            "--max-time",
+            &max_time_secs.to_string(),
+            url_or_path,
+        ])
         .output()
         .map_err(|e| anyhow::anyhow!("failed to fetch {url_or_path}: {e}"))?;
     if !output.status.success() {
-        anyhow::bail!("failed to fetch {url_or_path}: curl exited with {}", output.status);
+        anyhow::bail!(
+            "failed to fetch {url_or_path}: curl exited with {}",
+            output.status
+        );
     }
     Ok(output.stdout)
 }
@@ -205,7 +252,8 @@ pub fn fetch(url_or_path: &str, max_time_secs: u32) -> anyhow::Result<Vec<u8>> {
 pub fn sha256_file(path: &std::path::Path) -> anyhow::Result<String> {
     use sha2::{Digest, Sha256};
     use std::io::Read;
-    let mut file = std::fs::File::open(path).map_err(|e| anyhow::anyhow!("failed to open {}: {e}", path.display()))?;
+    let mut file = std::fs::File::open(path)
+        .map_err(|e| anyhow::anyhow!("failed to open {}: {e}", path.display()))?;
     let mut hasher = Sha256::new();
     let mut buf = [0u8; 64 * 1024];
     loop {
@@ -215,13 +263,21 @@ pub fn sha256_file(path: &std::path::Path) -> anyhow::Result<String> {
         }
         hasher.update(&buf[..n]);
     }
-    Ok(hasher.finalize().iter().map(|b| format!("{b:02x}")).collect())
+    Ok(hasher
+        .finalize()
+        .iter()
+        .map(|b| format!("{b:02x}"))
+        .collect())
 }
 
 /// Check `path` against the entry for `name` in `checksums` (`sha256sum`
 /// output: `<hex>  <name>` or `<hex> *<name>` per line). Returns the hash on
 /// a match; errors if `name` is unlisted or the hash differs.
-pub fn verify_sha256(path: &std::path::Path, checksums: &str, name: &str) -> anyhow::Result<String> {
+pub fn verify_sha256(
+    path: &std::path::Path,
+    checksums: &str,
+    name: &str,
+) -> anyhow::Result<String> {
     let expected = checksum_for(checksums, name)?;
     let actual = sha256_file(path)?;
     if actual != expected {
@@ -305,11 +361,21 @@ pub trait ToolProvider: Send + Sync {
     fn install(&self, version: &str) -> anyhow::Result<()>;
     fn uninstall(&self, version: &str) -> anyhow::Result<()>;
     /// Optional reproducible-download capability; older plugins keep working.
-    fn resolve_downloads(&self, _version: &str, _platforms: &[String]) -> anyhow::Result<protocol::ResolveResponse> {
-        anyhow::bail!("{} does not support lockfiles; update the plugin or install without a lockfile", self.name())
+    fn resolve_downloads(
+        &self,
+        _version: &str,
+        _platforms: &[String],
+    ) -> anyhow::Result<protocol::ResolveResponse> {
+        anyhow::bail!(
+            "{} does not support lockfiles; update the plugin or install without a lockfile",
+            self.name()
+        )
     }
     fn install_locked(&self, _version: &str, _asset: &protocol::LockedAsset) -> anyhow::Result<()> {
-        anyhow::bail!("{} does not support locked installs; update the plugin", self.name())
+        anyhow::bail!(
+            "{} does not support locked installs; update the plugin",
+            self.name()
+        )
     }
 }
 
@@ -323,7 +389,11 @@ pub mod runner {
     use std::process::ExitCode;
 
     pub fn run(manifest: Manifest, provider: &dyn ToolProvider) -> ExitCode {
-        match dispatch(&manifest, provider, &std::env::args().skip(1).collect::<Vec<_>>()) {
+        match dispatch(
+            &manifest,
+            provider,
+            &std::env::args().skip(1).collect::<Vec<_>>(),
+        ) {
             Ok(()) => ExitCode::SUCCESS,
             Err(err) => {
                 eprintln!("error: {err:#}");
@@ -332,7 +402,11 @@ pub mod runner {
         }
     }
 
-    fn dispatch(manifest: &Manifest, provider: &dyn ToolProvider, args: &[String]) -> anyhow::Result<()> {
+    fn dispatch(
+        manifest: &Manifest,
+        provider: &dyn ToolProvider,
+        args: &[String],
+    ) -> anyhow::Result<()> {
         let (command, rest) = args
             .split_first()
             .ok_or_else(|| anyhow::anyhow!("missing plugin command"))?;
@@ -370,12 +444,15 @@ pub mod runner {
             }
             "install" => provider.install(require_version(rest)?),
             "resolve" => {
-                let request: protocol::ResolveRequest = serde_json::from_str(require_version(rest)?)?;
+                let request: protocol::ResolveRequest =
+                    serde_json::from_str(require_version(rest)?)?;
                 print_json(&provider.resolve_downloads(&request.version, &request.platforms)?)
             }
             "install-locked" => {
                 let version = require_version(rest)?;
-                let asset = rest.get(1).ok_or_else(|| anyhow::anyhow!("locked asset JSON required"))?;
+                let asset = rest
+                    .get(1)
+                    .ok_or_else(|| anyhow::anyhow!("locked asset JSON required"))?;
                 provider.install_locked(version, &serde_json::from_str(asset)?)
             }
             "uninstall" => provider.uninstall(require_version(rest)?),
@@ -393,7 +470,9 @@ pub mod runner {
         match args {
             [flag, value] if flag == "--query" => ToolVersionQuery::parse_arg(value),
             [] => Ok(ToolVersionQuery::Recent),
-            _ => Err(anyhow::anyhow!("usage: versions [--query recent|latest|major:<N>]")),
+            _ => Err(anyhow::anyhow!(
+                "usage: versions [--query recent|latest|major:<N>]"
+            )),
         }
     }
 
@@ -423,9 +502,12 @@ mod tests {
 
     #[test]
     fn extreme_timeouts_do_not_panic() {
-        #[cfg(unix)] let mut command = std::process::Command::new("true");
-        #[cfg(windows)] let mut command = std::process::Command::new("cmd");
-        #[cfg(windows)] command.args(["/C", "exit 0"]);
+        #[cfg(unix)]
+        let mut command = std::process::Command::new("true");
+        #[cfg(windows)]
+        let mut command = std::process::Command::new("cmd");
+        #[cfg(windows)]
+        command.args(["/C", "exit 0"]);
         let mut child = command.spawn().unwrap();
         if let Err(err) = wait_deadline(&mut child, u64::MAX) {
             assert_eq!(err.kind(), std::io::ErrorKind::InvalidInput);
@@ -449,9 +531,18 @@ mod tests {
         assert_eq!(sha256_file(&path).unwrap(), abc);
         let sums = format!("{}  other.tar.gz\n{abc}  a.tar.gz\n", "0".repeat(64));
         assert_eq!(verify_sha256(&path, &sums, "a.tar.gz").unwrap(), abc);
-        assert_eq!(verify_sha256(&path, &format!("{abc} *a.tar.gz"), "a.tar.gz").unwrap(), abc);
-        assert!(verify_sha256(&path, &sums, "other.tar.gz").unwrap_err().to_string().contains("mismatch"));
-        assert!(verify_sha256(&path, &sums, "missing.tar.gz").unwrap_err().to_string().contains("no entry"));
+        assert_eq!(
+            verify_sha256(&path, &format!("{abc} *a.tar.gz"), "a.tar.gz").unwrap(),
+            abc
+        );
+        assert!(verify_sha256(&path, &sums, "other.tar.gz")
+            .unwrap_err()
+            .to_string()
+            .contains("mismatch"));
+        assert!(verify_sha256(&path, &sums, "missing.tar.gz")
+            .unwrap_err()
+            .to_string()
+            .contains("no entry"));
         let _ = std::fs::remove_file(path);
     }
 
@@ -460,9 +551,24 @@ mod tests {
     fn run_timed_reports_timeout_and_failure() {
         let mut sleep = std::process::Command::new("sleep");
         sleep.arg("5");
-        assert!(run_timed(sleep, 100, "sleep", "AVM_TEST_UNSET").unwrap_err().to_string().contains("timed out"));
-        assert!(run_timed(std::process::Command::new("false"), 5_000, "false", "AVM_TEST_UNSET").is_err());
-        assert!(run_timed(std::process::Command::new("true"), 5_000, "true", "AVM_TEST_UNSET").is_ok());
+        assert!(run_timed(sleep, 100, "sleep", "AVM_TEST_UNSET")
+            .unwrap_err()
+            .to_string()
+            .contains("timed out"));
+        assert!(run_timed(
+            std::process::Command::new("false"),
+            5_000,
+            "false",
+            "AVM_TEST_UNSET"
+        )
+        .is_err());
+        assert!(run_timed(
+            std::process::Command::new("true"),
+            5_000,
+            "true",
+            "AVM_TEST_UNSET"
+        )
+        .is_ok());
     }
 }
 

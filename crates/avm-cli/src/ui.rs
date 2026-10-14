@@ -68,7 +68,12 @@ pub fn select(title: &str, items: &[String]) -> Result<Option<usize>> {
                     offset = 0;
                 }
             }
-            KeyCode::Up | KeyCode::Down | KeyCode::PageUp | KeyCode::PageDown | KeyCode::Home | KeyCode::End => {
+            KeyCode::Up
+            | KeyCode::Down
+            | KeyCode::PageUp
+            | KeyCode::PageDown
+            | KeyCode::Home
+            | KeyCode::End => {
                 selected = move_selection(key.code, selected, filtered.len(), page_size);
             }
             KeyCode::Char(c) => {
@@ -205,7 +210,13 @@ mod tests {
         assert_eq!(move_selection(PageDown, 1, 25, 10), 11);
         assert_eq!(move_selection(PageDown, 20, 25, 10), 24);
         assert_eq!(move_selection(PageUp, 3, 25, 10), 0);
-        assert_eq!((move_selection(Home, 7, 25, 10), move_selection(End, 7, 25, 10)), (0, 24));
+        assert_eq!(
+            (
+                move_selection(Home, 7, 25, 10),
+                move_selection(End, 7, 25, 10)
+            ),
+            (0, 24)
+        );
         assert_eq!(move_selection(End, 0, 0, 10), 0, "no rows: no panic");
     }
 

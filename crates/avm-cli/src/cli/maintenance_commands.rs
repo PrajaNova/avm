@@ -26,29 +26,49 @@ fn statuses(cfg: &ResolvedConfig, only: &[String]) -> Result<Vec<Status>> {
         if !only.is_empty() && !only.contains(&tool) {
             continue;
         }
-        let Ok(provider) = provider_by_name(&tool) else { continue };
+        let Ok(provider) = provider_by_name(&tool) else {
+            continue;
+        };
         let available: Vec<String> = provider
             .available_versions(ToolVersionQuery::Recent)
             .with_context(|| format!("couldn't list {tool} versions"))?
             .into_iter()
             .map(|v| v.version)
             .collect();
-        let origin = matches!(source, AliasSource::Local).then(|| cfg.tool_origins.get(&tool)).flatten()
-            .filter(|file| std::env::current_dir().ok().is_none_or(|cwd| Path::new(file.as_str()) != cwd.join(CONFIG_FILE)));
+        let origin = matches!(source, AliasSource::Local)
+            .then(|| cfg.tool_origins.get(&tool))
+            .flatten()
+            .filter(|file| {
+                std::env::current_dir()
+                    .ok()
+                    .is_none_or(|cwd| Path::new(file.as_str()) != cwd.join(CONFIG_FILE))
+            });
         let requested = match source {
-            AliasSource::Local => cfg.tool_specs.get(&tool).cloned().unwrap_or_else(|| current.clone()),
-            _ => cfg.global_tool_specs.get(&tool).cloned().unwrap_or_else(|| current.clone()),
+            AliasSource::Local => cfg
+                .tool_specs
+                .get(&tool)
+                .cloned()
+                .unwrap_or_else(|| current.clone()),
+            _ => cfg
+                .global_tool_specs
+                .get(&tool)
+                .cloned()
+                .unwrap_or_else(|| current.clone()),
         };
         // An exact pin's "range" is its major line; a spec (`20`, `>=18`) is its own range.
         let range = if requested == current {
-            numbers(&current).and_then(|n| n.first().map(u64::to_string)).unwrap_or(requested.clone())
+            numbers(&current)
+                .and_then(|n| n.first().map(u64::to_string))
+                .unwrap_or(requested.clone())
         } else {
             requested.clone()
         };
         rows.push(Status {
             in_range: pick(&tool, &range, available.clone()),
             latest: pick(&tool, "*", available),
-            source: origin.cloned().unwrap_or_else(|| alias_source_label(&source).to_string()),
+            source: origin
+                .cloned()
+                .unwrap_or_else(|| alias_source_label(&source).to_string()),
             from_file: origin.is_some(),
             tool,
             requested,
@@ -60,10 +80,20 @@ fn statuses(cfg: &ResolvedConfig, only: &[String]) -> Result<Vec<Status>> {
 
 fn print_table(header: &[&str], rows: &[Vec<String>]) {
     let widths: Vec<usize> = (0..header.len())
-        .map(|i| rows.iter().map(|r| r[i].len()).chain([header[i].len()]).max().unwrap_or(0))
+        .map(|i| {
+            rows.iter()
+                .map(|r| r[i].len())
+                .chain([header[i].len()])
+                .max()
+                .unwrap_or(0)
+        })
         .collect();
     let line = |cells: Vec<&str>| {
-        let padded: Vec<String> = cells.iter().zip(&widths).map(|(c, w)| format!("{c:<w$}")).collect();
+        let padded: Vec<String> = cells
+            .iter()
+            .zip(&widths)
+            .map(|(c, w)| format!("{c:<w$}"))
+            .collect();
         println!("{}", padded.join("  ").trim_end());
     };
     line(header.to_vec());
@@ -106,7 +136,17 @@ pub fn cmd_outdated(json: bool) -> Result<()> {
             ]
         })
         .collect();
-    print_table(&["TOOL", "REQUESTED", "CURRENT", "LATEST IN RANGE", "LATEST", "PINNED BY"], &table);
+    print_table(
+        &[
+            "TOOL",
+            "REQUESTED",
+            "CURRENT",
+            "LATEST IN RANGE",
+            "LATEST",
+            "PINNED BY",
+        ],
+        &table,
+    );
     Ok(())
 }
 
@@ -115,7 +155,9 @@ fn confirm(question: &str, yes: bool) -> Result<bool> {
         return Ok(true);
     }
     if !ui::can_select() {
-        return Err(anyhow!("{question} Re-run with -y to confirm (no terminal to ask)."));
+        return Err(anyhow!(
+            "{question} Re-run with -y to confirm (no terminal to ask)."
+        ));
     }
     print!("{question} [y/N] ");
     io::stdout().flush()?;
@@ -128,7 +170,11 @@ pub fn cmd_upgrade(tools: Vec<String>, bump: bool, dry_run: bool, yes: bool) -> 
     let cfg = load_state()?;
     let mut plan = Vec::new();
     for s in statuses(&cfg, &tools)? {
-        let target = if bump { s.latest.clone() } else { s.in_range.clone() };
+        let target = if bump {
+            s.latest.clone()
+        } else {
+            s.in_range.clone()
+        };
         match target {
             Some(t) if t != s.current => {
                 if bump && s.from_file {
@@ -144,10 +190,20 @@ pub fn cmd_upgrade(tools: Vec<String>, bump: bool, dry_run: bool, yes: bool) -> 
         return Ok(());
     }
     for (s, target) in &plan {
-        let pin = if s.from_file { "installs; the version file already covers it".to_string() } else { format!("{} pin", s.source) };
+        let pin = if s.from_file {
+            "installs; the version file already covers it".to_string()
+        } else {
+            format!("{} pin", s.source)
+        };
         println!("{}: {} → {target} ({pin})", s.tool, s.current);
     }
-    if dry_run || (bump && !confirm("Move these pins to the latest release (may cross a major version)?", yes)?) {
+    if dry_run
+        || (bump
+            && !confirm(
+                "Move these pins to the latest release (may cross a major version)?",
+                yes,
+            )?)
+    {
         return Ok(());
     }
     for (s, target) in plan {
@@ -164,12 +220,19 @@ pub fn cmd_upgrade(tools: Vec<String>, bump: bool, dry_run: bool, yes: bool) -> 
 pub fn cmd_plugin_outdated(json: bool) -> Result<()> {
     let manager = PluginManager::new()?;
     let mut rows = Vec::new();
-    let mut names: Vec<String> = manager.list_plugins().into_values().map(|m| m.name).collect();
+    let mut names: Vec<String> = manager
+        .list_plugins()
+        .into_values()
+        .map(|m| m.name)
+        .collect();
     names.sort();
     names.dedup();
     for name in names {
         // Marketplace installs record their release in meta.json.
-        let meta = manager.plugin_dir().join(format!("avm-plugin-{name}")).join("meta.json");
+        let meta = manager
+            .plugin_dir()
+            .join(format!("avm-plugin-{name}"))
+            .join("meta.json");
         let installed = fs::read(&meta)
             .ok()
             .and_then(|raw| serde_json::from_slice::<serde_json::Value>(&raw).ok())
@@ -177,12 +240,17 @@ pub fn cmd_plugin_outdated(json: bool) -> Result<()> {
         let latest = runtime::marketplace_lookup(&name)
             .ok()
             .flatten()
-            .and_then(|entry| runtime::github_release(&entry.repo, entry.release_tag.as_deref()).ok())
+            .and_then(|entry| {
+                runtime::github_release(&entry.repo, entry.release_tag.as_deref()).ok()
+            })
             .map(|r| r.tag_name);
         rows.push((name, installed, latest));
     }
     if json {
-        let out: Vec<_> = rows.iter().map(|(n, i, l)| serde_json::json!({"plugin": n, "installed": i, "latest": l})).collect();
+        let out: Vec<_> = rows
+            .iter()
+            .map(|(n, i, l)| serde_json::json!({"plugin": n, "installed": i, "latest": l}))
+            .collect();
         println!("{}", serde_json::to_string_pretty(&out)?);
         return Ok(());
     }
@@ -192,10 +260,17 @@ pub fn cmd_plugin_outdated(json: bool) -> Result<()> {
             let state = match (&installed, &latest) {
                 (Some(i), Some(l)) if i == l => "up to date".to_string(),
                 (Some(_), Some(_)) => format!("run `avm plugin update {name}`"),
-                (Some(_), None) => "couldn't reach GitHub (set GITHUB_TOKEN if rate-limited)".to_string(),
+                (Some(_), None) => {
+                    "couldn't reach GitHub (set GITHUB_TOKEN if rate-limited)".to_string()
+                }
                 _ => "not from the marketplace".to_string(),
             };
-            vec![name, installed.unwrap_or_else(|| "-".into()), latest.unwrap_or_else(|| "-".into()), state]
+            vec![
+                name,
+                installed.unwrap_or_else(|| "-".into()),
+                latest.unwrap_or_else(|| "-".into()),
+                state,
+            ]
         })
         .collect();
     print_table(&["PLUGIN", "INSTALLED", "LATEST", ""], &table);
@@ -210,7 +285,8 @@ fn tracked_path() -> Result<PathBuf> {
 
 fn tracked_dirs() -> Result<BTreeSet<String>> {
     match fs::read(tracked_path()?) {
-        Ok(raw) => serde_json::from_slice(&raw).context("invalid tracked-configs.json; cannot safely prune"),
+        Ok(raw) => serde_json::from_slice(&raw)
+            .context("invalid tracked-configs.json; cannot safely prune"),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(BTreeSet::new()),
         Err(e) => Err(e.into()),
     }
@@ -241,13 +317,20 @@ pub fn track_config_dir(dir: &Path) {
 /// Config and plugin-env caches are one file per directory or plugin build and are
 /// never read again once stale; drop the ones untouched for a month.
 fn prune_stale_caches() {
-    let Ok(dir) = shims::avm_home().map(|home| home.join("cache")) else { return };
+    let Ok(dir) = shims::avm_home().map(|home| home.join("cache")) else {
+        return;
+    };
     let month = Duration::from_secs(30 * 24 * 60 * 60);
     for entry in fs::read_dir(dir).into_iter().flatten().flatten() {
         let name = entry.file_name();
         let name = name.to_string_lossy();
         let stale = (name.starts_with("config-") || name.starts_with("env-"))
-            && entry.metadata().and_then(|m| m.modified()).ok().and_then(|t| t.elapsed().ok()).is_some_and(|age| age > month);
+            && entry
+                .metadata()
+                .and_then(|m| m.modified())
+                .ok()
+                .and_then(|t| t.elapsed().ok())
+                .is_some_and(|age| age > month);
         if stale {
             let _ = fs::remove_file(entry.path());
         }
@@ -256,7 +339,9 @@ fn prune_stale_caches() {
 
 /// Shims mark `<version>/.last_used`, at most once a day.
 pub fn mark_used(executable: &Path) {
-    let Some(version_dir) = executable.parent().and_then(Path::parent) else { return };
+    let Some(version_dir) = executable.parent().and_then(Path::parent) else {
+        return;
+    };
     let marker = version_dir.join(".last_used");
     let fresh = fs::metadata(&marker)
         .and_then(|m| m.modified())
@@ -269,16 +354,27 @@ pub fn mark_used(executable: &Path) {
 }
 
 fn dir_size(path: &Path) -> u64 {
-    let Ok(meta) = fs::symlink_metadata(path) else { return 0 };
+    let Ok(meta) = fs::symlink_metadata(path) else {
+        return 0;
+    };
     if !meta.is_dir() {
         return meta.len();
     }
-    fs::read_dir(path).into_iter().flatten().flatten().map(|e| dir_size(&e.path())).sum()
+    fs::read_dir(path)
+        .into_iter()
+        .flatten()
+        .flatten()
+        .map(|e| dir_size(&e.path()))
+        .sum()
 }
 
 fn human(bytes: u64) -> String {
     let mb = bytes as f64 / 1_048_576.0;
-    if mb >= 1024.0 { format!("{:.1} GB", mb / 1024.0) } else { format!("{mb:.0} MB") }
+    if mb >= 1024.0 {
+        format!("{:.1} GB", mb / 1024.0)
+    } else {
+        format!("{mb:.0} MB")
+    }
 }
 
 fn parse_days(spec: &str) -> Result<u64> {
@@ -292,19 +388,41 @@ fn global_packages(tool: &str, version_dir: &Path) -> Vec<String> {
     if tool != "node" {
         return Vec::new();
     }
-    let own = ["node", "npm", "npx", "corepack", "nodevars", "install_tools"];
+    let own = [
+        "node",
+        "npm",
+        "npx",
+        "corepack",
+        "nodevars",
+        "install_tools",
+    ];
     let mut pkgs: BTreeSet<String> = BTreeSet::new();
-    for entry in fs::read_dir(version_dir.join("bin")).into_iter().flatten().flatten() {
+    for entry in fs::read_dir(version_dir.join("bin"))
+        .into_iter()
+        .flatten()
+        .flatten()
+    {
         let path = entry.path();
-        let stem = path.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
-        if !own.contains(&stem.as_str()) && !stem.starts_with('.') && path.extension().is_none_or(|e| e != "ps1") {
+        let stem = path
+            .file_stem()
+            .map(|s| s.to_string_lossy().into_owned())
+            .unwrap_or_default();
+        if !own.contains(&stem.as_str())
+            && !stem.starts_with('.')
+            && path.extension().is_none_or(|e| e != "ps1")
+        {
             pkgs.insert(stem);
         }
     }
     pkgs.into_iter().collect()
 }
 
-pub fn cmd_prune(older_than: Option<String>, include_unrecorded: bool, dry_run: bool, yes: bool) -> Result<()> {
+pub fn cmd_prune(
+    older_than: Option<String>,
+    include_unrecorded: bool,
+    dry_run: bool,
+    yes: bool,
+) -> Result<()> {
     let home = home_dir()?;
     if !dry_run {
         prune_stale_caches();
@@ -312,35 +430,65 @@ pub fn cmd_prune(older_than: Option<String>, include_unrecorded: bool, dry_run: 
     let tracked = tracked_path()?;
     // Not locked while resolving or asking: every shim and prompt takes that lock to track its project.
     let tracked_snapshot = tracked_dirs()?;
-    let cutoff = older_than.as_deref().map(parse_days).transpose()?.map(|d| Duration::from_secs(d * 24 * 60 * 60));
+    let cutoff = older_than
+        .as_deref()
+        .map(parse_days)
+        .transpose()?
+        .map(|d| Duration::from_secs(d * 24 * 60 * 60));
 
     // Versions still wanted: global pins, plus pins of every tracked project that still exists.
-    let mut keep: HashSet<(String, String)> = config::load(&home)?.tools.into_iter()
-        .flat_map(|(tool, spec)| [(tool.clone(), crate::version_files::resolve(&tool, &spec)), (tool, spec)])
+    let mut keep: HashSet<(String, String)> = config::load(&home)?
+        .tools
+        .into_iter()
+        .flat_map(|(tool, spec)| {
+            [
+                (tool.clone(), crate::version_files::resolve(&tool, &spec)),
+                (tool, spec),
+            ]
+        })
         .collect();
     let mut live_dirs = BTreeSet::new();
     for dir in &tracked_snapshot {
         let path = PathBuf::from(dir);
         if path.is_dir() {
-            let cfg = crate::resolver::load(&path, &home, HashMap::new())
-                .with_context(|| format!("cannot safely prune: failed to resolve tracked project {}", path.display()))?;
-            keep.extend(cfg.local_tools.into_iter().chain(cfg.global_tools).flat_map(|(tool, spec)| {
-                [(tool.clone(), crate::version_files::resolve(&tool, &spec)), (tool, spec)]
-            }));
+            let cfg = crate::resolver::load(&path, &home, HashMap::new()).with_context(|| {
+                format!(
+                    "cannot safely prune: failed to resolve tracked project {}",
+                    path.display()
+                )
+            })?;
+            keep.extend(
+                cfg.local_tools
+                    .into_iter()
+                    .chain(cfg.global_tools)
+                    .flat_map(|(tool, spec)| {
+                        [
+                            (tool.clone(), crate::version_files::resolve(&tool, &spec)),
+                            (tool, spec),
+                        ]
+                    }),
+            );
             // Keep pins in inactive profiles too: switching AVM_ENV must not
             // make prune delete a runtime another profile still selects.
             for ancestor in path.ancestors().take_while(|p| *p != home) {
-                let mut files: Vec<_> = fs::read_dir(ancestor)?.map(|e| e.map(|e| e.path())).collect::<io::Result<_>>()?;
+                let mut files: Vec<_> = fs::read_dir(ancestor)?
+                    .map(|e| e.map(|e| e.path()))
+                    .collect::<io::Result<_>>()?;
                 files.sort();
-                for file in files.into_iter().filter(|p| p.file_name().and_then(|n| n.to_str())
-                    .is_some_and(|n| n.starts_with(".avm.") && n.ends_with(".json"))) {
+                for file in files.into_iter().filter(|p| {
+                    p.file_name()
+                        .and_then(|n| n.to_str())
+                        .is_some_and(|n| n.starts_with(".avm.") && n.ends_with(".json"))
+                }) {
                     for (tool, spec) in config::load_file(&file)?.tools {
                         avm_plugin_api::validate_name(&tool)?;
                         avm_plugin_api::validate_version_spec(&spec)?;
                         keep.insert((tool.clone(), crate::version_files::resolve(&tool, &spec)));
                     }
                 }
-                if config::load(ancestor)?.root { break; }
+                if config::load(ancestor)?.root {
+                    break;
+                }
             }
             live_dirs.insert(dir.clone());
         }
@@ -353,10 +501,15 @@ pub fn cmd_prune(older_than: Option<String>, include_unrecorded: bool, dry_run: 
         let tool_name = tool.file_name().to_string_lossy().into_owned();
         for version in fs::read_dir(tool.path()).into_iter().flatten().flatten() {
             let name = version.file_name().to_string_lossy().into_owned();
-            if name.starts_with('.') || !version.path().is_dir() || keep.contains(&(tool_name.clone(), name.clone())) {
+            if name.starts_with('.')
+                || !version.path().is_dir()
+                || keep.contains(&(tool_name.clone(), name.clone()))
+            {
                 continue;
             }
-            let last = fs::metadata(version.path().join(".last_used")).and_then(|m| m.modified()).ok();
+            let last = fs::metadata(version.path().join(".last_used"))
+                .and_then(|m| m.modified())
+                .ok();
             // avm only learns which projects use a version as it runs, so a version
             // it has never seen used may still be needed. Don't guess unless asked.
             if last.is_none() && !include_unrecorded {
@@ -364,7 +517,9 @@ pub fn cmd_prune(older_than: Option<String>, include_unrecorded: bool, dry_run: 
                 continue;
             }
             if let Some(cutoff) = cutoff {
-                let age = last.or_else(|| version.metadata().and_then(|m| m.modified()).ok()).and_then(|t| t.elapsed().ok());
+                let age = last
+                    .or_else(|| version.metadata().and_then(|m| m.modified()).ok())
+                    .and_then(|t| t.elapsed().ok());
                 if age.is_some_and(|a| a < cutoff) {
                     continue;
                 }
@@ -392,14 +547,20 @@ pub fn cmd_prune(older_than: Option<String>, include_unrecorded: bool, dry_run: 
         total += size;
         let used = last
             .map(|t| {
-                let days = SystemTime::now().duration_since(t).map(|d| d.as_secs() / 86_400).unwrap_or(0);
+                let days = SystemTime::now()
+                    .duration_since(t)
+                    .map(|d| d.as_secs() / 86_400)
+                    .unwrap_or(0);
                 format!("last used {days}d ago")
             })
             .unwrap_or_else(|| "no recorded use".to_string());
         println!("  {tool} {version}  {}  ({used})", human(size));
         let pkgs = global_packages(tool, path);
         if !pkgs.is_empty() {
-            println!("    warning: holds global packages ({}); other versions fall back to them", pkgs.join(", "));
+            println!(
+                "    warning: holds global packages ({}); other versions fall back to them",
+                pkgs.join(", ")
+            );
         }
     }
     println!("{} version(s), {} to reclaim.", doomed.len(), human(total));
@@ -411,7 +572,9 @@ pub fn cmd_prune(older_than: Option<String>, include_unrecorded: bool, dry_run: 
     // A project tracked while we waited may need a version we're about to delete.
     let _guard = avm_plugin_api::storage::lock(&tracked)?;
     if tracked_dirs()? != tracked_snapshot {
-        return Err(anyhow!("a project was tracked while pruning; nothing was removed, re-run `avm prune`"));
+        return Err(anyhow!(
+            "a project was tracked while pruning; nothing was removed, re-run `avm prune`"
+        ));
     }
     for (tool, version, path, _) in doomed {
         fs::remove_dir_all(&path).with_context(|| format!("failed to remove {tool} {version}"))?;

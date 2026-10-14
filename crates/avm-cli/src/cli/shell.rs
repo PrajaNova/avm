@@ -202,7 +202,10 @@ mod tests {
                 assert!(script.contains(&format!("{name}")), "{name}");
             }
         }
-        assert!(builtin_commands().iter().any(|n| n == "alias") && builtin_commands().iter().any(|n| n == "help"));
+        assert!(
+            builtin_commands().iter().any(|n| n == "alias")
+                && builtin_commands().iter().any(|n| n == "help")
+        );
     }
 
     #[test]

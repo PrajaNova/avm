@@ -16,7 +16,11 @@ const GIT_CLONE_TIMEOUT_MS: u64 = 120_000;
 const GIT_PULL_TIMEOUT_MS: u64 = 60_000;
 const PROTOCOL_PREFIX: &str = "avm-plugin-";
 /// A protocol plugin's executable inside its dir: `bin/avm-plugin(.exe)`.
-const PLUGIN_BIN: &str = if cfg!(windows) { "avm-plugin.exe" } else { "avm-plugin" };
+const PLUGIN_BIN: &str = if cfg!(windows) {
+    "avm-plugin.exe"
+} else {
+    "avm-plugin"
+};
 /// Marketplace plugin archives: zip on Windows, tar.gz elsewhere.
 const PLUGIN_ARCHIVE_EXT: &str = if cfg!(windows) { "zip" } else { "tar.gz" };
 const ASDF_PREFIX: &str = "asdf-";
@@ -44,7 +48,12 @@ impl PluginManager {
             .flatten()
             .flatten()
             .filter(|entry| entry.file_type().map(|ty| ty.is_dir()).unwrap_or(false))
-            .map(|entry| (entry.file_name().to_string_lossy().to_string(), entry.path()))
+            .map(|entry| {
+                (
+                    entry.file_name().to_string_lossy().to_string(),
+                    entry.path(),
+                )
+            })
             .collect();
         dirs.sort_by_key(|(name, _)| name.to_ascii_lowercase());
         dirs
@@ -52,7 +61,12 @@ impl PluginManager {
 
     /// First plugin dir that passes `is_kind` and maps to tool `name` once
     /// `prefix` (`avm-plugin-` / `asdf-`) is stripped.
-    fn find(&self, name: &str, prefix: &str, is_kind: fn(&Path) -> bool) -> Option<(String, PathBuf)> {
+    fn find(
+        &self,
+        name: &str,
+        prefix: &str,
+        is_kind: fn(&Path) -> bool,
+    ) -> Option<(String, PathBuf)> {
         self.plugin_dirs()
             .into_iter()
             .find(|(dir, path)| is_kind(path) && tool_name(dir, prefix) == name)
@@ -125,7 +139,12 @@ impl PluginManager {
                 .arg(&target)
                 .env_clear()
                 .env("PATH", DEFAULT_PLUGIN_PATH_ENV);
-            run_timed(git, GIT_CLONE_TIMEOUT_MS, "git clone", "AVM_GIT_CLONE_TIMEOUT")
+            run_timed(
+                git,
+                GIT_CLONE_TIMEOUT_MS,
+                "git clone",
+                "AVM_GIT_CLONE_TIMEOUT",
+            )
         } else {
             let source = fs::canonicalize(source).context("invalid plugin source path")?;
             copy_dir_recursive(&source, &target).context("plugin copy failed")
@@ -141,7 +160,9 @@ impl PluginManager {
         }
 
         let _ = fs::remove_dir_all(&target);
-        Err(anyhow!("invalid plugin: missing asdf bin/list-all + bin/install"))
+        Err(anyhow!(
+            "invalid plugin: missing asdf bin/list-all + bin/install"
+        ))
     }
 
     pub fn remove_plugin(&self, name: &str) -> Result<()> {
@@ -207,7 +228,10 @@ impl PluginManager {
     /// as tool `<name>`.
     pub fn protocol_provider(&self, name: &str) -> Option<PluginProcess> {
         let (_, plugin_path) = self.find(name, PROTOCOL_PREFIX, is_protocol_plugin_source)?;
-        Some(PluginProcess::new(name, plugin_path.join("bin").join(PLUGIN_BIN)))
+        Some(PluginProcess::new(
+            name,
+            plugin_path.join("bin").join(PLUGIN_BIN),
+        ))
     }
 }
 
@@ -225,7 +249,11 @@ impl AsdfToolProvider {
     }
 
     fn bin_path(&self, version: &str) -> Option<PathBuf> {
-        let candidate = self.install_path(version).ok()?.join("bin").join(&self.name);
+        let candidate = self
+            .install_path(version)
+            .ok()?
+            .join("bin")
+            .join(&self.name);
         candidate.exists().then_some(candidate)
     }
 
@@ -308,9 +336,12 @@ impl ToolProvider for AsdfToolProvider {
             .collect();
         // asdf list-all is usually oldest-first; protocol queries are newest-first.
         all.sort_by(|a, b| {
-            use crate::version_files::{numbers, build};
-            (numbers(&b.version), build(&b.version), &b.version)
-                .cmp(&(numbers(&a.version), build(&a.version), &a.version))
+            use crate::version_files::{build, numbers};
+            (numbers(&b.version), build(&b.version), &b.version).cmp(&(
+                numbers(&a.version),
+                build(&a.version),
+                &a.version,
+            ))
         });
         let mut versions = query.filter(all, |v| version_major(&v.version).unwrap_or(u64::MAX));
         if matches!(query, ToolVersionQuery::Recent) {
@@ -349,7 +380,9 @@ impl ToolProvider for AsdfToolProvider {
 
     fn install(&self, version: &str) -> Result<()> {
         avm_plugin_api::download::validate_version(version)?;
-        let _guard = avm_plugin_api::storage::lock(&tool_dir(&self.name)?.join(format!(".install-{version}")))?;
+        let _guard = avm_plugin_api::storage::lock(
+            &tool_dir(&self.name)?.join(format!(".install-{version}")),
+        )?;
         if self.is_installed(version) {
             return Ok(());
         }
@@ -438,8 +471,17 @@ impl PluginProcess {
     fn env_cache_path(&self, version: &str) -> Option<PathBuf> {
         avm_plugin_api::download::validate_version(version).ok()?;
         let meta = fs::metadata(&self.executable).ok()?;
-        let nanos = meta.modified().ok()?.duration_since(std::time::UNIX_EPOCH).ok()?.as_nanos();
-        let name = format!("env-{}-{version}-{nanos}-{}.json", self.tool_name, meta.len());
+        let nanos = meta
+            .modified()
+            .ok()?
+            .duration_since(std::time::UNIX_EPOCH)
+            .ok()?
+            .as_nanos();
+        let name = format!(
+            "env-{}-{version}-{nanos}-{}.json",
+            self.tool_name,
+            meta.len()
+        );
         Some(crate::shims::avm_home().ok()?.join("cache").join(name))
     }
 
@@ -468,27 +510,38 @@ impl ToolProvider for PluginProcess {
 
     fn installed_versions(&self) -> Result<Vec<String>> {
         Ok(self
-            .call_json::<avm_plugin_api::protocol::InstalledVersionsResponse>(&["installed-versions"])?
+            .call_json::<avm_plugin_api::protocol::InstalledVersionsResponse>(&[
+                "installed-versions",
+            ])?
             .versions)
     }
 
     fn available_versions(&self, query: ToolVersionQuery) -> Result<Vec<ToolVersion>> {
         let query_arg = query.to_arg();
         Ok(self
-            .call_json::<avm_plugin_api::protocol::VersionsResponse>(&["versions", "--query", &query_arg])?
+            .call_json::<avm_plugin_api::protocol::VersionsResponse>(&[
+                "versions", "--query", &query_arg,
+            ])?
             .versions)
     }
 
     fn executable_path(&self, version: &str) -> Result<Option<PathBuf>> {
         Ok(self
-            .call_json::<avm_plugin_api::protocol::ExecutablePathResponse>(&["executable-path", version])?
+            .call_json::<avm_plugin_api::protocol::ExecutablePathResponse>(&[
+                "executable-path",
+                version,
+            ])?
             .path
             .map(PathBuf::from))
     }
 
     fn env_vars(&self, version: &str) -> Result<HashMap<String, String>> {
         let cache = self.env_cache_path(version);
-        if let Some(env) = cache.as_ref().and_then(|p| fs::read(p).ok()).and_then(|raw| serde_json::from_slice(&raw).ok()) {
+        if let Some(env) = cache
+            .as_ref()
+            .and_then(|p| fs::read(p).ok())
+            .and_then(|raw| serde_json::from_slice(&raw).ok())
+        {
             return Ok(env);
         }
         let env = self
@@ -496,7 +549,10 @@ impl ToolProvider for PluginProcess {
             .env;
         // Best effort: a cache that can't be written just means a spawn next time.
         if let Some((path, raw)) = cache.zip(serde_json::to_vec(&env).ok()) {
-            if path.parent().is_some_and(|dir| fs::create_dir_all(dir).is_ok()) {
+            if path
+                .parent()
+                .is_some_and(|dir| fs::create_dir_all(dir).is_ok())
+            {
                 let _ = avm_plugin_api::storage::atomic_write(&path, &raw);
             }
         }
@@ -511,14 +567,23 @@ impl ToolProvider for PluginProcess {
         self.run_status(&["uninstall", version])
     }
 
-    fn resolve_downloads(&self, version: &str, platforms: &[String]) -> Result<avm_plugin_api::protocol::ResolveResponse> {
+    fn resolve_downloads(
+        &self,
+        version: &str,
+        platforms: &[String],
+    ) -> Result<avm_plugin_api::protocol::ResolveResponse> {
         let request = serde_json::to_string(&avm_plugin_api::protocol::ResolveRequest {
-            version: version.to_string(), platforms: platforms.to_vec(),
+            version: version.to_string(),
+            platforms: platforms.to_vec(),
         })?;
         self.call_json(&["resolve", &request])
     }
 
-    fn install_locked(&self, version: &str, asset: &avm_plugin_api::protocol::LockedAsset) -> Result<()> {
+    fn install_locked(
+        &self,
+        version: &str,
+        asset: &avm_plugin_api::protocol::LockedAsset,
+    ) -> Result<()> {
         let asset = serde_json::to_string(asset)?;
         self.run_status(&["install-locked", version, &asset])
     }
@@ -528,7 +593,8 @@ const DEFAULT_MARKETPLACE_REGISTRY_URL: &str =
     "https://raw.githubusercontent.com/PrajaNova/avm/main/marketplace/registry.json";
 const MARKETPLACE_TIMEOUT_SECS: u32 = 20;
 const MARKETPLACE_INSTALL_TIMEOUT_MS: u64 = 300_000;
-const DEFAULT_PLUGIN_PATH_ENV: &str = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin";
+const DEFAULT_PLUGIN_PATH_ENV: &str =
+    "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin";
 
 #[derive(Debug, Clone, serde::Deserialize)]
 pub struct MarketplaceEntry {
@@ -571,12 +637,20 @@ pub fn marketplace_platform() -> Result<(&'static str, &'static str)> {
         "macos" => "darwin",
         "linux" => "linux",
         "windows" => "windows",
-        other => return Err(anyhow!("unsupported platform for marketplace install: {other}")),
+        other => {
+            return Err(anyhow!(
+                "unsupported platform for marketplace install: {other}"
+            ))
+        }
     };
     let arch = match std::env::consts::ARCH {
         "aarch64" => "arm64",
         "x86_64" => "amd64",
-        other => return Err(anyhow!("unsupported architecture for marketplace install: {other}")),
+        other => {
+            return Err(anyhow!(
+                "unsupported architecture for marketplace install: {other}"
+            ))
+        }
     };
     Ok((os, arch))
 }
@@ -596,29 +670,46 @@ pub struct GithubAsset {
 /// `repo`'s release for `tag`, or its latest. `AVM_GITHUB_API_URL` overrides
 /// the API base (a local directory works too, for tests).
 pub fn github_release(repo: &str, tag: Option<&str>) -> Result<GithubRelease> {
-    let api = std::env::var("AVM_GITHUB_API_URL").unwrap_or_else(|_| "https://api.github.com".to_string());
+    let api = std::env::var("AVM_GITHUB_API_URL")
+        .unwrap_or_else(|_| "https://api.github.com".to_string());
     let which = tag.map_or("latest".to_string(), |t| format!("tags/{t}"));
-    let url = format!("{}/repos/{repo}/releases/{which}", api.trim_end_matches('/'));
-    let body = github_api_get(&url).with_context(|| format!("failed to query release {which} of {repo}"))?;
+    let url = format!(
+        "{}/repos/{repo}/releases/{which}",
+        api.trim_end_matches('/')
+    );
+    let body = github_api_get(&url)
+        .with_context(|| format!("failed to query release {which} of {repo}"))?;
     serde_json::from_slice(&body).with_context(|| format!("malformed release info for {repo}"))
 }
 
 /// GET a GitHub API URL. Sends `GITHUB_TOKEN`/`GH_TOKEN` when set, since
 /// unauthenticated calls share 60/hour per IP (offices, CI runners).
 fn github_api_get(url: &str) -> Result<Vec<u8>> {
-    let token = std::env::var("GITHUB_TOKEN").or_else(|_| std::env::var("GH_TOKEN")).ok().filter(|t| !t.is_empty());
+    let token = std::env::var("GITHUB_TOKEN")
+        .or_else(|_| std::env::var("GH_TOKEN"))
+        .ok()
+        .filter(|t| !t.is_empty());
     let Some(token) = token.filter(|_| url.starts_with("https://api.github.com/")) else {
         return fetch(url, MARKETPLACE_TIMEOUT_SECS);
     };
     let output = Command::new("curl")
-        .args(["-fsSL", "--connect-timeout", "10", "--max-time", &MARKETPLACE_TIMEOUT_SECS.to_string()])
+        .args([
+            "-fsSL",
+            "--connect-timeout",
+            "10",
+            "--max-time",
+            &MARKETPLACE_TIMEOUT_SECS.to_string(),
+        ])
         .arg("-H")
         .arg(format!("Authorization: Bearer {token}"))
         .args(["-H", "Accept: application/vnd.github+json", url])
         .output()
         .with_context(|| format!("failed to fetch {url}"))?;
     if !output.status.success() {
-        return Err(anyhow!("failed to fetch {url}: curl exited with {}", output.status));
+        return Err(anyhow!(
+            "failed to fetch {url}: curl exited with {}",
+            output.status
+        ));
     }
     Ok(output.stdout)
 }
@@ -627,7 +718,12 @@ fn github_api_get(url: &str) -> Result<Vec<u8>> {
 /// `checksums.txt` (refusing if there is none, unless AVM_ALLOW_UNVERIFIED=1),
 /// and extract it into `extract_dir` (which must be private to this process).
 /// Returns (sha256, verified).
-pub fn fetch_verified_archive(repo: &str, release: &GithubRelease, asset_name: &str, extract_dir: &Path) -> Result<(String, bool)> {
+pub fn fetch_verified_archive(
+    repo: &str,
+    release: &GithubRelease,
+    asset_name: &str,
+    extract_dir: &Path,
+) -> Result<(String, bool)> {
     let asset = release
         .assets
         .iter()
@@ -642,13 +738,26 @@ pub fn fetch_verified_archive(repo: &str, release: &GithubRelease, asset_name: &
         ));
     }
 
-    let ext = if asset_name.ends_with(".zip") { "zip" } else { "tar.gz" };
+    let ext = if asset_name.ends_with(".zip") {
+        "zip"
+    } else {
+        "tar.gz"
+    };
     // The archive lives in the caller's private dir, never at a guessable shared /tmp path.
     fs::create_dir_all(extract_dir).context("failed to create extraction dir")?;
     let tmp = extract_dir.join(format!(".download.{ext}"));
     let mut download = Command::new("curl");
-    download.args(["-fsSL", "--connect-timeout", "10"]).arg(&asset.browser_download_url).arg("-o").arg(&tmp);
-    run_timed(download, MARKETPLACE_INSTALL_TIMEOUT_MS, &format!("downloading {asset_name}"), "AVM_MARKETPLACE_INSTALL_TIMEOUT")?;
+    download
+        .args(["-fsSL", "--connect-timeout", "10"])
+        .arg(&asset.browser_download_url)
+        .arg("-o")
+        .arg(&tmp);
+    run_timed(
+        download,
+        MARKETPLACE_INSTALL_TIMEOUT_MS,
+        &format!("downloading {asset_name}"),
+        "AVM_MARKETPLACE_INSTALL_TIMEOUT",
+    )?;
 
     let (sha256, verified) = match checksums {
         Some(c) => fetch(&c.browser_download_url, MARKETPLACE_TIMEOUT_SECS)
@@ -667,7 +776,10 @@ pub fn fetch_verified_archive(repo: &str, release: &GithubRelease, asset_name: &
 
     let mut tar = Command::new("tar");
     // Windows 10+ ships bsdtar, which also reads zip.
-    tar.arg(if ext == "zip" { "-xf" } else { "-xzf" }).arg(&tmp).arg("-C").arg(extract_dir);
+    tar.arg(if ext == "zip" { "-xf" } else { "-xzf" })
+        .arg(&tmp)
+        .arg("-C")
+        .arg(extract_dir);
     let status = tar.status().context("failed to run tar");
     let _ = fs::remove_file(&tmp);
     if !status?.success() {
@@ -681,7 +793,11 @@ pub fn fetch_verified_archive(repo: &str, release: &GithubRelease, asset_name: &
 /// `avm-plugin-<name>_<os>_<arch>.tar.gz` (`.zip` on Windows) on `repo`'s
 /// selected release, containing exactly one file named `avm-plugin-<name>`, is
 /// the expected contract (documented in marketplace/README.md).
-pub fn install_from_marketplace(name: &str, entry: &MarketplaceEntry, plugin_dir: &Path) -> Result<String> {
+pub fn install_from_marketplace(
+    name: &str,
+    entry: &MarketplaceEntry,
+    plugin_dir: &Path,
+) -> Result<String> {
     let (os, arch) = marketplace_platform()?;
     let repo = &entry.repo;
     let release = github_release(repo, entry.release_tag.as_deref())?;
@@ -693,7 +809,9 @@ pub fn install_from_marketplace(name: &str, entry: &MarketplaceEntry, plugin_dir
             .iter()
             .filter_map(|a| {
                 let platform = a.name.strip_prefix(&prefix)?;
-                platform.strip_suffix(".tar.gz").or_else(|| platform.strip_suffix(".zip"))
+                platform
+                    .strip_suffix(".tar.gz")
+                    .or_else(|| platform.strip_suffix(".zip"))
             })
             .collect();
         return Err(anyhow!(
@@ -711,7 +829,9 @@ pub fn install_from_marketplace(name: &str, entry: &MarketplaceEntry, plugin_dir
         let bin_name = format!("avm-plugin-{name}{}", std::env::consts::EXE_SUFFIX);
         let extracted_bin = extract_dir.join(&bin_name);
         if !extracted_bin.exists() {
-            return Err(anyhow!("{asset_name} did not contain the expected file {bin_name}"));
+            return Err(anyhow!(
+                "{asset_name} did not contain the expected file {bin_name}"
+            ));
         }
         let target_dir = plugin_dir.join(format!("{PROTOCOL_PREFIX}{name}"));
         let bin_dir = target_dir.join("bin");
@@ -728,9 +848,14 @@ pub fn install_from_marketplace(name: &str, entry: &MarketplaceEntry, plugin_dir
             use std::os::unix::fs::PermissionsExt;
             fs::set_permissions(&staged, fs::Permissions::from_mode(0o755))?;
         }
-        fs::rename(&staged, &dest).inspect_err(|_| { let _ = fs::remove_file(&staged); }).context("failed to move plugin binary into place")?;
+        fs::rename(&staged, &dest)
+            .inspect_err(|_| {
+                let _ = fs::remove_file(&staged);
+            })
+            .context("failed to move plugin binary into place")?;
         let meta = serde_json::json!({ "version": release.tag_name, "sha256": sha256, "verified": verified });
-        fs::write(target_dir.join("meta.json"), meta.to_string()).context("failed to write plugin meta.json")?;
+        fs::write(target_dir.join("meta.json"), meta.to_string())
+            .context("failed to write plugin meta.json")?;
         Ok((sha256, verified))
     })();
     let _ = fs::remove_dir_all(&extract_dir);
@@ -934,8 +1059,8 @@ fn run_with_timeout(mut cmd: Command, timeout_ms: u64) -> Result<String> {
         buf
     });
 
-    let status = wait_deadline(&mut child, timeout_ms)
-        .context("failed while waiting for plugin command")?;
+    let status =
+        wait_deadline(&mut child, timeout_ms).context("failed while waiting for plugin command")?;
     drop(tree);
     // Detached Unix descendants can leave the group; they must not extend our deadline.
     while !stdout_reader.is_finished() || !stderr_reader.is_finished() {
@@ -972,13 +1097,20 @@ mod timeout_tests {
     #[test]
     fn descendants_cannot_hold_plugin_pipes_open() {
         let started = std::time::Instant::now();
-        #[cfg(unix)] let mut command = Command::new("sh");
-        #[cfg(unix)] command.args(["-c", "sleep 20 & wait"]);
-        #[cfg(windows)] let mut command = Command::new("powershell");
+        #[cfg(unix)]
+        let mut command = Command::new("sh");
+        #[cfg(unix)]
+        command.args(["-c", "sleep 20 & wait"]);
+        #[cfg(windows)]
+        let mut command = Command::new("powershell");
         #[cfg(windows)] command.args(["-NoProfile", "-Command", "$p = Start-Process ping -ArgumentList '-n','20','127.0.0.1' -NoNewWindow -PassThru; Wait-Process -Id $p.Id"]);
-        assert!(run_with_timeout(command, 1000).unwrap_err().to_string().contains("timed out"));
+        assert!(run_with_timeout(command, 1000)
+            .unwrap_err()
+            .to_string()
+            .contains("timed out"));
         assert!(started.elapsed() < std::time::Duration::from_secs(5));
-        #[cfg(unix)] {
+        #[cfg(unix)]
+        {
             let mut command = Command::new("sh");
             command.args(["-c", "sleep 20 & printf ready"]);
             assert_eq!(run_with_timeout(command, 1000).unwrap(), "ready");

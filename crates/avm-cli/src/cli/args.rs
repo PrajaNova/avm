@@ -49,9 +49,7 @@ pub enum Commands {
     #[command(alias = "ls")]
     List,
     /// Show where an alias or version selection comes from.
-    Which {
-        key: String,
-    },
+    Which { key: String },
     /// Manage alias commands — same shape as `avm plugin` (add/remove/list).
     /// `avm add`/`avm remove` above still work too, unchanged.
     Alias {
@@ -80,9 +78,7 @@ pub enum Commands {
         command: PluginCommands,
     },
     /// Show how to start a new avm plugin from the template repo.
-    Create {
-        name: String,
-    },
+    Create { name: String },
     /// Print shell setup for avm aliases and shims (sh/bash/zsh, or pwsh).
     ShellInit {
         #[arg(value_enum)]
@@ -99,9 +95,7 @@ pub enum Commands {
     ExecShim(ExecShimArgs),
     /// Shortcut for `avm plugin add <source>`.
     #[command(hide = true)]
-    Pa {
-        source: String,
-    },
+    Pa { source: String },
     /// Shortcut for `avm env add <key> <value>`.
     #[command(hide = true)]
     Ea {
@@ -159,9 +153,7 @@ pub enum Commands {
 #[derive(Subcommand)]
 pub enum PluginCommands {
     /// Install a plugin by name, path, or URL.
-    Add {
-        source: String,
-    },
+    Add { source: String },
     /// List installed plugins.
     List {
         #[arg(short, long)]
@@ -171,9 +163,7 @@ pub enum PluginCommands {
     #[command(alias = "all", alias = "marketplace")]
     Available,
     /// Remove an installed plugin.
-    Remove {
-        name: String,
-    },
+    Remove { name: String },
     /// Show installed plugins with newer releases.
     Outdated {
         #[arg(long)]
@@ -195,9 +185,7 @@ pub enum ShimsCommands {
     /// Add ~/.avm/shims to PATH in shell startup files so it works everywhere, incl. closed envs.
     Activate,
     /// Remove one shim.
-    Remove {
-        tool: String,
-    },
+    Remove { tool: String },
     /// Print the shim directory path.
     Path,
 }

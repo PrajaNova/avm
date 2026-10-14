@@ -42,18 +42,29 @@ impl ToolProvider for JavaProvider {
 
     fn env_vars(&self, version: &str) -> anyhow::Result<HashMap<String, String>> {
         let home = tool_dir("java")?.join(version);
-        Ok(HashMap::from([("JAVA_HOME".to_string(), home.to_string_lossy().to_string())]))
+        Ok(HashMap::from([(
+            "JAVA_HOME".to_string(),
+            home.to_string_lossy().to_string(),
+        )]))
     }
 
     fn install(&self, version: &str) -> anyhow::Result<()> {
         install::install_java(version)
     }
 
-    fn resolve_downloads(&self, version: &str, platforms: &[String]) -> anyhow::Result<avm_plugin_api::protocol::ResolveResponse> {
+    fn resolve_downloads(
+        &self,
+        version: &str,
+        platforms: &[String],
+    ) -> anyhow::Result<avm_plugin_api::protocol::ResolveResponse> {
         versions::resolve_downloads(version, platforms)
     }
 
-    fn install_locked(&self, version: &str, asset: &avm_plugin_api::protocol::LockedAsset) -> anyhow::Result<()> {
+    fn install_locked(
+        &self,
+        version: &str,
+        asset: &avm_plugin_api::protocol::LockedAsset,
+    ) -> anyhow::Result<()> {
         install::install(version, Some(asset))
     }
 

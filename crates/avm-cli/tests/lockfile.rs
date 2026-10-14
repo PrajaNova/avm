@@ -13,7 +13,11 @@ struct Project(PathBuf);
 impl Project {
     fn new() -> Self {
         static NEXT: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
-        let root = std::env::temp_dir().join(format!("avm-lock-test-{}-{}", std::process::id(), NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)));
+        let root = std::env::temp_dir().join(format!(
+            "avm-lock-test-{}-{}",
+            std::process::id(),
+            NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+        ));
         fs::create_dir_all(root.join("home")).unwrap();
         fs::create_dir_all(root.join("project")).unwrap();
         fs::write(root.join("home/.avm.json"), r#"{"tools":{"java":"21"}}"#).unwrap();
@@ -84,7 +88,8 @@ else:
             .env("AVM_HOME", self.0.join("home/.avm"))
             .env("AVM_PLUGIN_DIR", self.0.join("home/.avm/plugins"))
             .env("AVM_NO_UPDATE_CHECK", "1")
-            .env("AVM_TRUST_ALL", "0").env_remove("AVM_ENV")
+            .env("AVM_TRUST_ALL", "0")
+            .env_remove("AVM_ENV")
             .output()
             .unwrap()
     }
@@ -131,10 +136,21 @@ fn nested_lock_commands_update_the_project_lock() {
     success(project.run_in(&["lock"], "project/packages/web"));
     assert_eq!(project.lock()["tools"]["node"]["resolved"], "20.2.0");
     assert!(!project.0.join("project/packages/web/.avm.lock").exists());
-    fs::set_permissions(project.0.join("project/.avm.lock"), fs::Permissions::from_mode(0o640)).unwrap();
+    fs::set_permissions(
+        project.0.join("project/.avm.lock"),
+        fs::Permissions::from_mode(0o640),
+    )
+    .unwrap();
     fs::write(project.0.join("remote"), "20.3.0").unwrap();
     success(project.run_in(&["lock"], "project/packages/web"));
-    assert_eq!(fs::metadata(project.0.join("project/.avm.lock")).unwrap().permissions().mode() & 0o777, 0o640);
+    assert_eq!(
+        fs::metadata(project.0.join("project/.avm.lock"))
+            .unwrap()
+            .permissions()
+            .mode()
+            & 0o777,
+        0o640
+    );
     assert_eq!(project.lock()["tools"]["node"]["resolved"], "20.3.0");
     assert!(!project.0.join("project/packages/web/.avm.lock").exists());
     fs::write(project.0.join("project/.avm.lock"), "invalid lock").unwrap();
@@ -147,7 +163,10 @@ fn nested_lock_commands_update_the_project_lock() {
     let lock: Value = serde_json::from_slice(&fs::read(child.join(".avm.lock")).unwrap()).unwrap();
     assert_eq!(lock["tools"]["node"]["requested"], "20.2.0");
     assert_eq!(project.lock(), parent_lock);
-    success(project.run_in(&["--env", "ci", "install", "--frozen"], "project/packages/web"));
+    success(project.run_in(
+        &["--env", "ci", "install", "--frozen"],
+        "project/packages/web",
+    ));
 }
 
 #[test]
@@ -158,7 +177,11 @@ fn locks_installs_and_rejects_drift_before_installing() {
     let local_lock = fs::read(project.0.join("project/.avm.lock")).unwrap();
     assert_eq!(project.lock()["tools"].as_object().unwrap().len(), 1);
     assert!(project.lock()["tools"].get("java").is_none());
-    fs::write(project.0.join("home/.avm.json"), r#"{"tools":{"java":"17","node":"99"}}"#).unwrap();
+    fs::write(
+        project.0.join("home/.avm.json"),
+        r#"{"tools":{"java":"17","node":"99"}}"#,
+    )
+    .unwrap();
     success(project.run(&["install", "--frozen"]));
     assert!(success(project.run(&["which", "node"])).contains("20.2.0"));
     assert!(!project.0.join("home/.avm/tools/java").exists());
@@ -167,12 +190,23 @@ fn locks_installs_and_rejects_drift_before_installing() {
     assert!(success(project.run(&["which", "node"])).contains("20.2.0"));
     fs::write(project.0.join("home/.avm.json"), "{}").unwrap();
     success(project.run(&["install", "--frozen"]));
-    assert_eq!(fs::read(project.0.join("project/.avm.lock")).unwrap(), local_lock);
+    assert_eq!(
+        fs::read(project.0.join("project/.avm.lock")).unwrap(),
+        local_lock
+    );
     fs::remove_dir_all(project.0.join("home/.avm/tools")).unwrap();
     fs::remove_file(project.0.join("installs")).unwrap();
     fs::remove_file(project.0.join("project/.avm.lock")).unwrap();
-    fs::write(project.0.join("home/.avm.json"), r#"{"tools":{"java":"21"}}"#).unwrap();
-    fs::write(project.0.join("project/.avm.json"), r#"{"tools":{"node":"20","java":"21"}}"#).unwrap();
+    fs::write(
+        project.0.join("home/.avm.json"),
+        r#"{"tools":{"java":"21"}}"#,
+    )
+    .unwrap();
+    fs::write(
+        project.0.join("project/.avm.json"),
+        r#"{"tools":{"node":"20","java":"21"}}"#,
+    )
+    .unwrap();
     let config = fs::read(project.0.join("project/.avm.json")).unwrap();
     let global = fs::read(project.0.join("home/.avm.json")).unwrap();
     failure(project.run(&["install", "--frozen"]), "requires .avm.lock");
@@ -246,7 +280,13 @@ fn locks_installs_and_rejects_drift_before_installing() {
     let out = project.run(&["install", "--frozen"]);
     let warning = String::from_utf8_lossy(&out.stderr).into_owned();
     success(out);
-    assert!(warning.contains(&format!("node plugin binary not pinned for {}", avm_plugin_api::download::host_platform().unwrap())), "{warning}");
+    assert!(
+        warning.contains(&format!(
+            "node plugin binary not pinned for {}",
+            avm_plugin_api::download::host_platform().unwrap()
+        )),
+        "{warning}"
+    );
     project.save_lock(&lock);
 
     fs::write(

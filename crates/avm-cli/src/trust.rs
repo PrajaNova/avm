@@ -28,11 +28,13 @@ fn save(store: &BTreeMap<String, String>) -> Result<()> {
     if let Some(dir) = path.parent() {
         fs::create_dir_all(dir).context("failed to create avm home")?;
     }
-    avm_plugin_api::storage::atomic_write(&path, &serde_json::to_vec_pretty(store)?).context("failed to write trusted.json")
+    avm_plugin_api::storage::atomic_write(&path, &serde_json::to_vec_pretty(store)?)
+        .context("failed to write trusted.json")
 }
 
 fn key(file: &Path) -> Result<PathBuf> {
-    file.canonicalize().with_context(|| format!("{} not found", file.display()))
+    file.canonicalize()
+        .with_context(|| format!("{} not found", file.display()))
 }
 
 /// Trusted if `AVM_TRUST_ALL=1`, it lives directly in `$HOME` (the global
@@ -49,10 +51,18 @@ pub fn is_trusted(file: &Path, trusted_paths: &[String]) -> bool {
         return false;
     };
     let home = avm_plugin_api::home_dir().ok();
-    if home.as_deref().and_then(|h| h.canonicalize().ok()).as_deref() == Some(dir) {
+    if home
+        .as_deref()
+        .and_then(|h| h.canonicalize().ok())
+        .as_deref()
+        == Some(dir)
+    {
         return true;
     }
-    if trusted_paths.iter().any(|pattern| glob_match(&resolve_prefix(&expand_home(pattern, home.as_deref())), dir)) {
+    if trusted_paths
+        .iter()
+        .any(|pattern| glob_match(&resolve_prefix(&expand_home(pattern, home.as_deref())), dir))
+    {
         return true;
     }
     match avm_plugin_api::sha256_file(&file) {
@@ -90,7 +100,9 @@ fn expand_home(pattern: &str, home: Option<&Path>) -> String {
 /// Canonicalize the pattern's literal (glob-free) leading dirs, so a pattern
 /// written through a symlink (macOS `/var` → `/private/var`) still matches.
 fn resolve_prefix(pattern: &str) -> String {
-    let cut = pattern.find('*').map_or(pattern.len(), |i| pattern[..i].rfind(['/', '\\']).unwrap_or(0));
+    let cut = pattern.find('*').map_or(pattern.len(), |i| {
+        pattern[..i].rfind(['/', '\\']).unwrap_or(0)
+    });
     match Path::new(&pattern[..cut]).canonicalize() {
         Ok(real) if cut > 0 => format!("{}{}", real.display(), &pattern[cut..]),
         _ => pattern.to_string(),
@@ -139,6 +151,9 @@ mod tests {
         assert!(!m("/home/u/*/api", "/home/u/a/b/api"));
         assert!(m("/home/u/proj-*", "/home/u/proj-x"));
         assert!(!m("/home/u/proj-*", "/home/u/other"));
-        assert_eq!(expand_home("~/work/**", Some(Path::new("/h"))), "/h/work/**");
+        assert_eq!(
+            expand_home("~/work/**", Some(Path::new("/h"))),
+            "/h/work/**"
+        );
     }
 }

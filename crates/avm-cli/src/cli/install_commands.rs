@@ -1,9 +1,7 @@
 use super::*;
 use crate::lockfile::{self, LockedTool, Lockfile, PluginPin};
 use avm_plugin_api::{
-    download::{
-        host_platform, validate_asset, validate_platform, validate_version,
-    },
+    download::{host_platform, validate_asset, validate_platform, validate_version},
     protocol::LockedAsset,
 };
 
@@ -100,9 +98,8 @@ pub fn cmd_lock(mut platforms: Vec<String>) -> Result<()> {
 fn lock_root(cwd: &Path, home: &Path) -> Result<PathBuf> {
     let names = config::file_names(&std::env::var("AVM_ENV").unwrap_or_default())?;
     for dir in cwd.ancestors() {
-        let files = std::iter::once(lockfile::LOCK_FILE).chain(
-            names.iter().filter(|_| dir != home).map(String::as_str),
-        );
+        let files = std::iter::once(lockfile::LOCK_FILE)
+            .chain(names.iter().filter(|_| dir != home).map(String::as_str));
         for file in files {
             match fs::metadata(dir.join(file)) {
                 Ok(meta) if meta.is_file() => return Ok(dir.to_path_buf()),
@@ -132,7 +129,9 @@ pub fn cmd_install(frozen: bool) -> Result<()> {
     let mut requested = lockfile::requested_tools(&cfg);
     if lock.is_none() {
         for (tool, spec) in &cfg.global_tool_specs {
-            requested.entry(tool.clone()).or_insert_with(|| spec.clone());
+            requested
+                .entry(tool.clone())
+                .or_insert_with(|| spec.clone());
         }
     }
     // Validate the whole plan before downloading or installing any tool.

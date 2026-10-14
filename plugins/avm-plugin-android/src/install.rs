@@ -24,7 +24,8 @@ pub fn sdk_dir(version: &str) -> Result<PathBuf> {
 
 pub fn install_android(version: &str) -> Result<()> {
     avm_plugin_api::download::validate_version(version)?;
-    let _guard = avm_plugin_api::storage::lock(&tool_dir("android")?.join(format!(".install-{version}")))?;
+    let _guard =
+        avm_plugin_api::storage::lock(&tool_dir("android")?.join(format!(".install-{version}")))?;
     let target = tool_dir("android")?.join(version);
     let sdk = sdk_dir(version)?;
 
@@ -32,17 +33,29 @@ pub fn install_android(version: &str) -> Result<()> {
     // required before this counts as done: an interrupted multi-package
     // sdkmanager run can land `platforms/` while `system-images/` only has a
     // package.xml, which avdmanager then refuses to create an AVD from.
-    if sdk.join("platforms").join(format!("android-{version}")).exists() && has_complete_system_image(&sdk) {
+    if sdk
+        .join("platforms")
+        .join(format!("android-{version}"))
+        .exists()
+        && has_complete_system_image(&sdk)
+    {
         return write_wrappers(&target, &sdk);
     }
 
     let java_home = require_jdk()?;
 
-    if !sdk.join("cmdline-tools").join("latest").join("bin").join(bat("sdkmanager")).exists() {
+    if !sdk
+        .join("cmdline-tools")
+        .join("latest")
+        .join("bin")
+        .join(bat("sdkmanager"))
+        .exists()
+    {
         // Staged inside the tools dir: never counts as installed, same fs for rename.
         let tmp = tool_dir("android")?.join(format!(".tmp-{version}"));
         fs::create_dir_all(&tmp).context("failed to create android install temp dir")?;
-        fs::create_dir_all(sdk.join("cmdline-tools")).context("failed to create android sdk dir")?;
+        fs::create_dir_all(sdk.join("cmdline-tools"))
+            .context("failed to create android sdk dir")?;
         let zip_path = tmp.join("cmdline-tools.zip");
         download_cmdline_tools(&zip_path)?;
         extract_cmdline_tools(&zip_path, &tmp, &sdk)?;
@@ -75,7 +88,13 @@ pub fn install_android(version: &str) -> Result<()> {
 /// True if any `sdk/system-images/*/*/*/system.img` exists — a directory alone
 /// isn't enough, since an interrupted install can leave only `package.xml`.
 fn has_complete_system_image(sdk: &Path) -> bool {
-    let subdirs = |p: PathBuf| fs::read_dir(p).into_iter().flatten().flatten().map(|e| e.path());
+    let subdirs = |p: PathBuf| {
+        fs::read_dir(p)
+            .into_iter()
+            .flatten()
+            .flatten()
+            .map(|e| e.path())
+    };
     subdirs(sdk.join("system-images"))
         .flat_map(subdirs)
         .flat_map(subdirs)
@@ -86,15 +105,30 @@ fn download_cmdline_tools(destination: &Path) -> Result<()> {
     let (url, expected) = cmdline_tools_source()?;
     let max_secs = env_timeout_ms("AVM_ANDROID_CURL_TIMEOUT", DOWNLOAD_TIMEOUT_MS) / 1000;
     let mut cmd = Command::new("curl");
-    cmd.args(["-fL", "--connect-timeout", "10", "--max-time", &max_secs.to_string(), &url, "-o"])
-        .arg(destination)
-        .stdout(Stdio::null());
-    run_timed(cmd, DOWNLOAD_TIMEOUT_MS, "Android command-line tools download", "AVM_ANDROID_CURL_TIMEOUT")
-        .with_context(|| format!("failed to download {url}"))?;
+    cmd.args([
+        "-fL",
+        "--connect-timeout",
+        "10",
+        "--max-time",
+        &max_secs.to_string(),
+        &url,
+        "-o",
+    ])
+    .arg(destination)
+    .stdout(Stdio::null());
+    run_timed(
+        cmd,
+        DOWNLOAD_TIMEOUT_MS,
+        "Android command-line tools download",
+        "AVM_ANDROID_CURL_TIMEOUT",
+    )
+    .with_context(|| format!("failed to download {url}"))?;
 
     let Some(expected) = expected else {
         if std::env::var("AVM_ALLOW_UNVERIFIED").as_deref() == Ok("1") {
-            eprintln!("warning: installing UNVERIFIED Android cmdline-tools (AVM_ALLOW_UNVERIFIED=1)");
+            eprintln!(
+                "warning: installing UNVERIFIED Android cmdline-tools (AVM_ALLOW_UNVERIFIED=1)"
+            );
             return Ok(());
         }
         let _ = fs::remove_file(destination);
@@ -117,13 +151,22 @@ fn extract_cmdline_tools(zip_path: &Path, tmp: &Path, sdk: &Path) -> Result<()> 
         fs::remove_dir_all(&extracted).context("failed to clean previous extraction")?;
     }
     // Windows has no unzip; its bundled bsdtar reads zip.
-    let mut cmd = if cfg!(windows) { Command::new("tar") } else { Command::new("unzip") };
+    let mut cmd = if cfg!(windows) {
+        Command::new("tar")
+    } else {
+        Command::new("unzip")
+    };
     if cfg!(windows) {
         cmd.arg("-xf").arg(zip_path).arg("-C").arg(tmp);
     } else {
         cmd.arg("-q").arg(zip_path).arg("-d").arg(tmp);
     }
-    run_timed(cmd, UNZIP_TIMEOUT_MS, "Android command-line tools extraction", "AVM_ANDROID_UNZIP_TIMEOUT")?;
+    run_timed(
+        cmd,
+        UNZIP_TIMEOUT_MS,
+        "Android command-line tools extraction",
+        "AVM_ANDROID_UNZIP_TIMEOUT",
+    )?;
 
     let dest = sdk.join("cmdline-tools").join("latest");
     if dest.exists() {
@@ -134,7 +177,12 @@ fn extract_cmdline_tools(zip_path: &Path, tmp: &Path, sdk: &Path) -> Result<()> 
 
 /// `sdkmanager --sdk_root=<sdk>`, pointed at `java_home` when one is needed.
 fn sdkmanager(sdk: &Path, java_home: Option<&Path>) -> Command {
-    let mut cmd = Command::new(sdk.join("cmdline-tools").join("latest").join("bin").join(bat("sdkmanager")));
+    let mut cmd = Command::new(
+        sdk.join("cmdline-tools")
+            .join("latest")
+            .join("bin")
+            .join(bat("sdkmanager")),
+    );
     cmd.arg(format!("--sdk_root={}", sdk.display()));
     if let Some(java_home) = java_home {
         cmd.env("JAVA_HOME", java_home);
@@ -147,28 +195,45 @@ fn sdkmanager(sdk: &Path, java_home: Option<&Path>) -> Command {
 pub fn accept_licenses(sdk: &Path, java_home: Option<&Path>) {
     println!("Accepting the Android SDK licenses (https://developer.android.com/studio/terms)...");
     let mut cmd = sdkmanager(sdk, java_home);
-    cmd.arg("--licenses").stdin(Stdio::piped()).stdout(Stdio::null()).stderr(Stdio::null());
-    let Ok((mut child, _tree)) = avm_plugin_api::process::spawn_isolated(&mut cmd) else { return };
+    cmd.arg("--licenses")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null());
+    let Ok((mut child, _tree)) = avm_plugin_api::process::spawn_isolated(&mut cmd) else {
+        return;
+    };
     if let Some(mut stdin) = child.stdin.take() {
         use std::io::Write;
         // sdkmanager prompts once per license; "y\n" repeated satisfies all of them.
         let _ = stdin.write_all("y\n".repeat(64).as_bytes());
     }
-    let _ = wait_deadline(&mut child, env_timeout_ms(SDKMANAGER_ENV, SDKMANAGER_TIMEOUT_MS));
+    let _ = wait_deadline(
+        &mut child,
+        env_timeout_ms(SDKMANAGER_ENV, SDKMANAGER_TIMEOUT_MS),
+    );
 }
 
 /// System-image tag for phones; TV/Wear/Automotive AVDs need their own tag.
 pub const DEFAULT_TAG: &str = "google_apis";
 
 pub fn sysimg_package(system_image: &str, tag: &str) -> String {
-    format!("system-images;android-{system_image};{tag};{}", sysimg_abi())
+    format!(
+        "system-images;android-{system_image};{tag};{}",
+        sysimg_abi()
+    )
 }
 
 /// Install `extra` packages plus the emulator and `system_image`. sdkmanager
 /// tracks "installed" by package.xml alone, so an interrupted earlier install
 /// that left package.xml without system.img would make it a silent no-op —
 /// clear such a partial image first to force a real re-fetch.
-pub fn install_system_image(sdk: &Path, java_home: Option<&Path>, system_image: &str, tag: &str, extra: &[String]) -> Result<()> {
+pub fn install_system_image(
+    sdk: &Path,
+    java_home: Option<&Path>,
+    system_image: &str,
+    tag: &str,
+    extra: &[String],
+) -> Result<()> {
     let package = sysimg_package(system_image, tag);
     let image_dir = sdk
         .join("system-images")
@@ -185,10 +250,20 @@ pub fn install_system_image(sdk: &Path, java_home: Option<&Path>, system_image: 
     let mut attempt = 1;
     loop {
         let mut cmd = sdkmanager(sdk, java_home);
-        cmd.args(extra).arg("emulator").arg(&package).stdout(Stdio::null());
-        match run_timed(cmd, SDKMANAGER_TIMEOUT_MS, "sdkmanager package install", SDKMANAGER_ENV) {
+        cmd.args(extra)
+            .arg("emulator")
+            .arg(&package)
+            .stdout(Stdio::null());
+        match run_timed(
+            cmd,
+            SDKMANAGER_TIMEOUT_MS,
+            "sdkmanager package install",
+            SDKMANAGER_ENV,
+        ) {
             Err(err) if attempt < SDKMANAGER_ATTEMPTS => {
-                eprintln!("sdkmanager failed ({err:#}); retrying ({attempt}/{SDKMANAGER_ATTEMPTS})...");
+                eprintln!(
+                    "sdkmanager failed ({err:#}); retrying ({attempt}/{SDKMANAGER_ATTEMPTS})..."
+                );
                 attempt += 1;
             }
             result => return result,
@@ -253,10 +328,14 @@ pub fn resolve_system_image_id(listing: &str, api: &str, tag: &str) -> Result<St
         let Some(rest) = line.trim().strip_prefix("system-images;android-") else {
             continue;
         };
-        let Some(id_end) = rest.find(';') else { continue };
+        let Some(id_end) = rest.find(';') else {
+            continue;
+        };
         let (id, after_id) = rest.split_at(id_end);
         // The suffix must end the column (not `google_apis_playstore`).
-        let Some(tail) = after_id.strip_prefix(&suffix) else { continue };
+        let Some(tail) = after_id.strip_prefix(&suffix) else {
+            continue;
+        };
         if !tail.starts_with(char::is_whitespace) {
             continue;
         }
@@ -279,13 +358,18 @@ pub fn resolve_system_image_id(listing: &str, api: &str, tag: &str) -> Result<St
         .or_else(|| same_major_gt.into_iter().min_by_key(|(key, _)| key.clone()))
         .or_else(|| any.into_iter().max_by_key(|(key, _)| key.clone()))
         .map(|(_, id)| id.to_string())
-        .ok_or_else(|| anyhow!("no {tag} {abi} system image found for Android API {api} in the SDK repository"))
+        .ok_or_else(|| {
+            anyhow!("no {tag} {abi} system image found for Android API {api} in the SDK repository")
+        })
 }
 
 pub fn list_packages(sdk: &Path, java_home: Option<&Path>) -> Result<String> {
     let mut cmd = sdkmanager(sdk, java_home);
-    cmd.arg("--list").stdout(Stdio::piped()).stderr(Stdio::null());
-    let (mut child, tree) = avm_plugin_api::process::spawn_isolated(&mut cmd).context("failed to spawn sdkmanager --list")?;
+    cmd.arg("--list")
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null());
+    let (mut child, tree) = avm_plugin_api::process::spawn_isolated(&mut cmd)
+        .context("failed to spawn sdkmanager --list")?;
     // Drain stdout on a thread so a full pipe can't deadlock the wait below.
     let stdout = child.stdout.take();
     let reader = std::thread::spawn(move || {
@@ -297,8 +381,11 @@ pub fn list_packages(sdk: &Path, java_home: Option<&Path>) -> Result<String> {
         buf
     });
 
-    let status = wait_deadline(&mut child, env_timeout_ms(SDKMANAGER_ENV, SDKMANAGER_LIST_TIMEOUT_MS))
-        .context("failed while waiting for sdkmanager --list")?;
+    let status = wait_deadline(
+        &mut child,
+        env_timeout_ms(SDKMANAGER_ENV, SDKMANAGER_LIST_TIMEOUT_MS),
+    )
+    .context("failed while waiting for sdkmanager --list")?;
     drop(tree);
     let output = reader.join().unwrap_or_default();
     match status {
@@ -316,10 +403,30 @@ fn write_wrappers(target: &Path, sdk: &Path) -> Result<()> {
     let bin = target.join("bin");
     fs::create_dir_all(&bin).context("failed to create android bin dir")?;
     let cmdline_bin = sdk.join("cmdline-tools").join("latest").join("bin");
-    wrapper(&bin, sdk, "adb", &sdk.join("platform-tools").join(exe("adb")))?;
-    wrapper(&bin, sdk, "sdkmanager", &cmdline_bin.join(bat("sdkmanager")))?;
-    wrapper(&bin, sdk, "avdmanager", &cmdline_bin.join(bat("avdmanager")))?;
-    wrapper(&bin, sdk, "emulator", &sdk.join("emulator").join(exe("emulator")))?;
+    wrapper(
+        &bin,
+        sdk,
+        "adb",
+        &sdk.join("platform-tools").join(exe("adb")),
+    )?;
+    wrapper(
+        &bin,
+        sdk,
+        "sdkmanager",
+        &cmdline_bin.join(bat("sdkmanager")),
+    )?;
+    wrapper(
+        &bin,
+        sdk,
+        "avdmanager",
+        &cmdline_bin.join(bat("avdmanager")),
+    )?;
+    wrapper(
+        &bin,
+        sdk,
+        "emulator",
+        &sdk.join("emulator").join(exe("emulator")),
+    )?;
     // `android` satisfies avm's is_installed marker convention and is a
     // reasonable default entry point.
     wrapper(&bin, sdk, "android", &cmdline_bin.join(bat("sdkmanager")))
@@ -327,7 +434,11 @@ fn write_wrappers(target: &Path, sdk: &Path) -> Result<()> {
 
 /// SDK tool file names: cmdline-tools are `.bat` and binaries `.exe` on Windows.
 fn bat(name: &str) -> String {
-    if cfg!(windows) { format!("{name}.bat") } else { name.to_string() }
+    if cfg!(windows) {
+        format!("{name}.bat")
+    } else {
+        name.to_string()
+    }
 }
 
 fn exe(name: &str) -> String {
@@ -336,7 +447,11 @@ fn exe(name: &str) -> String {
 
 /// avm's wrappers in `<version>/bin`: `adb`, or `adb.cmd` on Windows.
 pub fn wrapper_name(name: &str) -> String {
-    if cfg!(windows) { format!("{name}.cmd") } else { name.to_string() }
+    if cfg!(windows) {
+        format!("{name}.cmd")
+    } else {
+        name.to_string()
+    }
 }
 
 #[cfg(windows)]
@@ -347,7 +462,8 @@ fn wrapper(bin: &Path, sdk: &Path, name: &str, target: &Path) -> Result<()> {
         sdk = sdk.display(),
         target = target.display(),
     );
-    fs::write(&dest, contents).with_context(|| format!("failed to write wrapper {}", dest.display()))
+    fs::write(&dest, contents)
+        .with_context(|| format!("failed to write wrapper {}", dest.display()))
 }
 
 #[cfg(unix)]
@@ -359,7 +475,8 @@ fn wrapper(bin: &Path, sdk: &Path, name: &str, target: &Path) -> Result<()> {
         sdk = sdk.display(),
         target = target.display(),
     );
-    fs::write(&dest, contents).with_context(|| format!("failed to write wrapper {}", dest.display()))?;
+    fs::write(&dest, contents)
+        .with_context(|| format!("failed to write wrapper {}", dest.display()))?;
     fs::set_permissions(&dest, fs::Permissions::from_mode(0o755))?;
     Ok(())
 }
@@ -373,7 +490,8 @@ const DEFAULT_CMDLINE_TOOLS_BUILD: &str = "11076708";
 /// Everything after this bootstrap is installed by `sdkmanager`, which
 /// verifies its own packages.
 fn cmdline_tools_source() -> Result<(String, Option<String>)> {
-    let build = std::env::var("ANDROID_CMDLINE_TOOLS_BUILD").unwrap_or_else(|_| DEFAULT_CMDLINE_TOOLS_BUILD.to_string());
+    let build = std::env::var("ANDROID_CMDLINE_TOOLS_BUILD")
+        .unwrap_or_else(|_| DEFAULT_CMDLINE_TOOLS_BUILD.to_string());
     let host = match std::env::consts::OS {
         "macos" => "mac",
         "linux" => "linux",
@@ -381,14 +499,24 @@ fn cmdline_tools_source() -> Result<(String, Option<String>)> {
         other => return Err(anyhow!("unsupported OS for Android cmdline-tools: {other}")),
     };
     let pinned = match (build.as_str(), host) {
-        (DEFAULT_CMDLINE_TOOLS_BUILD, "mac") => Some("7bc5c72ba0275c80a8f19684fb92793b83a6b5c94d4d179fc5988930282d7e64"),
-        (DEFAULT_CMDLINE_TOOLS_BUILD, "linux") => Some("2d2d50857e4eb553af5a6dc3ad507a17adf43d115264b1afc116f95c92e5e258"),
-        (DEFAULT_CMDLINE_TOOLS_BUILD, "win") => Some("4d6931209eebb1bfb7c7e8b240a6a3cb3ab24479ea294f3539429574b1eec862"),
+        (DEFAULT_CMDLINE_TOOLS_BUILD, "mac") => {
+            Some("7bc5c72ba0275c80a8f19684fb92793b83a6b5c94d4d179fc5988930282d7e64")
+        }
+        (DEFAULT_CMDLINE_TOOLS_BUILD, "linux") => {
+            Some("2d2d50857e4eb553af5a6dc3ad507a17adf43d115264b1afc116f95c92e5e258")
+        }
+        (DEFAULT_CMDLINE_TOOLS_BUILD, "win") => {
+            Some("4d6931209eebb1bfb7c7e8b240a6a3cb3ab24479ea294f3539429574b1eec862")
+        }
         _ => None,
     };
-    let expected = std::env::var("ANDROID_CMDLINE_TOOLS_SHA256").ok().or(pinned.map(str::to_string));
+    let expected = std::env::var("ANDROID_CMDLINE_TOOLS_SHA256")
+        .ok()
+        .or(pinned.map(str::to_string));
     Ok((
-        format!("https://dl.google.com/android/repository/commandlinetools-{host}-{build}_latest.zip"),
+        format!(
+            "https://dl.google.com/android/repository/commandlinetools-{host}-{build}_latest.zip"
+        ),
         expected,
     ))
 }
@@ -432,7 +560,11 @@ fn find_avm_managed_jdk() -> Option<PathBuf> {
 fn pinned_java_version() -> Option<String> {
     let raw = fs::read_to_string(home_dir().ok()?.join(".avm.json")).ok()?;
     let parsed: serde_json::Value = serde_json::from_str(&raw).ok()?;
-    parsed.get("tools")?.get("java")?.as_str().map(str::to_string)
+    parsed
+        .get("tools")?
+        .get("java")?
+        .as_str()
+        .map(str::to_string)
 }
 
 #[cfg(test)]
@@ -449,9 +581,21 @@ mod tests {
              system-images;android-37.0;google_apis_playstore;{abi} | 1 | x\n\
              system-images;android-37-ext18;google_apis;{abi} | 1 | x\n"
         );
-        assert_eq!(resolve_build_tools_version(&listing, "37.2").unwrap(), "36.0.0");
-        assert_eq!(resolve_build_tools_version(&listing, "35").unwrap(), "35.0.1");
-        assert_eq!(resolve_system_image_id(&listing, "37.2", DEFAULT_TAG).unwrap(), "37.0");
-        assert_eq!(resolve_system_image_id(&listing, "36", DEFAULT_TAG).unwrap(), "36");
+        assert_eq!(
+            resolve_build_tools_version(&listing, "37.2").unwrap(),
+            "36.0.0"
+        );
+        assert_eq!(
+            resolve_build_tools_version(&listing, "35").unwrap(),
+            "35.0.1"
+        );
+        assert_eq!(
+            resolve_system_image_id(&listing, "37.2", DEFAULT_TAG).unwrap(),
+            "37.0"
+        );
+        assert_eq!(
+            resolve_system_image_id(&listing, "36", DEFAULT_TAG).unwrap(),
+            "36"
+        );
     }
 }

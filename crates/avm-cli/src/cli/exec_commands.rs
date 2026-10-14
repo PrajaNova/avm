@@ -9,9 +9,15 @@ pub fn cmd_exec(args: ExecArgs) -> Result<()> {
         .ok_or_else(|| anyhow!("command required after --"))?;
     #[cfg(windows)]
     let program = if Path::new(program).components().count() == 1 {
-        shims::which_in_path(program, std::ffi::OsStr::new(env.get("PATH").map(String::as_str).unwrap_or("")), false)
-            .ok_or_else(|| anyhow!("command '{program}' not found in PATH"))?
-    } else { PathBuf::from(program) };
+        shims::which_in_path(
+            program,
+            std::ffi::OsStr::new(env.get("PATH").map(String::as_str).unwrap_or("")),
+            false,
+        )
+        .ok_or_else(|| anyhow!("command '{program}' not found in PATH"))?
+    } else {
+        PathBuf::from(program)
+    };
     let mut command = Command::new(program);
     command.args(arguments).envs(env);
     #[cfg(unix)]
@@ -185,10 +191,13 @@ mod tests {
             panic!("expected run")
         };
         assert_eq!(args.args, ["--port", "3000"]);
-        let cli = Cli::try_parse_from(["avm", "--env", "ci", "run", "dev", "--", "--env", "target"]).unwrap();
+        let cli =
+            Cli::try_parse_from(["avm", "--env", "ci", "run", "dev", "--", "--env", "target"])
+                .unwrap();
         assert_eq!(cli.profiles.as_deref(), Some("ci"));
-        let Some(Commands::Run(args)) = cli.command else { panic!("expected run") };
+        let Some(Commands::Run(args)) = cli.command else {
+            panic!("expected run")
+        };
         assert_eq!(args.args, ["--env", "target"]);
-
     }
 }

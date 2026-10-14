@@ -4,8 +4,22 @@ pub fn cmd_which(key: &str) -> Result<()> {
     let cfg = load_state_with_aliases()?;
     if let Some(alias) = cfg.resolve_alias(key) {
         match alias.source {
-            AliasSource::Local => println!("local alias '{key}': {} (from {})", alias.command, cfg.alias_origins.get(key).map(String::as_str).unwrap_or("unknown")),
-            AliasSource::Global => println!("global alias '{key}': {} (from {})", alias.command, cfg.alias_origins.get(key).map(String::as_str).unwrap_or("unknown")),
+            AliasSource::Local => println!(
+                "local alias '{key}': {} (from {})",
+                alias.command,
+                cfg.alias_origins
+                    .get(key)
+                    .map(String::as_str)
+                    .unwrap_or("unknown")
+            ),
+            AliasSource::Global => println!(
+                "global alias '{key}': {} (from {})",
+                alias.command,
+                cfg.alias_origins
+                    .get(key)
+                    .map(String::as_str)
+                    .unwrap_or("unknown")
+            ),
             AliasSource::Plugin => {
                 let plugin = alias.plugin_name.unwrap_or_else(|| "plugin".to_string());
                 println!("plugin alias '{key}' from {plugin}: {}", alias.command);
@@ -44,10 +58,13 @@ fn cmd_env_print(shell: Shell) -> Result<()> {
     let mut baseline = env_baseline()?;
     for (key, value) in &baseline {
         if !env.contains_key(key) {
-            println!("{}", match value {
-                Some(value) => shell.export(key, value),
-                None => shell.unset(key),
-            });
+            println!(
+                "{}",
+                match value {
+                    Some(value) => shell.export(key, value),
+                    None => shell.unset(key),
+                }
+            );
         }
     }
     baseline.retain(|key, _| env.contains_key(key));
@@ -62,20 +79,26 @@ fn cmd_env_print(shell: Shell) -> Result<()> {
     let mut keys: Vec<_> = env.keys().collect();
     keys.sort();
     for key in keys {
-        baseline.entry(key.clone()).or_insert_with(|| INHERITED_ENV.get().and_then(|env| env.get(key)).cloned());
+        baseline
+            .entry(key.clone())
+            .or_insert_with(|| INHERITED_ENV.get().and_then(|env| env.get(key)).cloned());
         println!("{}", shell.export(key, &env[key]));
     }
     if baseline.is_empty() {
         println!("{}", shell.unset(ENV_BASELINE));
     } else {
-        println!("{}", shell.export(ENV_BASELINE, &serde_json::to_string(&baseline)?));
+        println!(
+            "{}",
+            shell.export(ENV_BASELINE, &serde_json::to_string(&baseline)?)
+        );
     }
     // This output is eval'd with stderr discarded, so the untrusted notice
     // is emitted as shell code, once per shell session per set of files.
     let untrusted = untrusted_files(&cfg);
     let marker: Vec<String> = untrusted.iter().map(|f| f.display().to_string()).collect();
     let marker = marker.join(":");
-    if !untrusted.is_empty() && std::env::var("_AVM_TRUST_NOTICE").ok().as_deref() != Some(&marker) {
+    if !untrusted.is_empty() && std::env::var("_AVM_TRUST_NOTICE").ok().as_deref() != Some(&marker)
+    {
         println!("{}", shell.warn(&untrusted_notice(&untrusted)));
         println!("{}", shell.export("_AVM_TRUST_NOTICE", &marker));
     }
@@ -88,7 +111,12 @@ pub fn cmd_resolve(args: ResolveArgs) -> Result<()> {
         .resolve_alias(&args.key)
         .ok_or_else(|| alias_not_found_error(&args.key, &cfg))?;
     let script = match alias.argv {
-        Some(argv) => argv.iter().chain(&args.args).map(|arg| sh_quote(arg)).collect::<Vec<_>>().join(" "),
+        Some(argv) => argv
+            .iter()
+            .chain(&args.args)
+            .map(|arg| sh_quote(arg))
+            .collect::<Vec<_>>()
+            .join(" "),
         None => build_shell_alias_string(&alias.command, &args.args)?,
     };
     println!("{script}");
@@ -124,12 +152,20 @@ pub fn cmd_run(args: RunArgs) -> Result<()> {
     };
     // ponytail: Windows runs aliases through `cmd /C` with sh-style quoting of
     // extra args; a cmd-aware quoter if args with spaces or quotes misbehave.
-    let (shell, flag) = if cfg!(windows) { ("cmd", "/C") } else { ("sh", "-c") };
+    let (shell, flag) = if cfg!(windows) {
+        ("cmd", "/C")
+    } else {
+        ("sh", "-c")
+    };
     let mut command = match alias.argv {
         Some(argv) => {
             #[cfg(windows)]
-            let program = shims::which_in_path(&argv[0], std::ffi::OsStr::new(env.get("PATH").map(String::as_str).unwrap_or("")), true)
-                .ok_or_else(|| anyhow!("package manager '{}' not found in PATH", argv[0]))?;
+            let program = shims::which_in_path(
+                &argv[0],
+                std::ffi::OsStr::new(env.get("PATH").map(String::as_str).unwrap_or("")),
+                true,
+            )
+            .ok_or_else(|| anyhow!("package manager '{}' not found in PATH", argv[0]))?;
             #[cfg(not(windows))]
             let program = &argv[0];
             let mut command = Command::new(program);
@@ -138,11 +174,14 @@ pub fn cmd_run(args: RunArgs) -> Result<()> {
         }
         None => {
             let mut command = Command::new(shell);
-            command.arg(flag).arg(build_shell_alias_string(&alias.command, &args.args)?);
+            command
+                .arg(flag)
+                .arg(build_shell_alias_string(&alias.command, &args.args)?);
             command
         }
     };
-    let status = command.envs(env)
+    let status = command
+        .envs(env)
         .status()
         .with_context(|| format!("failed to run alias via {shell}"))?;
     std::process::exit(status.code().unwrap_or(1));
@@ -187,12 +226,20 @@ fn build_shell_alias_string(template: &str, args: &[String]) -> Result<String> {
 /// `name  command  [source]`, so the picker shows what each alias will run.
 fn alias_label(cfg: &ResolvedConfig, name: &str) -> String {
     match cfg.resolve_alias(name) {
-        Some(alias) => format!("{name}  {}  [{}]", alias.command, alias_source_label(&alias.source)),
+        Some(alias) => format!(
+            "{name}  {}  [{}]",
+            alias.command,
+            alias_source_label(&alias.source)
+        ),
         None => name.to_string(),
     }
 }
 
-fn select_alias_suggestion(query: &str, cfg: &ResolvedConfig, suggestions: &[String]) -> Result<Option<String>> {
+fn select_alias_suggestion(
+    query: &str,
+    cfg: &ResolvedConfig,
+    suggestions: &[String],
+) -> Result<Option<String>> {
     if suggestions.is_empty() {
         return Err(anyhow!("alias '{query}' not found"));
     }
@@ -212,7 +259,13 @@ fn alias_not_found_error(key: &str, cfg: &ResolvedConfig) -> anyhow::Error {
     let suggestions = cfg.suggest_aliases(key);
     if !suggestions.is_empty() {
         message.push_str("\n\nDid you mean?\n");
-        message.push_str(&suggestions.iter().map(|s| format!("  avm {s}")).collect::<Vec<_>>().join("\n"));
+        message.push_str(
+            &suggestions
+                .iter()
+                .map(|s| format!("  avm {s}"))
+                .collect::<Vec<_>>()
+                .join("\n"),
+        );
     }
     for file in &cfg.untrusted {
         message.push_str(&format!(
@@ -257,7 +310,12 @@ pub fn cmd_home() -> Result<()> {
     choices.push(HomeChoice::Help);
     match ui::select("avm: what do you want to run?", &labels)? {
         Some(index) => match choices.swap_remove(index) {
-            HomeChoice::Alias(key) => cmd_run(RunArgs { key, tools: Vec::new(), no_install: false, args: Vec::new() }),
+            HomeChoice::Alias(key) => cmd_run(RunArgs {
+                key,
+                tools: Vec::new(),
+                no_install: false,
+                args: Vec::new(),
+            }),
             HomeChoice::Tool(tool) => cmd_plugin_command(vec![tool]),
             HomeChoice::Help => print_help(),
         },

@@ -84,7 +84,7 @@ else:
             .env("AVM_HOME", self.0.join("home/.avm"))
             .env("AVM_PLUGIN_DIR", self.0.join("home/.avm/plugins"))
             .env("AVM_NO_UPDATE_CHECK", "1")
-            .env("AVM_TRUST_ALL", "0")
+            .env("AVM_TRUST_ALL", "0").env_remove("AVM_ENV")
             .output()
             .unwrap()
     }
@@ -140,6 +140,14 @@ fn nested_lock_commands_update_the_project_lock() {
     fs::write(project.0.join("project/.avm.lock"), "invalid lock").unwrap();
     success(project.run_in(&["lock"], "project/packages/web"));
     assert_eq!(project.lock()["tools"].as_object().unwrap().len(), 1);
+    let parent_lock = project.lock();
+    let child = project.0.join("project/packages/web");
+    fs::write(child.join(".avm.ci.json"), r#"{"tools":{"node":"20.2.0"}}"#).unwrap();
+    success(project.run_in(&["--env", "ci", "lock"], "project/packages/web"));
+    let lock: Value = serde_json::from_slice(&fs::read(child.join(".avm.lock")).unwrap()).unwrap();
+    assert_eq!(lock["tools"]["node"]["requested"], "20.2.0");
+    assert_eq!(project.lock(), parent_lock);
+    success(project.run_in(&["--env", "ci", "install", "--frozen"], "project/packages/web"));
 }
 
 #[test]

@@ -4,8 +4,8 @@ pub fn cmd_which(key: &str) -> Result<()> {
     let cfg = load_state()?;
     if let Some(alias) = cfg.resolve_alias(key) {
         match alias.source {
-            AliasSource::Local => println!("local alias '{key}': {}", alias.command),
-            AliasSource::Global => println!("global alias '{key}': {}", alias.command),
+            AliasSource::Local => println!("local alias '{key}': {} (from {})", alias.command, cfg.alias_origins.get(key).map(String::as_str).unwrap_or("unknown")),
+            AliasSource::Global => println!("global alias '{key}': {} (from {})", alias.command, cfg.alias_origins.get(key).map(String::as_str).unwrap_or("unknown")),
             AliasSource::Plugin => {
                 let plugin = alias.plugin_name.unwrap_or_else(|| "plugin".to_string());
                 println!("plugin alias '{key}' from {plugin}: {}", alias.command);
@@ -16,7 +16,7 @@ pub fn cmd_which(key: &str) -> Result<()> {
 
     if let Some((version, source)) = cfg.resolve_tool(key) {
         let origin = match (&source, cfg.tool_origins.get(key)) {
-            (AliasSource::Local, Some(file)) => format!("from {file}"),
+            (_, Some(file)) => format!("from {file}"),
             _ => alias_source_label(&source).to_string(),
         };
         println!("tool '{key}': {version} ({origin})");
@@ -200,10 +200,10 @@ fn alias_not_found_error(key: &str, cfg: &ResolvedConfig) -> anyhow::Error {
         message.push_str("\n\nDid you mean?\n");
         message.push_str(&suggestions.iter().map(|s| format!("  avm {s}")).collect::<Vec<_>>().join("\n"));
     }
-    if let Some(file) = &cfg.untrusted {
+    for file in &cfg.untrusted {
         message.push_str(&format!(
-            "\n\n{} is not trusted, so its aliases are disabled. Review it, then run 'avm trust'.",
-            file.display()
+            "\n\n{} is not trusted, so its aliases are disabled. Review it, then run 'avm trust {}'.",
+            file.display(), file.display()
         ));
     }
     anyhow!(message)

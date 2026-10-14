@@ -98,9 +98,12 @@ pub fn cmd_lock(mut platforms: Vec<String>) -> Result<()> {
 }
 
 fn lock_root(cwd: &Path, home: &Path) -> Result<PathBuf> {
-    for file in [lockfile::LOCK_FILE, CONFIG_FILE] {
-        for dir in cwd.ancestors() {
-            if file == CONFIG_FILE && dir == home { break; }
+    let names = config::file_names(&std::env::var("AVM_ENV").unwrap_or_default())?;
+    for dir in cwd.ancestors() {
+        let files = std::iter::once(lockfile::LOCK_FILE).chain(
+            names.iter().filter(|_| dir != home).map(String::as_str),
+        );
+        for file in files {
             match fs::metadata(dir.join(file)) {
                 Ok(meta) if meta.is_file() => return Ok(dir.to_path_buf()),
                 Ok(_) => return Err(anyhow!("{} is not a file", dir.join(file).display())),

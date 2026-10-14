@@ -67,10 +67,10 @@ function global:prompt { _avm_apply_env; & $global:_avm_original_prompt }
 
 function global:avm {
   _avm_apply_env
-  $builtins = 'init','install','lock','add','list','ls','remove','rm','which','env','trust','self-update','outdated','upgrade','prune','help','shell-init','plugin','resolve','run','exec','x','shims','exec-shim','node','java','--help','-h'
+  $builtins = 'init','install','lock','add','list','ls','remove','rm','which','env','trust','self-update','outdated','upgrade','prune','help','shell-init','plugin','resolve','run','exec','x','shims','exec-shim','node','java','--env','--help','-h'
   if ($args.Count -gt 0 -and @('-v','--version') -contains $args[0]) {
     & avm-bin --version
-  } elseif ($args.Count -eq 0 -or $builtins -contains $args[0]) {
+  } elseif ($args.Count -eq 0 -or $builtins -contains $args[0] -or $args[0] -like '--env=*') {
     & avm-bin @args
   } else {
     & avm-bin resolve @args *> $null
@@ -152,7 +152,7 @@ avm() {
       command avm-bin --version
       return $?
       ;;
-    init|install|lock|add|list|ls|remove|rm|which|env|trust|self-update|outdated|upgrade|prune|help|shell-init|plugin|completion|--help|-h|resolve|run|exec|x|shims|exec-shim|node|java)
+    --env|--env=*|init|install|lock|add|list|ls|remove|rm|which|env|trust|self-update|outdated|upgrade|prune|help|shell-init|plugin|completion|--help|-h|resolve|run|exec|x|shims|exec-shim|node|java)
       command avm-bin "$@"
       _avm_rc=$?
       _avm_apply_env

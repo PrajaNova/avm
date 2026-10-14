@@ -22,6 +22,13 @@ pub fn main() {
         return;
     }
     let cli = Cli::parse();
+    if let Some(profiles) = &cli.profiles {
+        if let Err(err) = config::file_names(profiles) {
+            eprintln!("avm: {err}");
+            std::process::exit(1);
+        }
+        std::env::set_var("AVM_ENV", profiles);
+    }
     // The update notice is for people at a terminal: never in shims, the
     // eval'd `env`/`shell-init`, or the alias path the shell hook drives.
     let notify = !matches!(

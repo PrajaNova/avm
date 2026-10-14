@@ -395,3 +395,29 @@ fn upgrade_keeps_inherited_pins_at_their_source() {
     assert!(inherited.contains("edit it to move to 22.1.0"), "{inherited}");
     assert!(!child.join(".avm.json").exists());
 }
+
+#[test]
+fn shims_activate_appends_without_rewriting_non_utf8_rc_files() {
+    let p = Project::new();
+    let bashrc = p.0.join("home/.bashrc");
+    let original = b"# caf\xe9 latin-1 comment\nalias ll='ls -l'\n".to_vec();
+    fs::write(&bashrc, &original).unwrap();
+    assert!(p.run(&["shims", "activate"]).status.success());
+    let after = fs::read(&bashrc).unwrap();
+    assert!(after.starts_with(&original), "existing bytes must be preserved");
+    assert!(String::from_utf8_lossy(&after).contains("# >>> avm shims >>>"));
+    assert!(p.run(&["shims", "activate"]).status.success());
+    assert_eq!(fs::read(&bashrc).unwrap(), after, "second run must not append again");
+}
+
+#[cfg(unix)]
+#[test]
+fn shims_install_leaves_unchanged_shims_untouched() {
+    use std::os::unix::fs::MetadataExt;
+    let p = Project::new();
+    assert!(p.run(&["shims", "install"]).status.success());
+    let node = p.0.join("home/.avm/shims/node");
+    let inode = fs::metadata(&node).unwrap().ino();
+    assert!(p.run(&["shims", "install"]).status.success());
+    assert_eq!(fs::metadata(&node).unwrap().ino(), inode);
+}

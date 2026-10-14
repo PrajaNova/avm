@@ -144,12 +144,15 @@ pub fn activate_profiles() -> Result<Vec<PathBuf>> {
     let mut written = Vec::new();
     for name in [".zshenv", ".bashrc", ".profile"] {
         let path = home.join(name);
-        let existing = fs::read_to_string(&path).unwrap_or_default();
+        // Lossy read: a non-UTF-8 rc file must never be mistaken for an empty one.
+        let existing = String::from_utf8_lossy(&fs::read(&path).unwrap_or_default()).into_owned();
         if existing.contains(marker) {
             continue;
         }
-        fs::write(&path, format!("{existing}{block}"))
-            .with_context(|| format!("failed to update {}", path.display()))?;
+        // Append only; never rewrite what the user already has.
+        let appended = fs::OpenOptions::new().create(true).append(true).open(&path)
+            .and_then(|mut file| std::io::Write::write_all(&mut file, block.as_bytes()));
+        appended.with_context(|| format!("failed to update {}", path.display()))?;
         written.push(path);
     }
     Ok(written)
@@ -233,9 +236,17 @@ exec "$(command -v avm-bin)" exec-shim {tool} -- "$@"
 "#
     );
 
-    fs::write(&path, contents).with_context(|| format!("write shim for {tool}"))?;
-    let mut perms = fs::metadata(&path).context("shim metadata")?.permissions();
+    // Unchanged shims are left alone: shell startup reshims, and a truncating
+    // rewrite can be read half-written by a process running the shim right now.
+    if fs::read_to_string(&path).is_ok_and(|existing| existing == contents) {
+        return Ok(());
+    }
+    // Write beside it and rename, so readers see the old or the new script, never a partial one.
+    let staged = shims_dir.join(format!(".{tool}.{}.tmp", std::process::id()));
+    fs::write(&staged, contents).with_context(|| format!("write shim for {tool}"))?;
+    let mut perms = fs::metadata(&staged).context("shim metadata")?.permissions();
     perms.set_mode(perms.mode() | 0o755);
-    fs::set_permissions(&path, perms).context("chmod shim")?;
+    fs::set_permissions(&staged, perms).context("chmod shim")?;
+    fs::rename(&staged, &path).with_context(|| format!("install shim for {tool}"))?;
     Ok(())
 }

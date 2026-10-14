@@ -7,6 +7,12 @@ The format follows Keep a Changelog style, and releases use semantic versioning.
 ## [Unreleased]
 
 ### Fixed
+- `avm shims activate` appends to shell startup files instead of rewriting them, so non-UTF-8 files are no longer wiped.
+- `avm prune` no longer holds the project-tracking lock while waiting for confirmation, so shims and prompts don't hang; it aborts if a project was tracked meanwhile.
+- Plugin updates keep the working binary until the new one is in place; archives are staged in a private dir instead of shared `/tmp` and cleaned on every exit.
+- Cache plugin `env-vars` per plugin build and skip the tracking lock for known projects, cutting per-prompt work; `prune` clears month-old cache files.
+- Shims are written atomically and left alone when unchanged.
+- Android plugin uses the shared home-dir lookup (Windows `USERPROFILE`) and announces license acceptance.
 - Reject tool pins and removal arguments that escape managed directories.
 - Preserve existing PowerShell profiles and malformed configuration files.
 - Serialize config, trust, project-tracking and runtime-install writes; replace JSON atomically.

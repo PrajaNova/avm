@@ -15,11 +15,7 @@ const SDKMANAGER_LIST_TIMEOUT_MS: u64 = 60_000;
 const SDKMANAGER_ENV: &str = "AVM_ANDROID_SDKMANAGER_TIMEOUT";
 const SDKMANAGER_ATTEMPTS: u32 = 3;
 
-pub fn home_dir() -> Result<PathBuf> {
-    std::env::var_os("HOME")
-        .map(PathBuf::from)
-        .ok_or_else(|| anyhow!("HOME not set"))
-}
+pub use avm_plugin_api::home_dir;
 
 pub fn sdk_dir(version: &str) -> Result<PathBuf> {
     avm_plugin_api::download::validate_version(version)?;
@@ -149,6 +145,7 @@ fn sdkmanager(sdk: &Path, java_home: Option<&Path>) -> Command {
 /// Best-effort: some sdkmanager versions exit non-zero here even after
 /// accepting everything needed; the package install is the real check.
 pub fn accept_licenses(sdk: &Path, java_home: Option<&Path>) {
+    println!("Accepting the Android SDK licenses (https://developer.android.com/studio/terms)...");
     let mut cmd = sdkmanager(sdk, java_home);
     cmd.arg("--licenses").stdin(Stdio::piped()).stdout(Stdio::null()).stderr(Stdio::null());
     let Ok((mut child, _tree)) = avm_plugin_api::process::spawn_isolated(&mut cmd) else { return };

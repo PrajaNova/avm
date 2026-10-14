@@ -431,6 +431,18 @@ impl PluginProcess {
         })
     }
 
+    /// `env-vars` is read on every prompt and shim call, and is a fixed answer for a
+    /// given plugin binary and version, so it's cached under `~/.avm/cache`. The key
+    /// includes the plugin executable's mtime and size, so updating the plugin
+    /// invalidates it. `avm prune` removes old entries.
+    fn env_cache_path(&self, version: &str) -> Option<PathBuf> {
+        avm_plugin_api::download::validate_version(version).ok()?;
+        let meta = fs::metadata(&self.executable).ok()?;
+        let nanos = meta.modified().ok()?.duration_since(std::time::UNIX_EPOCH).ok()?.as_nanos();
+        let name = format!("env-{}-{version}-{nanos}-{}.json", self.tool_name, meta.len());
+        Some(crate::shims::avm_home().ok()?.join("cache").join(name))
+    }
+
     fn run_status(&self, args: &[&str]) -> Result<()> {
         let mut cmd = Command::new(&self.executable);
         cmd.args(args);
@@ -475,9 +487,20 @@ impl ToolProvider for PluginProcess {
     }
 
     fn env_vars(&self, version: &str) -> Result<HashMap<String, String>> {
-        Ok(self
+        let cache = self.env_cache_path(version);
+        if let Some(env) = cache.as_ref().and_then(|p| fs::read(p).ok()).and_then(|raw| serde_json::from_slice(&raw).ok()) {
+            return Ok(env);
+        }
+        let env = self
             .call_json::<avm_plugin_api::protocol::EnvVarsResponse>(&["env-vars", version])?
-            .env)
+            .env;
+        // Best effort: a cache that can't be written just means a spawn next time.
+        if let Some((path, raw)) = cache.zip(serde_json::to_vec(&env).ok()) {
+            if path.parent().is_some_and(|dir| fs::create_dir_all(dir).is_ok()) {
+                let _ = avm_plugin_api::storage::atomic_write(&path, &raw);
+            }
+        }
+        Ok(env)
     }
 
     fn install(&self, version: &str) -> Result<()> {
@@ -602,7 +625,8 @@ fn github_api_get(url: &str) -> Result<Vec<u8>> {
 
 /// Download `asset_name` from `release`, verify it against the release's
 /// `checksums.txt` (refusing if there is none, unless AVM_ALLOW_UNVERIFIED=1),
-/// and extract it into `extract_dir`. Returns (sha256, verified).
+/// and extract it into `extract_dir` (which must be private to this process).
+/// Returns (sha256, verified).
 pub fn fetch_verified_archive(repo: &str, release: &GithubRelease, asset_name: &str, extract_dir: &Path) -> Result<(String, bool)> {
     let asset = release
         .assets
@@ -619,7 +643,9 @@ pub fn fetch_verified_archive(repo: &str, release: &GithubRelease, asset_name: &
     }
 
     let ext = if asset_name.ends_with(".zip") { "zip" } else { "tar.gz" };
-    let tmp = std::env::temp_dir().join(format!("avm-download-{}.{ext}", std::process::id()));
+    // The archive lives in the caller's private dir, never at a guessable shared /tmp path.
+    fs::create_dir_all(extract_dir).context("failed to create extraction dir")?;
+    let tmp = extract_dir.join(format!(".download.{ext}"));
     let mut download = Command::new("curl");
     download.args(["-fsSL", "--connect-timeout", "10"]).arg(&asset.browser_download_url).arg("-o").arg(&tmp);
     run_timed(download, MARKETPLACE_INSTALL_TIMEOUT_MS, &format!("downloading {asset_name}"), "AVM_MARKETPLACE_INSTALL_TIMEOUT")?;
@@ -639,7 +665,6 @@ pub fn fetch_verified_archive(repo: &str, release: &GithubRelease, asset_name: &
         }
     };
 
-    fs::create_dir_all(extract_dir).context("failed to create extraction dir")?;
     let mut tar = Command::new("tar");
     // Windows 10+ ships bsdtar, which also reads zip.
     tar.arg(if ext == "zip" { "-xf" } else { "-xzf" }).arg(&tmp).arg("-C").arg(extract_dir);
@@ -678,42 +703,38 @@ pub fn install_from_marketplace(name: &str, entry: &MarketplaceEntry, plugin_dir
         ));
     }
 
-    let extract_dir = std::env::temp_dir().join(format!("avm-plugin-{name}-extract-{}", std::process::id()));
-    let (sha256, verified) = fetch_verified_archive(repo, &release, &asset_name, &extract_dir)?;
-
-    let bin_name = format!("avm-plugin-{name}{}", std::env::consts::EXE_SUFFIX);
-    let extracted_bin = extract_dir.join(&bin_name);
-    if !extracted_bin.exists() {
-        return Err(anyhow!("{asset_name} did not contain the expected file {bin_name}"));
-    }
-    let target_dir = plugin_dir.join(format!("{PROTOCOL_PREFIX}{name}"));
-    let bin_dir = target_dir.join("bin");
-    fs::create_dir_all(&bin_dir).context("failed to create plugin bin dir")?;
-    let dest = bin_dir.join(PLUGIN_BIN);
-    // On macOS, overwriting an existing binary at `dest` in place (as
-    // `fs::copy` alone does) and then executing it shortly after — exactly
-    // what `avm plugin update` does — can race the OS's Gatekeeper
-    // "provenance sandbox" tracking and get the process SIGKILLed (exit
-    // 137) on its first run or two. Removing the old file first, so the new
-    // one lands on a fresh inode instead of overwriting in place, avoids it.
-    // (Not fs::rename for the copy itself: the extraction temp dir and
-    // ~/.avm/plugins can be on different filesystems/mounts — observed in
-    // Docker, /tmp is tmpfs and the home dir is on the container's overlay
-    // fs — rename() fails EXDEV across devices, copy+remove works
-    // unconditionally.)
-    let _ = fs::remove_file(&dest);
-    fs::copy(&extracted_bin, &dest).context("failed to move plugin binary into place")?;
-    let _ = fs::remove_file(&extracted_bin);
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        let mut perms = fs::metadata(&dest)?.permissions();
-        perms.set_mode(0o755);
-        fs::set_permissions(&dest, perms)?;
-    }
+    // Staged under the plugin dir (same filesystem, owned by the user), not shared /tmp.
+    let extract_dir = plugin_dir.join(format!(".tmp-{name}-{}", std::process::id()));
     let _ = fs::remove_dir_all(&extract_dir);
-    let meta = serde_json::json!({ "version": release.tag_name, "sha256": sha256, "verified": verified });
-    fs::write(target_dir.join("meta.json"), meta.to_string()).context("failed to write plugin meta.json")?;
+    let installed = (|| -> Result<(String, bool)> {
+        let (sha256, verified) = fetch_verified_archive(repo, &release, &asset_name, &extract_dir)?;
+        let bin_name = format!("avm-plugin-{name}{}", std::env::consts::EXE_SUFFIX);
+        let extracted_bin = extract_dir.join(&bin_name);
+        if !extracted_bin.exists() {
+            return Err(anyhow!("{asset_name} did not contain the expected file {bin_name}"));
+        }
+        let target_dir = plugin_dir.join(format!("{PROTOCOL_PREFIX}{name}"));
+        let bin_dir = target_dir.join("bin");
+        fs::create_dir_all(&bin_dir).context("failed to create plugin bin dir")?;
+        let dest = bin_dir.join(PLUGIN_BIN);
+        // Copy beside the old binary, then rename over it: a failed copy leaves the
+        // working plugin in place, and the new file still lands on a fresh inode
+        // (overwriting in place and running it right away gets the process SIGKILLed
+        // by macOS Gatekeeper tracking — exit 137). Same dir, so no cross-device rename.
+        let staged = bin_dir.join(format!(".{PLUGIN_BIN}.new"));
+        fs::copy(&extracted_bin, &staged).context("failed to move plugin binary into place")?;
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            fs::set_permissions(&staged, fs::Permissions::from_mode(0o755))?;
+        }
+        fs::rename(&staged, &dest).inspect_err(|_| { let _ = fs::remove_file(&staged); }).context("failed to move plugin binary into place")?;
+        let meta = serde_json::json!({ "version": release.tag_name, "sha256": sha256, "verified": verified });
+        fs::write(target_dir.join("meta.json"), meta.to_string()).context("failed to write plugin meta.json")?;
+        Ok((sha256, verified))
+    })();
+    let _ = fs::remove_dir_all(&extract_dir);
+    installed?;
 
     Ok(release.tag_name)
 }

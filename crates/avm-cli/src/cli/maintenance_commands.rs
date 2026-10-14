@@ -222,6 +222,10 @@ pub fn track_config_dir(dir: &Path) {
     let key = dir.to_string_lossy().into_owned();
     let result = (|| -> Result<()> {
         let path = tracked_path()?;
+        // Hot path (every prompt and shim): skip the exclusive lock once the dir is known.
+        if tracked_dirs().is_ok_and(|dirs| dirs.contains(&key)) {
+            return Ok(());
+        }
         let _guard = avm_plugin_api::storage::lock(&path)?;
         let mut dirs = tracked_dirs()?;
         if dirs.insert(key) {
@@ -231,6 +235,22 @@ pub fn track_config_dir(dir: &Path) {
     })();
     if let Err(err) = result {
         eprintln!("warning: could not track project for prune: {err}");
+    }
+}
+
+/// Config and plugin-env caches are one file per directory or plugin build and are
+/// never read again once stale; drop the ones untouched for a month.
+fn prune_stale_caches() {
+    let Ok(dir) = shims::avm_home().map(|home| home.join("cache")) else { return };
+    let month = Duration::from_secs(30 * 24 * 60 * 60);
+    for entry in fs::read_dir(dir).into_iter().flatten().flatten() {
+        let name = entry.file_name();
+        let name = name.to_string_lossy();
+        let stale = (name.starts_with("config-") || name.starts_with("env-"))
+            && entry.metadata().and_then(|m| m.modified()).ok().and_then(|t| t.elapsed().ok()).is_some_and(|age| age > month);
+        if stale {
+            let _ = fs::remove_file(entry.path());
+        }
     }
 }
 
@@ -286,8 +306,12 @@ fn global_packages(tool: &str, version_dir: &Path) -> Vec<String> {
 
 pub fn cmd_prune(older_than: Option<String>, include_unrecorded: bool, dry_run: bool, yes: bool) -> Result<()> {
     let home = home_dir()?;
+    if !dry_run {
+        prune_stale_caches();
+    }
     let tracked = tracked_path()?;
-    let _guard = avm_plugin_api::storage::lock(&tracked)?;
+    // Not locked while resolving or asking: every shim and prompt takes that lock to track its project.
+    let tracked_snapshot = tracked_dirs()?;
     let cutoff = older_than.as_deref().map(parse_days).transpose()?.map(|d| Duration::from_secs(d * 24 * 60 * 60));
 
     // Versions still wanted: global pins, plus pins of every tracked project that still exists.
@@ -295,8 +319,8 @@ pub fn cmd_prune(older_than: Option<String>, include_unrecorded: bool, dry_run: 
         .flat_map(|(tool, spec)| [(tool.clone(), crate::version_files::resolve(&tool, &spec)), (tool, spec)])
         .collect();
     let mut live_dirs = BTreeSet::new();
-    for dir in tracked_dirs()? {
-        let path = PathBuf::from(&dir);
+    for dir in &tracked_snapshot {
+        let path = PathBuf::from(dir);
         if path.is_dir() {
             let cfg = crate::resolver::load(&path, &home, HashMap::new())
                 .with_context(|| format!("cannot safely prune: failed to resolve tracked project {}", path.display()))?;
@@ -318,7 +342,7 @@ pub fn cmd_prune(older_than: Option<String>, include_unrecorded: bool, dry_run: 
                 }
                 if config::load(ancestor)?.root { break; }
             }
-            live_dirs.insert(dir);
+            live_dirs.insert(dir.clone());
         }
     }
 
@@ -383,6 +407,11 @@ pub fn cmd_prune(older_than: Option<String>, include_unrecorded: bool, dry_run: 
     println!("Kept: global pins and pins of {} project(s) avm has seen (it records them as you use them).", live_dirs.len());
     if dry_run || !confirm("Remove them?", yes)? {
         return Ok(());
+    }
+    // A project tracked while we waited may need a version we're about to delete.
+    let _guard = avm_plugin_api::storage::lock(&tracked)?;
+    if tracked_dirs()? != tracked_snapshot {
+        return Err(anyhow!("a project was tracked while pruning; nothing was removed, re-run `avm prune`"));
     }
     for (tool, version, path, _) in doomed {
         fs::remove_dir_all(&path).with_context(|| format!("failed to remove {tool} {version}"))?;

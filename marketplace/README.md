@@ -4,7 +4,7 @@ The official plugin registry and documentation portal for [avm (Any Version Mana
 
 `avm-cli` fetches [`registry.json`](registry.json) from `marketplace/registry.json` on the AVM repo's `main` branch (no server, no API — just a file over `raw.githubusercontent.com`) to turn a short plugin name into a GitHub repo, then fetches that repo's **latest GitHub Release** (a prebuilt native binary, never source) for the current platform.
 
-This directory also contains the modern **avm Documentation & Marketplace Web Portal**, deployable to GitHub Pages at `https://prajanova.github.io/avm/`.
+This directory also contains the modern **avm Documentation & Marketplace Web Portal**, deployable to GitHub Pages at `https://getavm.dev/`.
 
 ---
 

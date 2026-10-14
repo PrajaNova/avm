@@ -92,7 +92,7 @@ tags and stable releases.
 or run `gh workflow run release-web.yml -R PrajaNova/avm`. Merging to
 `main` doesn't deploy. Enable **Settings → Pages → Source → GitHub
 Actions** in this repository before the first deployment. The site builds
-from `marketplace/` and publishes at `https://prajanova.github.io/avm/`.
+from `marketplace/` and publishes at `https://getavm.dev/`.
 
 The old `avm-marketplace` repository has been deleted; `marketplace/registry.json`
 in this repo is now the only copy CLI releases read.

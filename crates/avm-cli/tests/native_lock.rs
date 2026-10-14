@@ -1,5 +1,16 @@
 use serde_json::{json, Value};
-use std::{fs, io::{Read, Write}, net::TcpListener, path::Path, process::{Command, Output}, sync::{Arc, atomic::{AtomicBool, Ordering}}, thread};
+use std::{
+    fs,
+    io::{Read, Write},
+    net::TcpListener,
+    path::Path,
+    process::{Command, Output},
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
+    thread,
+};
 
 struct Disco {
     url: String,
@@ -19,33 +30,62 @@ impl Disco {
         let thread = thread::spawn(move || {
             while !stopped.load(Ordering::Relaxed) {
                 if let Ok((mut stream, _)) = listener.accept() {
-                    stream.set_read_timeout(Some(std::time::Duration::from_secs(2))).unwrap();
+                    stream
+                        .set_read_timeout(Some(std::time::Duration::from_secs(2)))
+                        .unwrap();
                     let mut request = [0; 8192];
                     if let Ok(n) = stream.read(&mut request) {
-                        let body = if request[..n].starts_with(b"GET /info ") { &info } else { &packages };
+                        let body = if request[..n].starts_with(b"GET /info ") {
+                            &info
+                        } else {
+                            &packages
+                        };
                         let _ = write!(stream, "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len());
                     }
-                } else { thread::sleep(std::time::Duration::from_millis(5)); }
+                } else {
+                    thread::sleep(std::time::Duration::from_millis(5));
+                }
             }
         });
-        Self { url, stop, thread: Some(thread) }
+        Self {
+            url,
+            stop,
+            thread: Some(thread),
+        }
     }
 }
 impl Drop for Disco {
     fn drop(&mut self) {
         self.stop.store(true, Ordering::Relaxed);
-        if let Some(thread) = self.thread.take() { thread.join().unwrap(); }
+        if let Some(thread) = self.thread.take() {
+            thread.join().unwrap();
+        }
     }
 }
 
 fn archive(root: &Path, name: &str, destination: &Path) {
     let mut cmd = Command::new("tar");
-    if cfg!(windows) { cmd.args(["-a", "-cf"]); } else { cmd.arg("-czf"); }
-    assert!(cmd.arg(destination).arg("-C").arg(root).arg(name).status().unwrap().success());
+    if cfg!(windows) {
+        cmd.args(["-a", "-cf"]);
+    } else {
+        cmd.arg("-czf");
+    }
+    assert!(cmd
+        .arg(destination)
+        .arg("-C")
+        .arg(root)
+        .arg(name)
+        .status()
+        .unwrap()
+        .success());
 }
 
 fn success(out: Output) -> String {
-    assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
     String::from_utf8(out.stdout).unwrap()
 }
 
@@ -55,7 +95,10 @@ fn native_plugins_lock_and_install_offline_on_this_platform() {
     let bin = Path::new(env!("CARGO_BIN_EXE_avm-bin")).parent().unwrap();
     let ext = std::env::consts::EXE_SUFFIX;
     let platform = avm_plugin_api::download::host_platform().unwrap();
-    let node_platform = platform.replace("windows", "win").replace("_amd64", "-x64").replace("_arm64", "-arm64");
+    let node_platform = platform
+        .replace("windows", "win")
+        .replace("_amd64", "-x64")
+        .replace("_arm64", "-arm64");
     let suffix = if cfg!(windows) { "zip" } else { "tar.gz" };
     let node_name = format!("node-v20.1.2-{node_platform}");
     let release = root.join("mirror/v20.1.2");
@@ -63,20 +106,38 @@ fn native_plugins_lock_and_install_offline_on_this_platform() {
     fs::create_dir_all(root.join("project")).unwrap();
     for tool in ["node", "java"] {
         let native = bin.join(format!("avm-plugin-{tool}{ext}"));
-        assert!(native.exists(), "build the workspace plugins before running this integration test");
+        assert!(
+            native.exists(),
+            "build the workspace plugins before running this integration test"
+        );
         let plugin = root.join(format!("home/.avm/plugins/avm-plugin-{tool}/bin"));
         fs::create_dir_all(&plugin).unwrap();
         fs::copy(&native, plugin.join(format!("avm-plugin{ext}"))).unwrap();
         let path = if tool == "node" {
-            if cfg!(windows) { root.join(&node_name) } else { root.join(&node_name).join("bin") }
-        } else { root.join("jdk/bin") };
+            if cfg!(windows) {
+                root.join(&node_name)
+            } else {
+                root.join(&node_name).join("bin")
+            }
+        } else {
+            root.join("jdk/bin")
+        };
         fs::create_dir_all(&path).unwrap();
-        if tool == "node" && cfg!(windows) { fs::create_dir_all(path.join("node_modules/npm")).unwrap(); }
-        if cfg!(windows) { fs::copy(native, path.join(format!("{tool}.exe"))).unwrap(); }
-        #[cfg(unix)] {
+        if tool == "node" && cfg!(windows) {
+            fs::create_dir_all(path.join("node_modules/npm")).unwrap();
+        }
+        if cfg!(windows) {
+            fs::copy(native, path.join(format!("{tool}.exe"))).unwrap();
+        }
+        #[cfg(unix)]
+        {
             use std::os::unix::fs::PermissionsExt;
             let file = path.join(tool);
-            fs::write(&file, format!("#!/bin/sh\nprintf '%s\\n' '{{\"name\":\"{tool}\"}}'\n")).unwrap();
+            fs::write(
+                &file,
+                format!("#!/bin/sh\nprintf '%s\\n' '{{\"name\":\"{tool}\"}}'\n"),
+            )
+            .unwrap();
             fs::set_permissions(file, fs::Permissions::from_mode(0o755)).unwrap();
         }
     }
@@ -86,25 +147,50 @@ fn native_plugins_lock_and_install_offline_on_this_platform() {
     archive(&root, "jdk", &java_archive);
     let node_hash = avm_plugin_api::sha256_file(&node_archive).unwrap();
     let java_hash = avm_plugin_api::sha256_file(&java_archive).unwrap();
-    fs::write(release.join("SHASUMS256.txt"), format!("{node_hash}  {node_name}.{suffix}\n")).unwrap();
-    fs::write(root.join("mirror/index.json"), json!([{"version":"v20.1.2","lts":"Iron"}]).to_string()).unwrap();
-    fs::write(root.join("project/.avm.json"), r#"{"tools":{"node":"20.1","java":"21"}}"#).unwrap();
-    let disco = Disco::new(json!({"java_version":"21.0.1+12","distribution_version":"21.0.1+12","major_version":21,"term_of_support":"lts","links":{"pkg_download_redirect":java_archive}}), &java_hash);
+    fs::write(
+        release.join("SHASUMS256.txt"),
+        format!("{node_hash}  {node_name}.{suffix}\n"),
+    )
+    .unwrap();
+    fs::write(
+        root.join("mirror/index.json"),
+        json!([{"version":"v20.1.2","lts":"Iron"}]).to_string(),
+    )
+    .unwrap();
+    fs::write(
+        root.join("project/.avm.json"),
+        r#"{"tools":{"node":"20.1","java":"21"}}"#,
+    )
+    .unwrap();
+    let disco = Disco::new(
+        json!({"java_version":"21.0.1+12","distribution_version":"21.0.1+12","major_version":21,"term_of_support":"lts","links":{"pkg_download_redirect":java_archive}}),
+        &java_hash,
+    );
     let disco_url = disco.url.clone();
-    let run = |args: &[&str]| Command::new(env!("CARGO_BIN_EXE_avm-bin"))
-        .args(args).current_dir(root.join("project"))
-        .env("HOME", root.join("home")).env("AVM_HOME", root.join("home/.avm"))
-        .env("AVM_PLUGIN_DIR", root.join("home/.avm/plugins"))
-        .env("AVM_NODE_DIST_URL", root.join("mirror")).env("AVM_JAVA_DISCO_URL", &disco_url)
-        .env("AVM_NO_UPDATE_CHECK", "1").env_remove("_AVM_ENV_BASELINE")
-        .output().unwrap();
+    let run = |args: &[&str]| {
+        Command::new(env!("CARGO_BIN_EXE_avm-bin"))
+            .args(args)
+            .current_dir(root.join("project"))
+            .env("HOME", root.join("home"))
+            .env("AVM_HOME", root.join("home/.avm"))
+            .env("AVM_PLUGIN_DIR", root.join("home/.avm/plugins"))
+            .env("AVM_NODE_DIST_URL", root.join("mirror"))
+            .env("AVM_JAVA_DISCO_URL", &disco_url)
+            .env("AVM_NO_UPDATE_CHECK", "1")
+            .env_remove("_AVM_ENV_BASELINE")
+            .output()
+            .unwrap()
+    };
     assert!(!run(&["install", "--frozen"]).status.success());
     success(run(&["lock"]));
     let lock_file = root.join("project/.avm.lock");
     let lock_bytes = fs::read(&lock_file).unwrap();
     let lock: Value = serde_json::from_slice(&lock_bytes).unwrap();
     assert_eq!(lock["tools"]["node"]["resolved"], "20.1.2");
-    assert_eq!(lock["tools"]["java"]["assets"][&platform]["sha256"], java_hash);
+    assert_eq!(
+        lock["tools"]["java"]["assets"][&platform]["sha256"],
+        java_hash
+    );
     drop(disco);
     fs::remove_file(root.join("mirror/index.json")).unwrap();
     fs::remove_file(release.join("SHASUMS256.txt")).unwrap();
@@ -114,7 +200,14 @@ fn native_plugins_lock_and_install_offline_on_this_platform() {
         let manifest: Value = serde_json::from_str(&out).unwrap();
         assert_eq!(manifest["name"], tool);
     }
-    success(run(&["exec", "--no-install", "node@20.1.2", "--", "node", "manifest"]));
+    success(run(&[
+        "exec",
+        "--no-install",
+        "node@20.1.2",
+        "--",
+        "node",
+        "manifest",
+    ]));
     assert_eq!(fs::read(&lock_file).unwrap(), lock_bytes);
     fs::remove_dir_all(root.join("home/.avm/tools")).unwrap();
     let mut wrong = lock.clone();

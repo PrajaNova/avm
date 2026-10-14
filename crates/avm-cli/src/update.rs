@@ -22,7 +22,10 @@ enum InstallMethod {
 }
 
 fn install_method(exe: &Path) -> InstallMethod {
-    let path = exe.to_string_lossy().replace('\\', "/").to_ascii_lowercase();
+    let path = exe
+        .to_string_lossy()
+        .replace('\\', "/")
+        .to_ascii_lowercase();
     if path.contains("/cellar/") || path.contains("/homebrew/") || path.contains("/linuxbrew/") {
         InstallMethod::Homebrew
     } else if path.contains("/node_modules/") {
@@ -41,7 +44,9 @@ fn upgrade_command(method: &InstallMethod) -> Option<&'static str> {
     match method {
         InstallMethod::Homebrew => Some("brew upgrade avm"),
         InstallMethod::Npm => Some("npm install -g @prajanova/avm@latest"),
-        InstallMethod::Cargo => Some("cargo install --git https://github.com/PrajaNova/avm.git avm-cli --force"),
+        InstallMethod::Cargo => {
+            Some("cargo install --git https://github.com/PrajaNova/avm.git avm-cli --force")
+        }
         InstallMethod::Scoop => Some("scoop update avm"),
         InstallMethod::Direct => None,
     }
@@ -72,11 +77,17 @@ pub fn self_update(version: Option<String>) -> Result<()> {
     let (os, arch) = runtime::marketplace_platform()?;
     let ext = if cfg!(windows) { "zip" } else { "tar.gz" };
     let asset = format!("avm_{os}_{arch}.{ext}");
-    let dir = exe.parent().ok_or_else(|| anyhow!("{} has no parent directory", exe.display()))?;
+    let dir = exe
+        .parent()
+        .ok_or_else(|| anyhow!("{} has no parent directory", exe.display()))?;
     // Extract next to the binary so the swap is a same-filesystem rename.
     let staging = dir.join(format!(".avm-update-{}", std::process::id()));
-    let result = runtime::fetch_verified_archive(REPO, &release, &asset, &staging)
-        .and_then(|_| replace_binary(&exe, &staging.join(format!("avm-bin{}", std::env::consts::EXE_SUFFIX))));
+    let result = runtime::fetch_verified_archive(REPO, &release, &asset, &staging).and_then(|_| {
+        replace_binary(
+            &exe,
+            &staging.join(format!("avm-bin{}", std::env::consts::EXE_SUFFIX)),
+        )
+    });
     let _ = fs::remove_dir_all(&staging);
     result.with_context(|| format!("couldn't update {}", exe.display()))?;
 
@@ -133,7 +144,11 @@ fn cache_path() -> Result<PathBuf> {
 }
 
 fn read_cache() -> CheckCache {
-    cache_path().ok().and_then(|p| fs::read(p).ok()).and_then(|raw| serde_json::from_slice(&raw).ok()).unwrap_or_default()
+    cache_path()
+        .ok()
+        .and_then(|p| fs::read(p).ok())
+        .and_then(|raw| serde_json::from_slice(&raw).ok())
+        .unwrap_or_default()
 }
 
 fn write_cache(cache: &CheckCache) {
@@ -144,7 +159,10 @@ fn write_cache(cache: &CheckCache) {
 }
 
 fn now() -> u64 {
-    SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0)
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0)
 }
 
 /// After an interactive command: print a one-line notice (at most daily) if a
@@ -162,7 +180,10 @@ pub fn maybe_notify() {
     let mut dirty = false;
     if let Some(latest) = cache.latest.as_deref().filter(|l| is_newer(l, CURRENT)) {
         if now.saturating_sub(cache.notified_at) >= DAY_SECS {
-            let how = current_exe().ok().and_then(|exe| upgrade_command(&install_method(&exe))).unwrap_or("avm self-update");
+            let how = current_exe()
+                .ok()
+                .and_then(|exe| upgrade_command(&install_method(&exe)))
+                .unwrap_or("avm self-update");
             eprintln!("avm {latest} is available (you have {CURRENT}). Update with: {how}");
             cache.notified_at = now;
             dirty = true;
@@ -185,9 +206,14 @@ pub fn maybe_notify() {
 /// `avm-bin __update-check`, detached so it outlives this command and the
 /// terminal session (its own process group; no console on Windows).
 fn spawn_detached_check() {
-    let Ok(exe) = std::env::current_exe() else { return };
+    let Ok(exe) = std::env::current_exe() else {
+        return;
+    };
     let mut cmd = Command::new(exe);
-    cmd.arg("__update-check").stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null());
+    cmd.arg("__update-check")
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null());
     #[cfg(unix)]
     {
         use std::os::unix::process::CommandExt;
@@ -217,12 +243,18 @@ fn is_newer(candidate: &str, current: &str) -> bool {
     fn split(v: &str) -> (Vec<u64>, Option<&str>) {
         let v = v.trim_start_matches('v');
         let (core, pre) = v.split_once('-').map_or((v, None), |(c, p)| (c, Some(p)));
-        (core.split('.').map(|n| n.parse().unwrap_or(0)).collect(), pre)
+        (
+            core.split('.').map(|n| n.parse().unwrap_or(0)).collect(),
+            pre,
+        )
     }
     // Pre-release tags compared piecewise, numbers numerically: beta-10 > beta-9.
     fn pre_key(p: &str) -> Vec<(u64, String)> {
         p.split(['-', '.'])
-            .map(|part| part.parse().map_or((0, part.to_string()), |n| (n, String::new())))
+            .map(|part| {
+                part.parse()
+                    .map_or((0, part.to_string()), |n| (n, String::new()))
+            })
             .collect()
     }
     let (a, pa) = split(candidate);
@@ -256,12 +288,27 @@ mod tests {
     #[test]
     fn install_methods() {
         let m = |p: &str| install_method(Path::new(p));
-        assert_eq!(m("/opt/homebrew/Cellar/avm/0.4.0/bin/avm-bin"), InstallMethod::Homebrew);
-        assert_eq!(m("/home/linuxbrew/.linuxbrew/Cellar/avm/0.4.0/bin/avm-bin"), InstallMethod::Homebrew);
-        assert_eq!(m("/usr/lib/node_modules/@prajanova/avm/bin/avm-bin"), InstallMethod::Npm);
+        assert_eq!(
+            m("/opt/homebrew/Cellar/avm/0.4.0/bin/avm-bin"),
+            InstallMethod::Homebrew
+        );
+        assert_eq!(
+            m("/home/linuxbrew/.linuxbrew/Cellar/avm/0.4.0/bin/avm-bin"),
+            InstallMethod::Homebrew
+        );
+        assert_eq!(
+            m("/usr/lib/node_modules/@prajanova/avm/bin/avm-bin"),
+            InstallMethod::Npm
+        );
         assert_eq!(m("/home/u/.cargo/bin/avm-bin"), InstallMethod::Cargo);
-        assert_eq!(m(r"C:\Users\u\scoop\apps\avm\current\avm-bin.exe"), InstallMethod::Scoop);
+        assert_eq!(
+            m(r"C:\Users\u\scoop\apps\avm\current\avm-bin.exe"),
+            InstallMethod::Scoop
+        );
         assert_eq!(m("/home/u/.local/bin/avm-bin"), InstallMethod::Direct);
-        assert_eq!(m(r"C:\Users\u\AppData\Local\avm\bin\avm-bin.exe"), InstallMethod::Direct);
+        assert_eq!(
+            m(r"C:\Users\u\AppData\Local\avm\bin\avm-bin.exe"),
+            InstallMethod::Direct
+        );
     }
 }

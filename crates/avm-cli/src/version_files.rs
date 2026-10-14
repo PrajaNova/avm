@@ -22,14 +22,21 @@ pub fn pins(cwd: &Path, home: &Path, idiomatic: bool) -> HashMap<String, (String
         }
         if idiomatic {
             for (file, tool, parse) in IDIOMATIC {
-                if let Some(spec) = fs::read_to_string(dir.join(file)).ok().and_then(|raw| parse(&raw)) {
+                if let Some(spec) = fs::read_to_string(dir.join(file))
+                    .ok()
+                    .and_then(|raw| parse(&raw))
+                {
                     here.push((tool.to_string(), spec, file));
                 }
             }
         }
         for (tool, spec, file) in here {
             found.entry(tool.clone()).or_insert_with(|| {
-                let origin = if dir == cwd { format!("./{file}") } else { dir.join(file).display().to_string() };
+                let origin = if dir == cwd {
+                    format!("./{file}")
+                } else {
+                    dir.join(file).display().to_string()
+                };
                 (resolve(&tool, &spec), origin, spec.clone())
             });
         }
@@ -47,7 +54,10 @@ const IDIOMATIC: &[(&str, &str, Parser)] = &[
 ];
 
 fn first_line(raw: &str) -> Option<String> {
-    raw.lines().map(|l| l.split('#').next().unwrap_or("").trim()).find(|l| !l.is_empty()).map(str::to_string)
+    raw.lines()
+        .map(|l| l.split('#').next().unwrap_or("").trim())
+        .find(|l| !l.is_empty())
+        .map(str::to_string)
 }
 
 /// asdf format: `<tool> <version> [fallback...]`; asdf names mapped to avm's.
@@ -77,7 +87,10 @@ fn parse_package_json(raw: &str) -> Option<String> {
 
 /// `java=17.0.9-tem` → `17.0.9` (the SDKMAN vendor suffix is dropped).
 fn parse_sdkmanrc(raw: &str) -> Option<String> {
-    let value = raw.lines().find_map(|l| l.trim().strip_prefix("java="))?.trim();
+    let value = raw
+        .lines()
+        .find_map(|l| l.trim().strip_prefix("java="))?
+        .trim();
     Some(value.split('-').next().unwrap_or(value).to_string())
 }
 
@@ -89,7 +102,12 @@ pub fn resolve(tool: &str, spec: &str) -> String {
         .ok()
         .and_then(|dir| fs::read_dir(dir).ok())
         .map(|entries| {
-            entries.flatten().filter(|e| e.path().is_dir()).filter_map(|e| e.file_name().into_string().ok()).filter(|n| !n.starts_with('.')).collect()
+            entries
+                .flatten()
+                .filter(|e| e.path().is_dir())
+                .filter_map(|e| e.file_name().into_string().ok())
+                .filter(|n| !n.starts_with('.'))
+                .collect()
         })
         .unwrap_or_default();
     pick(tool, spec, installed).unwrap_or_else(|| spec.trim_start_matches('v').to_string())
@@ -98,22 +116,40 @@ pub fn resolve(tool: &str, spec: &str) -> String {
 /// Newest of `installed` (any list of version names) matching `spec`.
 pub(crate) fn pick(tool: &str, spec: &str, installed: Vec<String>) -> Option<String> {
     let spec = spec.trim();
-    if let Some(exact) = installed.iter().find(|v| *v == spec.trim_start_matches('v')) {
+    if let Some(exact) = installed
+        .iter()
+        .find(|v| *v == spec.trim_start_matches('v'))
+    {
         return Some(exact.clone());
     }
     // Sorted by version, then build (`17.0.2+8` < `17.0.13+11`), then name.
-    let mut candidates: Vec<(Vec<u64>, u64, String)> =
-        installed.into_iter().filter_map(|name| Some((numbers(&name)?, build(&name), name))).collect();
+    let mut candidates: Vec<(Vec<u64>, u64, String)> = installed
+        .into_iter()
+        .filter_map(|name| Some((numbers(&name)?, build(&name), name)))
+        .collect();
     candidates.sort();
-    let newest = |ok: &dyn Fn(&[u64]) -> bool| candidates.iter().rev().find(|(v, _, _)| ok(v)).map(|(_, _, n)| n.clone());
+    let newest = |ok: &dyn Fn(&[u64]) -> bool| {
+        candidates
+            .iter()
+            .rev()
+            .find(|(v, _, _)| ok(v))
+            .map(|(_, _, n)| n.clone())
+    };
 
     if tool == "node" {
         let lts_major = |name: &str| match name {
             "*" => Some(None),
-            "argon" => Some(Some(4)), "boron" => Some(Some(6)), "carbon" => Some(Some(8)),
-            "dubnium" => Some(Some(10)), "erbium" => Some(Some(12)), "fermium" => Some(Some(14)),
-            "gallium" => Some(Some(16)), "hydrogen" => Some(Some(18)), "iron" => Some(Some(20)),
-            "jod" => Some(Some(22)), "krypton" => Some(Some(24)),
+            "argon" => Some(Some(4)),
+            "boron" => Some(Some(6)),
+            "carbon" => Some(Some(8)),
+            "dubnium" => Some(Some(10)),
+            "erbium" => Some(Some(12)),
+            "fermium" => Some(Some(14)),
+            "gallium" => Some(Some(16)),
+            "hydrogen" => Some(Some(18)),
+            "iron" => Some(Some(20)),
+            "jod" => Some(Some(22)),
+            "krypton" => Some(Some(24)),
             _ => None,
         };
         match spec.to_ascii_lowercase().as_str() {
@@ -152,18 +188,27 @@ pub(crate) fn numbers(name: &str) -> Option<Vec<u64>> {
 
 /// The `+N` build number (Java), 0 when there is none.
 pub(crate) fn build(name: &str) -> u64 {
-    name.split_once('+').and_then(|(_, b)| b.split(|c: char| !c.is_ascii_digit()).next()?.parse().ok()).unwrap_or(0)
+    name.split_once('+')
+        .and_then(|(_, b)| b.split(|c: char| !c.is_ascii_digit()).next()?.parse().ok())
+        .unwrap_or(0)
 }
 
 /// npm semver range check (`>=18 <21`, `^20.1`, `~1.2`, `18 || 20`,
 /// `20.x`, `1.2.3 - 2`), on `major.minor.patch`.
 fn satisfies(version: &[u64], range: &str) -> bool {
-    let v = [version.first().copied().unwrap_or(0), version.get(1).copied().unwrap_or(0), version.get(2).copied().unwrap_or(0)];
+    let v = [
+        version.first().copied().unwrap_or(0),
+        version.get(1).copied().unwrap_or(0),
+        version.get(2).copied().unwrap_or(0),
+    ];
     range.split("||").any(|set| {
         let set = set.trim();
-        if set.is_empty() { return range.trim().is_empty(); }
+        if set.is_empty() {
+            return range.trim().is_empty();
+        }
         if let Some((lo, hi)) = set.split_once(" - ") {
-            return comparator(&v, &format!(">={}", lo.trim())) && comparator(&v, &format!("<={}", hi.trim()));
+            return comparator(&v, &format!(">={}", lo.trim()))
+                && comparator(&v, &format!("<={}", hi.trim()));
         }
         set.split_whitespace().all(|c| comparator(&v, c))
     })
@@ -184,7 +229,9 @@ fn comparator(v: &[u64; 3], c: &str) -> bool {
                 _ => return false,
             },
         };
-        if parts.len() == 3 || (value.is_some() && parts.contains(&None)) { return false; }
+        if parts.len() == 3 || (value.is_some() && parts.contains(&None)) {
+            return false;
+        }
         parts.push(value);
     }
     let given = parts.iter().take_while(|p| p.is_some()).count().min(3);
@@ -242,23 +289,58 @@ mod tests {
         assert_eq!(p("~20.9").as_deref(), Some("20.9.0"));
         assert_eq!(p("19"), None);
         let java = installed(&["openjdk-17.0.9+9", "openjdk-21.0.2+13"]);
-        assert_eq!(pick("java", "17", java.clone()).as_deref(), Some("openjdk-17.0.9+9"));
-        assert_eq!(pick("java", "temurin-21.0.2", java).as_deref(), Some("openjdk-21.0.2+13"));
+        assert_eq!(
+            pick("java", "17", java.clone()).as_deref(),
+            Some("openjdk-17.0.9+9")
+        );
+        assert_eq!(
+            pick("java", "temurin-21.0.2", java).as_deref(),
+            Some("openjdk-21.0.2+13")
+        );
         // The build number is not a version component: 17+35 is 17.0.0 build 35.
-        let java17 = installed(&["openjdk-17+35", "openjdk-17.0.2+8", "openjdk-17.0.13+11", "openjdk-17.0.13+7", "openjdk-27+35"]);
-        assert_eq!(pick("java", "17", java17.clone()).as_deref(), Some("openjdk-17.0.13+11"));
-        assert_eq!(pick("java", "*", java17.clone()).as_deref(), Some("openjdk-27+35"));
-        assert_eq!(pick("java", ">=17 <18", java17).as_deref(), Some("openjdk-17.0.13+11"));
+        let java17 = installed(&[
+            "openjdk-17+35",
+            "openjdk-17.0.2+8",
+            "openjdk-17.0.13+11",
+            "openjdk-17.0.13+7",
+            "openjdk-27+35",
+        ]);
+        assert_eq!(
+            pick("java", "17", java17.clone()).as_deref(),
+            Some("openjdk-17.0.13+11")
+        );
+        assert_eq!(
+            pick("java", "*", java17.clone()).as_deref(),
+            Some("openjdk-27+35")
+        );
+        assert_eq!(
+            pick("java", ">=17 <18", java17).as_deref(),
+            Some("openjdk-17.0.13+11")
+        );
     }
 
     #[test]
     fn ranges() {
         let s = |v: [u64; 3], r: &str| satisfies(&v, r);
-        assert!(s([1, 2, 3], "1.2.3 - 2") && s([2, 9, 0], "1.2.3 - 2") && !s([3, 0, 0], "1.2.3 - 2"));
+        assert!(
+            s([1, 2, 3], "1.2.3 - 2") && s([2, 9, 0], "1.2.3 - 2") && !s([3, 0, 0], "1.2.3 - 2")
+        );
         assert!(s([0, 2, 5], "^0.2.3") && !s([0, 3, 0], "^0.2.3"));
-        assert!(s([2, 0, 0], ">1") && !s([1, 9, 9], ">1") && s([1, 2, 9], "<=1.2") && !s([1, 3, 0], "<=1.2"));
+        assert!(
+            s([2, 0, 0], ">1")
+                && !s([1, 9, 9], ">1")
+                && s([1, 2, 9], "<=1.2")
+                && !s([1, 3, 0], "<=1.2")
+        );
         assert!(s([5, 0, 0], "*") && s([5, 0, 0], ""));
-        for bad in [">=banana", "^banana20", "20..1", "20.x.1", "20.1.2.3", ">=18446744073709551616"] {
+        for bad in [
+            ">=banana",
+            "^banana20",
+            "20..1",
+            "20.x.1",
+            "20.1.2.3",
+            ">=18446744073709551616",
+        ] {
             assert!(!s([20, 1, 2], bad), "{bad}");
         }
         assert!(!s([20, 1, 2], "^18446744073709551615"));
@@ -269,11 +351,29 @@ mod tests {
 
     #[test]
     fn parses_files() {
-        assert_eq!(parse_tool_versions("nodejs 20.11.1 18\n# c\njava openjdk-17\nruby system\n"),
-            vec![("node".into(), "20.11.1".into()), ("java".into(), "openjdk-17".into())]);
-        assert_eq!(first_line("\n  v20.11.1 # pinned\n").as_deref(), Some("v20.11.1"));
-        assert_eq!(parse_sdkmanrc("# x\njava=17.0.9-tem\n").as_deref(), Some("17.0.9"));
-        assert_eq!(parse_package_json(r#"{"engines":{"node":">=18"},"volta":{"node":"20.1.0"}}"#).as_deref(), Some("20.1.0"));
-        assert_eq!(parse_package_json(r#"{"engines":{"node":">=18"}}"#).as_deref(), Some(">=18"));
+        assert_eq!(
+            parse_tool_versions("nodejs 20.11.1 18\n# c\njava openjdk-17\nruby system\n"),
+            vec![
+                ("node".into(), "20.11.1".into()),
+                ("java".into(), "openjdk-17".into())
+            ]
+        );
+        assert_eq!(
+            first_line("\n  v20.11.1 # pinned\n").as_deref(),
+            Some("v20.11.1")
+        );
+        assert_eq!(
+            parse_sdkmanrc("# x\njava=17.0.9-tem\n").as_deref(),
+            Some("17.0.9")
+        );
+        assert_eq!(
+            parse_package_json(r#"{"engines":{"node":">=18"},"volta":{"node":"20.1.0"}}"#)
+                .as_deref(),
+            Some("20.1.0")
+        );
+        assert_eq!(
+            parse_package_json(r#"{"engines":{"node":">=18"}}"#).as_deref(),
+            Some(">=18")
+        );
     }
 }

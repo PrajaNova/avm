@@ -12,8 +12,11 @@ pub fn cmd_plugin(cmd: PluginCommands) -> Result<()> {
             if !source.contains('/') {
                 if let Some(entry) = runtime::marketplace_lookup(&source)? {
                     println!("Fetching '{source}' from {}...", entry.repo);
-                    let version =
-                        runtime::install_from_marketplace(&source, &entry, &plugin_manager.plugin_dir())?;
+                    let version = runtime::install_from_marketplace(
+                        &source,
+                        &entry,
+                        &plugin_manager.plugin_dir(),
+                    )?;
                     println!("✓ Installed {source} {version}");
                     return Ok(());
                 }

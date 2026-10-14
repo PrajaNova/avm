@@ -48,6 +48,12 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
 
+      - name: Check formatting and lints
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          cargo fmt --all --check
+          cargo clippy --workspace --all-targets --locked -- -D warnings
+
       - name: Build workspace
         run: cargo build --workspace --locked
 

@@ -11,7 +11,10 @@ pub fn install_java(version: &str) -> Result<()> {
     install(version, None)
 }
 
-pub fn install(version: &str, locked: Option<&avm_plugin_api::protocol::LockedAsset>) -> Result<()> {
+pub fn install(
+    version: &str,
+    locked: Option<&avm_plugin_api::protocol::LockedAsset>,
+) -> Result<()> {
     avm_plugin_api::download::validate_version(version)?;
     let tools_root = tool_dir("java")?;
     let _guard = avm_plugin_api::storage::lock(&tools_root.join(format!(".install-{version}")))?;
@@ -36,12 +39,26 @@ pub fn install(version: &str, locked: Option<&avm_plugin_api::protocol::LockedAs
         (|| {
             let package = find_package(strip_avm_prefix(version))?;
             let url = &package.links.pkg_download_redirect;
-            let max_secs = avm_plugin_api::env_timeout_ms("AVM_JAVA_CURL_TIMEOUT", CURL_TIMEOUT_MS) / 1000;
+            let max_secs =
+                avm_plugin_api::env_timeout_ms("AVM_JAVA_CURL_TIMEOUT", CURL_TIMEOUT_MS) / 1000;
             let mut curl = Command::new("curl");
-            curl.args(["-fL", "--connect-timeout", "10", "--max-time", &max_secs.to_string(), url, "-o"])
-                .arg(&archive);
-            run_timed(curl, CURL_TIMEOUT_MS, "OpenJDK download", "AVM_JAVA_CURL_TIMEOUT")
-                .with_context(|| format!("failed to download OpenJDK from {url}"))?;
+            curl.args([
+                "-fL",
+                "--connect-timeout",
+                "10",
+                "--max-time",
+                &max_secs.to_string(),
+                url,
+                "-o",
+            ])
+            .arg(&archive);
+            run_timed(
+                curl,
+                CURL_TIMEOUT_MS,
+                "OpenJDK download",
+                "AVM_JAVA_CURL_TIMEOUT",
+            )
+            .with_context(|| format!("failed to download OpenJDK from {url}"))?;
             verify_archive(&package, &archive)
         })()
     };
@@ -53,8 +70,17 @@ pub fn install(version: &str, locked: Option<&avm_plugin_api::protocol::LockedAs
     // Temurin tarballs have exactly one root dir (e.g. `jdk-21.0.12+7`) — strip it.
     let mut tar = Command::new("tar");
     // Windows 10+ ships bsdtar, which also reads zip (and --strip-components).
-    tar.arg(if cfg!(windows) { "-xf" } else { "-xzf" }).arg(&archive).arg("--strip-components=1").arg("-C").arg(&jdk);
-    run_timed(tar, TAR_TIMEOUT_MS, "OpenJDK archive extraction", "AVM_JAVA_TAR_TIMEOUT")?;
+    tar.arg(if cfg!(windows) { "-xf" } else { "-xzf" })
+        .arg(&archive)
+        .arg("--strip-components=1")
+        .arg("-C")
+        .arg(&jdk);
+    run_timed(
+        tar,
+        TAR_TIMEOUT_MS,
+        "OpenJDK archive extraction",
+        "AVM_JAVA_TAR_TIMEOUT",
+    )?;
 
     // Temurin's macOS archives are `<root>/Contents/Home/{bin,lib,...}` (an app
     // bundle layout for `/usr/libexec/java_home`); avm wants a flat JDK dir.
@@ -78,7 +104,11 @@ fn verify_archive(package: &crate::versions::Package, archive: &std::path::Path)
             eprintln!("warning: installing UNVERIFIED OpenJDK (no sha256 available; AVM_ALLOW_UNVERIFIED=1)");
             return Ok(());
         }
-        Err(e) => return Err(e.context("can't verify OpenJDK download; set AVM_ALLOW_UNVERIFIED=1 to skip")),
+        Err(e) => {
+            return Err(
+                e.context("can't verify OpenJDK download; set AVM_ALLOW_UNVERIFIED=1 to skip")
+            )
+        }
     };
     let name = format!("jdk.{}", crate::versions::ARCHIVE_TYPE);
     avm_plugin_api::verify_sha256(archive, &format!("{expected}  {name}"), &name)

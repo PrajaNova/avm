@@ -18,7 +18,7 @@ tool 'node': 20.19.5 (from ./.nvmrc)
 - **Works with the files you already have:** `.nvmrc`, `.node-version`, `.tool-versions`, `.java-version`, `.sdkmanrc` and `package.json` engines.
 - **Global npm tools survive version switches:** install a CLI once, use it in projects pinned to other Node versions.
 - **Monorepo configs:** parent configs merge with nearest-directory precedence; environment profiles and personal overrides are supported. See [config layering](docs/ops/CONFIG_LAYERING.md).
-- **Safe by default:** avm, plugins and runtimes are sha256-verified before install, and a cloned repo's aliases and env stay off until you run `avm trust`.
+- **Safe by default:** avm, plugins and runtimes are checked against the sha256 their release publishes before install (this catches corrupt or altered downloads, not a compromised release), and a cloned repo's aliases and env stay off until you run `avm trust`.
 - **Android SDK, build tools and emulator** in one install, next to Node and Java.
 - **Everywhere:** macOS (Apple Silicon and Intel), Linux (x64 and arm64), and Windows (PowerShell, with `.exe` shims your IDE can run).
 - **Stays current:** `avm outdated`, `avm upgrade` and `avm self-update`.
@@ -41,8 +41,10 @@ Then add the shell hook ([details for each shell](https://prajanova.github.io/av
 eval "$(avm-bin shell-init)"   # in ~/.zshrc or ~/.bashrc
 ```
 
-Shell setup refreshes project environment variables at the Bash/PowerShell
-prompt, on directory changes in zsh, and before and after `avm` commands.
+Shell setup refreshes project environment variables when the directory changes
+(at the prompt in Bash/PowerShell, via `chpwd` in zsh) and before and after `avm`
+commands. After editing `.avm.json` by hand, `cd` out and back in or run any
+`avm` command to apply it.
 Leaving a project restores each variable's original value, or unsets it if it
 was originally absent. Re-run shell setup in existing sessions after upgrading.
 

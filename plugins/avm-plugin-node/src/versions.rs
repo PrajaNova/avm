@@ -14,7 +14,8 @@ struct IndexEntry {
 pub fn available_versions(query: ToolVersionQuery) -> Result<Vec<ToolVersion>> {
     let mirror = crate::install::mirror();
     let raw = avm_plugin_api::fetch(&format!("{}/index.json", mirror.trim_end_matches('/')), 20)?;
-    let index: Vec<IndexEntry> = serde_json::from_slice(&raw).context("failed to parse Node.js version index")?;
+    let index: Vec<IndexEntry> =
+        serde_json::from_slice(&raw).context("failed to parse Node.js version index")?;
     let versions = index.into_iter().map(to_tool_version).collect();
     Ok(query.filter(versions, |v: &ToolVersion| major(&v.version)))
 }
@@ -39,7 +40,11 @@ fn to_tool_version(entry: IndexEntry) -> ToolVersion {
 }
 
 fn major(version: &str) -> u64 {
-    version.split('.').next().and_then(|m| m.parse().ok()).unwrap_or(0)
+    version
+        .split('.')
+        .next()
+        .and_then(|m| m.parse().ok())
+        .unwrap_or(0)
 }
 
 #[cfg(test)]
@@ -51,9 +56,13 @@ mod tests {
         let entry: IndexEntry =
             serde_json::from_str(r#"{"version":"v20.1.0","lts":"Iron","security":true}"#).unwrap();
         let v = to_tool_version(entry);
-        assert_eq!((v.version.as_str(), v.label.as_str()), ("20.1.0", "20.1.0  LTS Iron  security"));
+        assert_eq!(
+            (v.version.as_str(), v.label.as_str()),
+            ("20.1.0", "20.1.0  LTS Iron  security")
+        );
         assert!(v.is_lts && v.is_security);
-        let entry: IndexEntry = serde_json::from_str(r#"{"version":"v21.0.0","lts":false}"#).unwrap();
+        let entry: IndexEntry =
+            serde_json::from_str(r#"{"version":"v21.0.0","lts":false}"#).unwrap();
         let versions = vec![to_tool_version(entry), v];
         let picked = ToolVersionQuery::Major(20).filter(versions, |v| major(&v.version));
         assert_eq!(picked.len(), 1);

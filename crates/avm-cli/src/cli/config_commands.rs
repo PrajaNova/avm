@@ -56,9 +56,17 @@ fn print_layered(
 ) {
     let keys: BTreeSet<&String> = local.keys().chain(global.keys()).collect();
     for key in keys {
-        let value = local.get(key).or_else(|| global.get(key)).map(String::as_str).unwrap_or("");
+        let value = local
+            .get(key)
+            .or_else(|| global.get(key))
+            .map(String::as_str)
+            .unwrap_or("");
         let origin = origins.get(key).map(String::as_str).unwrap_or("unknown");
-        let override_label = if local.contains_key(key) && global.contains_key(key) { " [override global]" } else { "" };
+        let override_label = if local.contains_key(key) && global.contains_key(key) {
+            " [override global]"
+        } else {
+            ""
+        };
         println!("{indent}{key}{sep}{value} (from {origin}){override_label}");
     }
 }
@@ -75,10 +83,16 @@ pub fn cmd_init() -> Result<()> {
         Err(e) if e.kind() == io::ErrorKind::NotFound => String::new(),
         Err(e) => return Err(e).context("read .gitignore"),
     };
-    if !raw.lines().any(|line| matches!(line.trim(), ".avm.local.json" | "/.avm.local.json")) {
-        if !raw.is_empty() && !raw.ends_with('\n') { raw.push('\n'); }
+    if !raw
+        .lines()
+        .any(|line| matches!(line.trim(), ".avm.local.json" | "/.avm.local.json"))
+    {
+        if !raw.is_empty() && !raw.ends_with('\n') {
+            raw.push('\n');
+        }
         raw.push_str(".avm.local.json\n");
-        avm_plugin_api::storage::atomic_write(&ignore, raw.as_bytes()).context("update .gitignore")?;
+        avm_plugin_api::storage::atomic_write(&ignore, raw.as_bytes())
+            .context("update .gitignore")?;
     }
     config::save(&root, &ConfigLoadResult::default())?;
     crate::trust::trust(&root.join(CONFIG_FILE))?;
@@ -96,9 +110,11 @@ pub fn cmd_add(args: AddArgs) -> Result<()> {
 }
 
 pub fn cmd_remove(args: RemoveArgs) -> Result<()> {
-    edit_config(args.global, false, |cfg| match cfg.aliases.remove(&args.key) {
-        Some(_) => Ok(()),
-        None => Err(anyhow!("alias '{}' not found", args.key)),
+    edit_config(args.global, false, |cfg| {
+        match cfg.aliases.remove(&args.key) {
+            Some(_) => Ok(()),
+            None => Err(anyhow!("alias '{}' not found", args.key)),
+        }
     })?;
     println!("✓ Removed {} alias '{}'", scope(args.global), args.key);
     Ok(())
@@ -120,7 +136,13 @@ fn cmd_alias_list() -> Result<()> {
         println!("No aliases configured.");
         return Ok(());
     }
-    print_layered(&cfg.local_aliases, &cfg.global_aliases, "", " → ", &cfg.alias_origins);
+    print_layered(
+        &cfg.local_aliases,
+        &cfg.global_aliases,
+        "",
+        " → ",
+        &cfg.alias_origins,
+    );
     Ok(())
 }
 
@@ -154,7 +176,14 @@ pub fn cmd_env_list() -> Result<()> {
     let mut keys: Vec<_> = merged.keys().collect();
     keys.sort();
     for key in keys {
-        println!("{key}={} (from {})", merged[key], cfg.env_origins.get(key).map(String::as_str).unwrap_or("unknown"));
+        println!(
+            "{key}={} (from {})",
+            merged[key],
+            cfg.env_origins
+                .get(key)
+                .map(String::as_str)
+                .unwrap_or("unknown")
+        );
     }
     Ok(())
 }
@@ -172,21 +201,41 @@ pub fn cmd_trust(args: TrustArgs) -> Result<()> {
     };
     let files: Vec<PathBuf> = if target.is_dir() {
         let names = config::file_names(&std::env::var("AVM_ENV").unwrap_or_default())?;
-        names.iter().map(|f| target.join(f)).chain([target.join(".env")]).filter(|f| f.exists()).collect()
+        names
+            .iter()
+            .map(|f| target.join(f))
+            .chain([target.join(".env")])
+            .filter(|f| f.exists())
+            .collect()
     } else {
         vec![target.clone()]
     };
     if files.is_empty() {
-        return Err(anyhow!("no active avm config or .env in {}", target.display()));
+        return Err(anyhow!(
+            "no active avm config or .env in {}",
+            target.display()
+        ));
     }
     for file in files {
         if args.revoke {
             let removed = crate::trust::revoke(&file)?;
-            println!("{} {}", if removed { "✓ Revoked trust for" } else { "Was not trusted:" }, file.display());
+            println!(
+                "{} {}",
+                if removed {
+                    "✓ Revoked trust for"
+                } else {
+                    "Was not trusted:"
+                },
+                file.display()
+            );
             continue;
         }
         // Show what's being trusted: the commands and env it will run with.
-        if file.file_name().and_then(|n| n.to_str()).is_some_and(|n| n.starts_with(".avm.") && n.ends_with(".json")) {
+        if file
+            .file_name()
+            .and_then(|n| n.to_str())
+            .is_some_and(|n| n.starts_with(".avm.") && n.ends_with(".json"))
+        {
             let cfg = config::load_file(&file)?;
             for (key, value) in cfg.aliases.iter().collect::<BTreeMap<_, _>>() {
                 println!("  alias {key} → {value}");
@@ -195,7 +244,10 @@ pub fn cmd_trust(args: TrustArgs) -> Result<()> {
                 println!("  env   {key}={value}");
             }
         } else {
-            for line in fs::read_to_string(&file)?.lines().filter(|l| !l.trim().is_empty() && !l.trim_start().starts_with('#')) {
+            for line in fs::read_to_string(&file)?
+                .lines()
+                .filter(|l| !l.trim().is_empty() && !l.trim_start().starts_with('#'))
+            {
                 println!("  {line}");
             }
         }
@@ -206,7 +258,7 @@ pub fn cmd_trust(args: TrustArgs) -> Result<()> {
 }
 
 pub fn cmd_list() -> Result<()> {
-    let cfg = load_state()?;
+    let cfg = load_state_with_aliases()?;
     let mut printed = false;
     let untrusted = untrusted_files(&cfg);
     if !untrusted.is_empty() {
@@ -216,7 +268,13 @@ pub fn cmd_list() -> Result<()> {
     if !cfg.local_aliases.is_empty() || !cfg.global_aliases.is_empty() {
         printed = true;
         println!("Aliases:");
-        print_layered(&cfg.local_aliases, &cfg.global_aliases, "  ", " → ", &cfg.alias_origins);
+        print_layered(
+            &cfg.local_aliases,
+            &cfg.global_aliases,
+            "  ",
+            " → ",
+            &cfg.alias_origins,
+        );
     }
 
     let merged_env = merge_env(&cfg);
@@ -226,22 +284,38 @@ pub fn cmd_list() -> Result<()> {
         let mut keys: Vec<_> = merged_env.keys().collect();
         keys.sort();
         for key in keys {
-            println!("  {key}={} (from {})", merged_env[key], cfg.env_origins.get(key).map(String::as_str).unwrap_or("unknown"));
+            println!(
+                "  {key}={} (from {})",
+                merged_env[key],
+                cfg.env_origins
+                    .get(key)
+                    .map(String::as_str)
+                    .unwrap_or("unknown")
+            );
         }
     }
 
     if !cfg.local_tools.is_empty() || !cfg.global_tools.is_empty() {
         printed = true;
         println!("Tools:");
-        print_layered(&cfg.local_tools, &cfg.global_tools, "  ", " = ", &cfg.tool_origins);
+        print_layered(
+            &cfg.local_tools,
+            &cfg.global_tools,
+            "  ",
+            " = ",
+            &cfg.tool_origins,
+        );
     }
 
     if let Ok(plugin_manager) = PluginManager::new() {
         // list_plugins() keys are plugin *directory* names
         // (e.g. "avm-plugin-android"); the short tool name
         // provider_by_name expects lives on the manifest value.
-        let names: BTreeSet<String> =
-            plugin_manager.list_plugins().into_values().map(|m| m.name).collect();
+        let names: BTreeSet<String> = plugin_manager
+            .list_plugins()
+            .into_values()
+            .map(|m| m.name)
+            .collect();
         let mut lines = Vec::new();
         for name in names {
             if let Ok(provider) = provider_by_name(&name) {

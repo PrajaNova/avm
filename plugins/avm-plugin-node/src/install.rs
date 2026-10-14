@@ -11,7 +11,10 @@ pub fn install_node(version: &str) -> Result<()> {
     install(version, None)
 }
 
-pub fn install(version: &str, locked: Option<&avm_plugin_api::protocol::LockedAsset>) -> Result<()> {
+pub fn install(
+    version: &str,
+    locked: Option<&avm_plugin_api::protocol::LockedAsset>,
+) -> Result<()> {
     let version = version.trim_start_matches('v');
     avm_plugin_api::download::validate_version(version)?;
     let platform = platform_name()?;
@@ -47,8 +50,16 @@ pub fn install(version: &str, locked: Option<&avm_plugin_api::protocol::LockedAs
 
     let mut tar = Command::new("tar");
     // Windows 10+ ships bsdtar, which also reads zip.
-    tar.arg(if cfg!(windows) { "-xf" } else { "-xzf" }).arg(&archive_path).arg("-C").arg(&tmp_root);
-    run_timed(tar, TAR_TIMEOUT_MS, "node archive extraction", "AVM_TAR_TIMEOUT")?;
+    tar.arg(if cfg!(windows) { "-xf" } else { "-xzf" })
+        .arg(&archive_path)
+        .arg("-C")
+        .arg(&tmp_root);
+    run_timed(
+        tar,
+        TAR_TIMEOUT_MS,
+        "node archive extraction",
+        "AVM_TAR_TIMEOUT",
+    )?;
 
     if target.exists() {
         fs::remove_dir_all(&target).context("failed to replace existing node install")?;
@@ -63,8 +74,11 @@ pub fn install(version: &str, locked: Option<&avm_plugin_api::protocol::LockedAs
         // by every version. Point it at this version's dir, as on Unix, so
         // `npm i -g` lands where avm's shims look (and per-version pins hold).
         let npmrc = bin.join("node_modules").join("npm").join("npmrc");
-        fs::write(&npmrc, format!("prefix={}\n", bin.display().to_string().replace('\\', "/")))
-            .context("failed to set npm's global prefix")?;
+        fs::write(
+            &npmrc,
+            format!("prefix={}\n", bin.display().to_string().replace('\\', "/")),
+        )
+        .context("failed to set npm's global prefix")?;
     } else {
         fs::rename(&extract_path, &target).context("failed to move node install into place")?;
     }
@@ -83,10 +97,16 @@ fn verify_archive(mirror: &str, version: &str, archive_name: &str, archive: &Pat
     let sums = match fetch(&url, 20) {
         Ok(sums) => sums,
         Err(_) if std::env::var("AVM_ALLOW_UNVERIFIED").as_deref() == Ok("1") => {
-            eprintln!("warning: installing UNVERIFIED {archive_name} (no {url}; AVM_ALLOW_UNVERIFIED=1)");
+            eprintln!(
+                "warning: installing UNVERIFIED {archive_name} (no {url}; AVM_ALLOW_UNVERIFIED=1)"
+            );
             return Ok(());
         }
-        Err(e) => return Err(e.context("can't verify Node.js download; set AVM_ALLOW_UNVERIFIED=1 to skip")),
+        Err(e) => {
+            return Err(
+                e.context("can't verify Node.js download; set AVM_ALLOW_UNVERIFIED=1 to skip")
+            )
+        }
     };
     verify_sha256(archive, &String::from_utf8_lossy(&sums), archive_name)
         .map(|_| ())
@@ -95,7 +115,9 @@ fn verify_archive(mirror: &str, version: &str, archive_name: &str, archive: &Pat
 
 fn fetch_archive(version: &str, archive_name: &str, destination: &Path) -> Result<()> {
     let mirror = mirror();
-    let local = Path::new(&mirror).join(format!("v{version}")).join(archive_name);
+    let local = Path::new(&mirror)
+        .join(format!("v{version}"))
+        .join(archive_name);
     if local.exists() {
         fs::copy(&local, destination)
             .with_context(|| format!("failed to copy node archive from {}", local.display()))?;
@@ -104,10 +126,23 @@ fn fetch_archive(version: &str, archive_name: &str, destination: &Path) -> Resul
 
     let url = format!("{}/v{version}/{archive_name}", mirror.trim_end_matches('/'));
     let mut curl = Command::new("curl");
-    curl.args(["-fL", "--connect-timeout", "10", "--max-time", "120", &url, "-o"])
-        .arg(destination);
-    run_timed(curl, CURL_OUTER_TIMEOUT_MS, "node download", "AVM_CURL_TIMEOUT")
-        .with_context(|| format!("failed to download Node.js from {url}"))
+    curl.args([
+        "-fL",
+        "--connect-timeout",
+        "10",
+        "--max-time",
+        "120",
+        &url,
+        "-o",
+    ])
+    .arg(destination);
+    run_timed(
+        curl,
+        CURL_OUTER_TIMEOUT_MS,
+        "node download",
+        "AVM_CURL_TIMEOUT",
+    )
+    .with_context(|| format!("failed to download Node.js from {url}"))
 }
 
 fn platform_name() -> Result<&'static str> {
@@ -122,7 +157,10 @@ fn platform_name() -> Result<&'static str> {
     }
 }
 
-pub fn resolve_downloads(version: &str, platforms: &[String]) -> Result<avm_plugin_api::protocol::ResolveResponse> {
+pub fn resolve_downloads(
+    version: &str,
+    platforms: &[String],
+) -> Result<avm_plugin_api::protocol::ResolveResponse> {
     use avm_plugin_api::protocol::{LockedAsset, ResolveResponse};
     let version = version.trim_start_matches('v');
     avm_plugin_api::download::validate_version(version)?;
@@ -131,16 +169,24 @@ pub fn resolve_downloads(version: &str, platforms: &[String]) -> Result<avm_plug
     let mut assets = std::collections::BTreeMap::new();
     for platform in platforms {
         avm_plugin_api::download::validate_platform(platform)?;
-        let (os, arch) = platform.split_once('_').ok_or_else(|| anyhow!("invalid platform"))?;
+        let (os, arch) = platform
+            .split_once('_')
+            .ok_or_else(|| anyhow!("invalid platform"))?;
         let os = if os == "windows" { "win" } else { os };
         let arch = if arch == "amd64" { "x64" } else { "arm64" };
         let ext = if os == "win" { "zip" } else { "tar.gz" };
         let name = format!("node-v{version}-{os}-{arch}.{ext}");
-        let asset = LockedAsset { url: format!("{base}/{name}"), sha256: avm_plugin_api::checksum_for(&sums, &name)? };
+        let asset = LockedAsset {
+            url: format!("{base}/{name}"),
+            sha256: avm_plugin_api::checksum_for(&sums, &name)?,
+        };
         avm_plugin_api::download::validate_asset(&asset)?;
         assets.insert(platform.clone(), asset);
     }
-    Ok(ResolveResponse { version: version.to_string(), assets })
+    Ok(ResolveResponse {
+        version: version.to_string(),
+        assets,
+    })
 }
 
 #[cfg(test)]
@@ -157,10 +203,17 @@ mod tests {
         let mirror_str = mirror.to_str().unwrap();
         let abc = "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad";
 
-        fs::write(release.join("SHASUMS256.txt"), format!("{abc}  node.tar.gz\n")).unwrap();
+        fs::write(
+            release.join("SHASUMS256.txt"),
+            format!("{abc}  node.tar.gz\n"),
+        )
+        .unwrap();
         assert!(verify_archive(mirror_str, "1.0.0", "node.tar.gz", &archive).is_ok());
         fs::write(&archive, b"tampered").unwrap();
-        let err = format!("{:#}", verify_archive(mirror_str, "1.0.0", "node.tar.gz", &archive).unwrap_err());
+        let err = format!(
+            "{:#}",
+            verify_archive(mirror_str, "1.0.0", "node.tar.gz", &archive).unwrap_err()
+        );
         assert!(err.contains("checksum mismatch"), "{err}");
         fs::remove_file(release.join("SHASUMS256.txt")).unwrap();
         assert!(verify_archive(mirror_str, "1.0.0", "node.tar.gz", &archive).is_err());

@@ -51,8 +51,7 @@ fn resolves_platform_checksums_and_installs_the_locked_archive() {
 
     let command = |args: &[String]| {
         let mut cmd = Command::new(env!("CARGO_BIN_EXE_avm-plugin-node"));
-        cmd
-            .args(args)
+        cmd.args(args)
             .env("HOME", root.join("home"))
             .env("AVM_NODE_DIST_URL", root.join("mirror"))
             .env("AVM_ALLOW_UNVERIFIED", "1");
@@ -88,13 +87,20 @@ fn resolves_platform_checksums_and_installs_the_locked_archive() {
     asset.sha256 = sha256;
     // Upstream checksums can disappear after locking; installation uses the lock.
     fs::remove_file(release.join("SHASUMS256.txt")).unwrap();
-    let args = ["install-locked".into(), "20.1.0".into(), serde_json::to_string(&asset).unwrap()];
-    let guard = avm_plugin_api::storage::lock(&root.join("home/.avm/tools/node/.install-20.1.0")).unwrap();
+    let args = [
+        "install-locked".into(),
+        "20.1.0".into(),
+        serde_json::to_string(&asset).unwrap(),
+    ];
+    let guard =
+        avm_plugin_api::storage::lock(&root.join("home/.avm/tools/node/.install-20.1.0")).unwrap();
     let mut children: Vec<_> = (0..2).map(|_| command(&args).spawn().unwrap()).collect();
     std::thread::sleep(std::time::Duration::from_millis(100));
     assert!(!root.join("home/.avm/tools/node/20.1.0").exists());
     drop(guard);
-    for child in &mut children { assert!(child.wait().unwrap().success()); }
+    for child in &mut children {
+        assert!(child.wait().unwrap().success());
+    }
     let node = root.join("home/.avm/tools/node/20.1.0/bin/node");
     assert_eq!(
         Command::new(node).output().unwrap().stdout,

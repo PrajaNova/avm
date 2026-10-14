@@ -1,8 +1,26 @@
 use super::*;
 
+/// Config for env, shims and exec: never touches `package.json`, so a broken
+/// one can't stop `node` or the prompt.
 pub fn load_state() -> Result<ResolvedConfig> {
+    load_state_with(false)
+}
+
+/// Like `load_state`, plus `package.json` scripts as aliases (for `run`, `resolve`, `which`, `list`).
+pub fn load_state_with_aliases() -> Result<ResolvedConfig> {
+    load_state_with(true)
+}
+
+fn load_state_with(aliases: bool) -> Result<ResolvedConfig> {
     let cwd = std::env::current_dir().context("failed to read current directory")?;
-    let plugin_aliases = package_json_aliases(&cwd)?;
+    let plugin_aliases = if aliases {
+        package_json_aliases(&cwd).unwrap_or_else(|err| {
+            eprintln!("avm: ignoring package.json scripts: {err:#}");
+            HashMap::new()
+        })
+    } else {
+        HashMap::new()
+    };
     let cfg = crate::resolver::load(&cwd, &home_dir()?, plugin_aliases)?;
     if !cfg.local_tools.is_empty() {
         track_config_dir(&cwd); // so `avm prune` keeps this project's versions
@@ -20,7 +38,12 @@ pub fn env_baseline() -> Result<BTreeMap<String, Option<String>>> {
         Ok(raw) => serde_json::from_str(&raw).context("invalid AVM environment baseline")?,
         Err(_) => BTreeMap::new(),
     };
-    config::validate_env(&baseline.keys().map(|key| (key.clone(), String::new())).collect())?;
+    config::validate_env(
+        &baseline
+            .keys()
+            .map(|key| (key.clone(), String::new()))
+            .collect(),
+    )?;
     Ok(baseline)
 }
 
@@ -63,8 +86,9 @@ fn package_json_aliases(cwd: &Path) -> Result<HashMap<String, ResolvedAlias>> {
         return Ok(HashMap::new());
     }
     let raw = fs::read_to_string(&package_json).context("failed to read package.json")?;
-    let parsed: serde_json::Value =
-        serde_json::from_str(&raw).context("failed to parse package.json")?;
+    // Windows editors often save a BOM, which JSON parsers reject.
+    let parsed: serde_json::Value = serde_json::from_str(raw.trim_start_matches('\u{feff}'))
+        .context("failed to parse package.json")?;
 
     let manager = if cwd.join("bun.lockb").exists() || cwd.join("bun.lock").exists() {
         "bun run"

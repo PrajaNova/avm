@@ -33,14 +33,16 @@ pub fn main() {
     // eval'd `env`/`shell-init`, or the alias path the shell hook drives.
     let notify = !matches!(
         cli.command,
-        Commands::ExecShim(_)
-            | Commands::Env { .. }
-            | Commands::ShellInit { .. }
-            | Commands::Resolve(_)
-            | Commands::Run(_)
-            | Commands::Exec(_)
-            | Commands::SelfUpdate { .. }
-            | Commands::UpdateCheck
+        Some(
+            Commands::ExecShim(_)
+                | Commands::Env { .. }
+                | Commands::ShellInit { .. }
+                | Commands::Resolve(_)
+                | Commands::Run(_)
+                | Commands::Exec(_)
+                | Commands::SelfUpdate { .. }
+                | Commands::UpdateCheck
+        )
     );
     if let Err(err) = run(cli) {
         eprintln!("avm: {err:#}");
@@ -54,7 +56,10 @@ pub fn main() {
 fn load_dotenv_env() -> Result<()> {
     let cwd = std::env::current_dir().context("failed to read current directory")?;
     let protected: HashSet<String> = std::env::vars().map(|(key, _)| key).collect();
-    let trusted_paths = home_dir().and_then(|home| config::load(&home)).map(|c| c.trusted_paths).unwrap_or_default();
+    let trusted_paths = home_dir()
+        .and_then(|home| config::load(&home))
+        .map(|c| c.trusted_paths)
+        .unwrap_or_default();
 
     let dirs: Vec<&Path> = cwd.ancestors().collect();
     let mut skipped = Vec::new();
@@ -127,7 +132,10 @@ fn parse_env_value(value: &str) -> String {
 }
 
 fn run(cli: Cli) -> Result<()> {
-    match cli.command {
+    let Some(command) = cli.command else {
+        return cmd_home();
+    };
+    match command {
         Commands::Init => cmd_init(),
         Commands::Install { frozen } => cmd_install(frozen),
         Commands::Lock { platform } => cmd_lock(platform),
@@ -163,9 +171,17 @@ fn run(cli: Cli) -> Result<()> {
         Commands::SelfUpdate { version } => crate::update::self_update(version),
         Commands::UpdateCheck => crate::update::refresh_cache(),
         Commands::Outdated { json } => cmd_outdated(json),
-        Commands::Upgrade { tools, bump, dry_run, yes } => cmd_upgrade(tools, bump, dry_run, yes),
-        Commands::Prune { older_than, include_unrecorded, dry_run, yes } => {
-            cmd_prune(older_than, include_unrecorded, dry_run, yes)
-        }
+        Commands::Upgrade {
+            tools,
+            bump,
+            dry_run,
+            yes,
+        } => cmd_upgrade(tools, bump, dry_run, yes),
+        Commands::Prune {
+            older_than,
+            include_unrecorded,
+            dry_run,
+            yes,
+        } => cmd_prune(older_than, include_unrecorded, dry_run, yes),
     }
 }

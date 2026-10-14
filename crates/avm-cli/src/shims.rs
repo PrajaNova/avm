@@ -8,7 +8,15 @@ pub const TOOL_BINS: &[(&str, &[&str])] = &[
     ("node", &["node", "npm", "npx", "pnpm", "yarn", "bun"]),
     (
         "java",
-        &["java", "javac", "jar", "javadoc", "jshell", "jarsigner", "keytool"],
+        &[
+            "java",
+            "javac",
+            "jar",
+            "javadoc",
+            "jshell",
+            "jarsigner",
+            "keytool",
+        ],
     ),
 ];
 
@@ -57,7 +65,11 @@ pub fn reshim() -> Result<()> {
                     continue;
                 }
                 // Windows: `tsc.cmd` → shim `tsc`.
-                let file_name = if cfg!(windows) { entry.path().file_stem().map(|s| s.to_os_string()) } else { Some(entry.file_name()) };
+                let file_name = if cfg!(windows) {
+                    entry.path().file_stem().map(|s| s.to_os_string())
+                } else {
+                    Some(entry.file_name())
+                };
                 if let Some(name) = file_name.as_deref().and_then(|n| n.to_str()) {
                     // Reject anything that isn't a plain command name.
                     if name.starts_with('.') || name.contains('/') || name.contains('\\') {
@@ -87,17 +99,20 @@ fn is_executable(path: &Path) -> bool {
 fn is_executable(path: &Path) -> bool {
     let exts = path_exts();
     path.is_file()
-        && path
-            .extension()
-            .and_then(|e| e.to_str())
-            .is_some_and(|e| exts.iter().any(|x| x.trim_start_matches('.').eq_ignore_ascii_case(e)))
+        && path.extension().and_then(|e| e.to_str()).is_some_and(|e| {
+            exts.iter()
+                .any(|x| x.trim_start_matches('.').eq_ignore_ascii_case(e))
+        })
 }
 
 /// Candidate file names for a bare command: itself on Unix; `node.exe`,
 /// `node.cmd`, ... per `PATHEXT` on Windows.
 pub fn command_names(bin: &str) -> Vec<String> {
     if cfg!(windows) && Path::new(bin).extension().is_none() {
-        path_exts().iter().map(|ext| format!("{bin}{}", ext.to_ascii_lowercase())).collect()
+        path_exts()
+            .iter()
+            .map(|ext| format!("{bin}{}", ext.to_ascii_lowercase()))
+            .collect()
     } else {
         vec![bin.to_string()]
     }
@@ -138,18 +153,25 @@ pub fn which_in_path(bin: &str, paths: &std::ffi::OsStr, skip_shims: bool) -> Op
 /// invocation, including non-interactive `zsh -c` used by such tools.
 pub fn activate_profiles() -> Result<Vec<PathBuf>> {
     let home = avm_plugin_api::home_dir()?;
-    let block = "\n# >>> avm shims >>>\nexport PATH=\"$HOME/.avm/shims:$PATH\"\n# <<< avm shims <<<\n";
+    let block =
+        "\n# >>> avm shims >>>\nexport PATH=\"$HOME/.avm/shims:$PATH\"\n# <<< avm shims <<<\n";
     let marker = "# >>> avm shims >>>";
 
     let mut written = Vec::new();
     for name in [".zshenv", ".bashrc", ".profile"] {
         let path = home.join(name);
-        let existing = fs::read_to_string(&path).unwrap_or_default();
+        // Lossy read: a non-UTF-8 rc file must never be mistaken for an empty one.
+        let existing = String::from_utf8_lossy(&fs::read(&path).unwrap_or_default()).into_owned();
         if existing.contains(marker) {
             continue;
         }
-        fs::write(&path, format!("{existing}{block}"))
-            .with_context(|| format!("failed to update {}", path.display()))?;
+        // Append only; never rewrite what the user already has.
+        let appended = fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&path)
+            .and_then(|mut file| std::io::Write::write_all(&mut file, block.as_bytes()));
+        appended.with_context(|| format!("failed to update {}", path.display()))?;
         written.push(path);
     }
     Ok(written)
@@ -157,7 +179,11 @@ pub fn activate_profiles() -> Result<Vec<PathBuf>> {
 
 pub fn remove_shim(tool: &str) -> Result<()> {
     avm_plugin_api::validate_name(tool)?;
-    for name in [tool.to_string(), format!("{tool}.cmd"), format!("{tool}.exe")] {
+    for name in [
+        tool.to_string(),
+        format!("{tool}.cmd"),
+        format!("{tool}.exe"),
+    ] {
         let path = shim_dir()?.join(name);
         if path.exists() {
             fs::remove_file(path).context("remove shim")?;
@@ -233,9 +259,19 @@ exec "$(command -v avm-bin)" exec-shim {tool} -- "$@"
 "#
     );
 
-    fs::write(&path, contents).with_context(|| format!("write shim for {tool}"))?;
-    let mut perms = fs::metadata(&path).context("shim metadata")?.permissions();
+    // Unchanged shims are left alone: shell startup reshims, and a truncating
+    // rewrite can be read half-written by a process running the shim right now.
+    if fs::read_to_string(&path).is_ok_and(|existing| existing == contents) {
+        return Ok(());
+    }
+    // Write beside it and rename, so readers see the old or the new script, never a partial one.
+    let staged = shims_dir.join(format!(".{tool}.{}.tmp", std::process::id()));
+    fs::write(&staged, contents).with_context(|| format!("write shim for {tool}"))?;
+    let mut perms = fs::metadata(&staged)
+        .context("shim metadata")?
+        .permissions();
     perms.set_mode(perms.mode() | 0o755);
-    fs::set_permissions(&path, perms).context("chmod shim")?;
+    fs::set_permissions(&staged, perms).context("chmod shim")?;
+    fs::rename(&staged, &path).with_context(|| format!("install shim for {tool}"))?;
     Ok(())
 }

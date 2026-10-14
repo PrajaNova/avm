@@ -21,7 +21,14 @@ pub struct ConfigLoadResult {
     pub idiomatic_version_files: Option<bool>,
 }
 
-const SECTIONS: &[&str] = &["aliases", "env", "tools", "trusted_paths", "idiomatic_version_files", "root"];
+const SECTIONS: &[&str] = &[
+    "aliases",
+    "env",
+    "tools",
+    "trusted_paths",
+    "idiomatic_version_files",
+    "root",
+];
 
 fn validate_env_key(key: &str) -> bool {
     !key.is_empty()
@@ -57,20 +64,29 @@ fn parse_config(raw: &[u8]) -> Result<ConfigLoadResult> {
             let mut cfg = ConfigLoadResult {
                 root: match object.get("root") {
                     None => false,
-                    Some(v) => v.as_bool().ok_or_else(|| anyhow!("root must be a boolean"))?,
+                    Some(v) => v
+                        .as_bool()
+                        .ok_or_else(|| anyhow!("root must be a boolean"))?,
                 },
                 aliases: parse_string_map(object.get("aliases"), "aliases")?,
                 env: parse_string_map(object.get("env"), "env")?,
                 tools: parse_string_map(object.get("tools"), "tools")?,
                 trusted_paths: match object.get("trusted_paths") {
                     None | Some(serde_json::Value::Null) => Vec::new(),
-                    Some(v) => serde_json::from_value(v.clone()).context("trusted_paths must be a list of strings")?,
+                    Some(v) => serde_json::from_value(v.clone())
+                        .context("trusted_paths must be a list of strings")?,
                 },
-                idiomatic_version_files: object.get("idiomatic_version_files").and_then(|v| v.as_bool()),
+                idiomatic_version_files: object
+                    .get("idiomatic_version_files")
+                    .and_then(|v| v.as_bool()),
             };
             validate_env(&cfg.env)?;
             if cfg!(windows) {
-                cfg.env = cfg.env.into_iter().map(|(key, value)| (key.to_ascii_uppercase(), value)).collect();
+                cfg.env = cfg
+                    .env
+                    .into_iter()
+                    .map(|(key, value)| (key.to_ascii_uppercase(), value))
+                    .collect();
             }
             Ok(cfg)
         }
@@ -97,7 +113,12 @@ pub fn load(root: &Path) -> Result<ConfigLoadResult> {
 
 pub fn load_file(file_path: &Path) -> Result<ConfigLoadResult> {
     match fs::read(file_path) {
-        Ok(raw) => parse_config(&raw).with_context(|| format!("invalid {}; repair the file before continuing", file_path.display())),
+        Ok(raw) => parse_config(&raw).with_context(|| {
+            format!(
+                "invalid {}; repair the file before continuing",
+                file_path.display()
+            )
+        }),
         Err(err) if err.kind() == std::io::ErrorKind::NotFound => Ok(ConfigLoadResult::default()),
         Err(err) => Err(err.into()),
     }
@@ -107,7 +128,8 @@ pub fn load_file(file_path: &Path) -> Result<ConfigLoadResult> {
 pub fn save(root: &Path, cfg: &ConfigLoadResult) -> Result<()> {
     validate_env(&cfg.env)?;
     let raw = serde_json::to_vec_pretty(cfg)?;
-    avm_plugin_api::storage::atomic_write(&root.join(CONFIG_FILE), &raw).context("failed to save config")
+    avm_plugin_api::storage::atomic_write(&root.join(CONFIG_FILE), &raw)
+        .context("failed to save config")
 }
 
 /// Low to high precedence within a directory. Profiles cannot name paths.
@@ -116,7 +138,11 @@ pub fn file_names(profiles: &str) -> Result<Vec<String>> {
     if !profiles.is_empty() {
         for profile in profiles.split(',') {
             let profile = profile.trim();
-            if profile.is_empty() || !profile.bytes().all(|c| c.is_ascii_alphanumeric() || b"_-".contains(&c)) {
+            if profile.is_empty()
+                || !profile
+                    .bytes()
+                    .all(|c| c.is_ascii_alphanumeric() || b"_-".contains(&c))
+            {
                 return Err(anyhow!("invalid environment profile: {profile}"));
             }
             if profile != "local" {
@@ -139,11 +165,17 @@ mod tests {
         let flat = parse_config(br#"{"dev":"npm run dev"}"#).unwrap();
         assert_eq!(flat.aliases["dev"], "npm run dev");
         assert!(parse_config(br#"{"env":{"1BAD":"x"}}"#).is_err());
-        let settings = parse_config(br#"{"trusted_paths":["~/work/**"],"idiomatic_version_files":false}"#).unwrap();
+        let settings =
+            parse_config(br#"{"trusted_paths":["~/work/**"],"idiomatic_version_files":false}"#)
+                .unwrap();
         assert!(settings.aliases.is_empty() && settings.trusted_paths == ["~/work/**"]);
         assert_eq!(settings.idiomatic_version_files, Some(false));
         assert!(parse_config(br#"{"root":true}"#).unwrap().root);
         assert!(parse_config(br#"{"root":"yes"}"#).is_err());
-        assert!(!String::from_utf8(serde_json::to_vec(&ConfigLoadResult::default()).unwrap()).unwrap().contains("trusted"));
+        assert!(
+            !String::from_utf8(serde_json::to_vec(&ConfigLoadResult::default()).unwrap())
+                .unwrap()
+                .contains("trusted")
+        );
     }
 }

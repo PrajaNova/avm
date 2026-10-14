@@ -1,6 +1,6 @@
 use std::collections::{BTreeSet, HashMap};
-use std::path::{Path, PathBuf};
 use std::hash::{Hash, Hasher};
+use std::path::{Path, PathBuf};
 
 use avm_plugin_api::ResolvedAlias;
 
@@ -64,9 +64,20 @@ impl ResolvedConfig {
             command: a.command.clone(),
             source: AliasSource::Plugin,
             plugin_name: Some(a.plugin_name.clone()),
-            argv: a.source.as_deref().filter(|prefix| a.plugin_name == "node"
-                && matches!(*prefix, "npm run" | "pnpm run" | "bun run" | "yarn"))
-                .map(|prefix| prefix.split_whitespace().map(str::to_string).chain([key.to_string()]).collect()),
+            argv: a
+                .source
+                .as_deref()
+                .filter(|prefix| {
+                    a.plugin_name == "node"
+                        && matches!(*prefix, "npm run" | "pnpm run" | "bun run" | "yarn")
+                })
+                .map(|prefix| {
+                    prefix
+                        .split_whitespace()
+                        .map(str::to_string)
+                        .chain([key.to_string()])
+                        .collect()
+                }),
         })
     }
 
@@ -91,13 +102,17 @@ impl ResolvedConfig {
         merged
     }
 
-    pub fn suggest_aliases(&self, query: &str) -> Vec<String> {
-        let candidates: BTreeSet<&String> = self
-            .local_aliases
+    /// Every alias name from every source, sorted.
+    pub fn alias_names(&self) -> BTreeSet<&String> {
+        self.local_aliases
             .keys()
             .chain(self.global_aliases.keys())
             .chain(self.plugin_aliases.keys())
-            .collect();
+            .collect()
+    }
+
+    pub fn suggest_aliases(&self, query: &str) -> Vec<String> {
+        let candidates = self.alias_names();
         let mut scored: Vec<(&String, f64)> = candidates
             .into_iter()
             .map(|key| (key, alias_match_score(query, key)))
@@ -105,7 +120,11 @@ impl ResolvedConfig {
             .collect();
         // Stable sort: equal scores keep the BTreeSet's alphabetical order.
         scored.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
-        scored.into_iter().map(|(key, _)| key.clone()).take(8).collect()
+        scored
+            .into_iter()
+            .map(|(key, _)| key.clone())
+            .take(8)
+            .collect()
     }
 }
 
@@ -120,7 +139,10 @@ pub fn load(
         lock.apply(&mut cfg)?;
     } else {
         for (tool, version) in &mut cfg.local_tools {
-            *version = crate::version_files::resolve(tool, version);
+            // Version-file pins were already resolved (their spec differs) in `load_unlocked`.
+            if cfg.tool_specs.get(tool) == Some(version) {
+                *version = crate::version_files::resolve(tool, version);
+            }
         }
     }
     for (tool, version) in &mut cfg.global_tools {
@@ -129,7 +151,11 @@ pub fn load(
     Ok(cfg)
 }
 
-pub fn load_unlocked(cwd: &Path, home: &Path, plugin_aliases: HashMap<String, ResolvedAlias>) -> anyhow::Result<ResolvedConfig> {
+pub fn load_unlocked(
+    cwd: &Path,
+    home: &Path,
+    plugin_aliases: HashMap<String, ResolvedAlias>,
+) -> anyhow::Result<ResolvedConfig> {
     let profiles = std::env::var("AVM_ENV").unwrap_or_default();
     let names = crate::config::file_names(&profiles)?;
     let mut cfg = load_config_layers(cwd, home, &names)?;
@@ -137,7 +163,9 @@ pub fn load_unlocked(cwd: &Path, home: &Path, plugin_aliases: HashMap<String, Re
     // Version-file pins stay below explicit JSON pins and are never cached:
     // installed runtimes and version files can change independently.
     let global = crate::config::load(home)?;
-    for (tool, (version, origin, spec)) in crate::version_files::pins(cwd, home, global.idiomatic_version_files != Some(false)) {
+    for (tool, (version, origin, spec)) in
+        crate::version_files::pins(cwd, home, global.idiomatic_version_files != Some(false))
+    {
         if !cfg.local_tools.contains_key(&tool) {
             cfg.local_tools.insert(tool.clone(), version);
             cfg.tool_origins.insert(tool.clone(), origin);
@@ -161,11 +189,20 @@ struct ConfigCache {
 // Include missing candidates (new overrides), symlink targets, timestamps and
 // content hashes: restoring an mtime must never resurrect trusted commands.
 fn signature(paths: &[PathBuf]) -> String {
-    paths.iter().map(|path| match std::fs::metadata(path) {
-        Ok(meta) => format!("{path:?}:{:?}:{:?}:{:?}:{:?}", path.canonicalize(),
-            meta.len(), meta.modified(), avm_plugin_api::sha256_file(path)),
-        Err(err) => format!("{path:?}:{:?}", err.kind()),
-    }).collect::<Vec<_>>().join("\n")
+    paths
+        .iter()
+        .map(|path| match std::fs::metadata(path) {
+            Ok(meta) => format!(
+                "{path:?}:{:?}:{:?}:{:?}:{:?}",
+                path.canonicalize(),
+                meta.len(),
+                meta.modified(),
+                avm_plugin_api::sha256_file(path)
+            ),
+            Err(err) => format!("{path:?}:{:?}", err.kind()),
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
 }
 
 fn candidate_paths(cwd: &Path, home: &Path, names: &[String]) -> Vec<PathBuf> {
@@ -175,38 +212,62 @@ fn candidate_paths(cwd: &Path, home: &Path, names: &[String]) -> Vec<PathBuf> {
             paths.extend(names.iter().map(|name| dir.join(name)));
         }
     }
-    if let Ok(home) = crate::shims::avm_home() { paths.push(home.join("trusted.json")); }
+    if let Ok(home) = crate::shims::avm_home() {
+        paths.push(home.join("trusted.json"));
+    }
     paths
 }
 
 fn load_config_layers(cwd: &Path, home: &Path, names: &[String]) -> anyhow::Result<ResolvedConfig> {
-    let key = format!("v1:{cwd:?}:{home:?}:{names:?}:{:?}", std::env::var("AVM_TRUST_ALL"));
+    let key = format!(
+        "v1:{cwd:?}:{home:?}:{names:?}:{:?}",
+        std::env::var("AVM_TRUST_ALL")
+    );
     let mut hash = std::collections::hash_map::DefaultHasher::new();
     key.hash(&mut hash);
-    let cache_path = crate::shims::avm_home().ok().map(|p| p.join(format!("cache/config-{:016x}.json", hash.finish())));
+    let cache_path = crate::shims::avm_home()
+        .ok()
+        .map(|p| p.join(format!("cache/config-{:016x}.json", hash.finish())));
     let paths = candidate_paths(cwd, home, names);
     let input_signature = signature(&paths);
-    if let Some(cache) = cache_path.as_ref().and_then(|p| std::fs::read(p).ok())
-        .and_then(|raw| serde_json::from_slice::<ConfigCache>(&raw).ok()) {
+    if let Some(cache) = cache_path
+        .as_ref()
+        .and_then(|p| std::fs::read(p).ok())
+        .and_then(|raw| serde_json::from_slice::<ConfigCache>(&raw).ok())
+    {
         if cache.key == key && cache.signature == input_signature {
             return Ok(cache.config);
         }
     }
     let global = crate::config::load(home)?;
     let mut cfg = ResolvedConfig {
-        local_aliases: HashMap::new(), global_aliases: global.aliases,
-        local_env: HashMap::new(), global_env: global.env,
-        local_tools: HashMap::new(), global_tool_specs: global.tools.clone(), global_tools: global.tools,
-        plugin_aliases: HashMap::new(), untrusted: Vec::new(),
-        alias_origins: HashMap::new(), env_origins: HashMap::new(), tool_origins: HashMap::new(), tool_specs: HashMap::new(),
+        local_aliases: HashMap::new(),
+        global_aliases: global.aliases,
+        local_env: HashMap::new(),
+        global_env: global.env,
+        local_tools: HashMap::new(),
+        global_tool_specs: global.tools.clone(),
+        global_tools: global.tools,
+        plugin_aliases: HashMap::new(),
+        untrusted: Vec::new(),
+        alias_origins: HashMap::new(),
+        env_origins: HashMap::new(),
+        tool_origins: HashMap::new(),
+        tool_specs: HashMap::new(),
     };
     let global_file = home.join(crate::config::CONFIG_FILE).display().to_string();
-    for (values, origins) in [(&cfg.global_aliases, &mut cfg.alias_origins), (&cfg.global_env, &mut cfg.env_origins), (&cfg.global_tools, &mut cfg.tool_origins)] {
+    for (values, origins) in [
+        (&cfg.global_aliases, &mut cfg.alias_origins),
+        (&cfg.global_env, &mut cfg.env_origins),
+        (&cfg.global_tools, &mut cfg.tool_origins),
+    ] {
         origins.extend(values.keys().map(|k| (k.clone(), global_file.clone())));
     }
     let mut layers = Vec::new();
     for dir in cwd.ancestors() {
-        if dir == home { continue; }
+        if dir == home {
+            continue;
+        }
         let mut stop = false;
         for name in names {
             let file = dir.join(name);
@@ -215,19 +276,35 @@ fn load_config_layers(cwd: &Path, home: &Path, names: &[String]) -> anyhow::Resu
             stop |= name == crate::config::CONFIG_FILE && layer.root;
             layers.push((file, layer));
         }
-        if stop { break; }
+        if stop {
+            break;
+        }
     }
     // Ancestors first, but base → profiles → personal within each directory.
     for chunk in layers.chunks(names.len()).rev() {
         for (file, layer) in chunk {
             let trusted = crate::trust::is_trusted(file, &global.trusted_paths);
-            if file.exists() && !trusted { cfg.untrusted.push(file.clone()); }
+            if file.exists() && !trusted {
+                cfg.untrusted.push(file.clone());
+            }
             for (values, merged, origins, tool_pins) in [
-                (&layer.aliases, &mut cfg.local_aliases, &mut cfg.alias_origins, false),
+                (
+                    &layer.aliases,
+                    &mut cfg.local_aliases,
+                    &mut cfg.alias_origins,
+                    false,
+                ),
                 (&layer.env, &mut cfg.local_env, &mut cfg.env_origins, false),
-                (&layer.tools, &mut cfg.local_tools, &mut cfg.tool_origins, true),
+                (
+                    &layer.tools,
+                    &mut cfg.local_tools,
+                    &mut cfg.tool_origins,
+                    true,
+                ),
             ] {
-                if !trusted && !tool_pins { continue; }
+                if !trusted && !tool_pins {
+                    continue;
+                }
                 for (key, value) in values {
                     merged.insert(key.clone(), value.clone());
                     origins.insert(key.clone(), file.display().to_string());
@@ -237,11 +314,17 @@ fn load_config_layers(cwd: &Path, home: &Path, names: &[String]) -> anyhow::Resu
     }
     cfg.tool_specs = cfg.local_tools.clone();
     if let Some(path) = cache_path.filter(|_| signature(&paths) == input_signature) {
-        let cache = ConfigCache { key, signature: input_signature, config: cfg.clone() };
+        let cache = ConfigCache {
+            key,
+            signature: input_signature,
+            config: cfg.clone(),
+        };
         // Cache failure cannot prevent config resolution (e.g. read-only home).
         if let Some(dir) = path.parent() {
             if std::fs::create_dir_all(dir).is_ok() {
-                if let Ok(raw) = serde_json::to_vec(&cache) { let _ = avm_plugin_api::storage::atomic_write(&path, &raw); }
+                if let Ok(raw) = serde_json::to_vec(&cache) {
+                    let _ = avm_plugin_api::storage::atomic_write(&path, &raw);
+                }
             }
         }
     }

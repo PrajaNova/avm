@@ -27,7 +27,10 @@ impl ToolProvider for NodeProvider {
     }
 
     fn is_installed(&self, version: &str) -> bool {
-        self.bin_path_for(version, NODE_BIN).ok().flatten().is_some()
+        self.bin_path_for(version, NODE_BIN)
+            .ok()
+            .flatten()
+            .is_some()
     }
 
     fn installed_versions(&self) -> anyhow::Result<Vec<String>> {
@@ -58,11 +61,19 @@ impl ToolProvider for NodeProvider {
         install::install_node(version)
     }
 
-    fn resolve_downloads(&self, version: &str, platforms: &[String]) -> anyhow::Result<avm_plugin_api::protocol::ResolveResponse> {
+    fn resolve_downloads(
+        &self,
+        version: &str,
+        platforms: &[String],
+    ) -> anyhow::Result<avm_plugin_api::protocol::ResolveResponse> {
         install::resolve_downloads(version, platforms)
     }
 
-    fn install_locked(&self, version: &str, asset: &avm_plugin_api::protocol::LockedAsset) -> anyhow::Result<()> {
+    fn install_locked(
+        &self,
+        version: &str,
+        asset: &avm_plugin_api::protocol::LockedAsset,
+    ) -> anyhow::Result<()> {
         install::install(version, Some(asset))
     }
 

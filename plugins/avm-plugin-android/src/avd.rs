@@ -20,7 +20,9 @@ pub fn run(args: &[String]) -> ExitCode {
             print_help();
             Ok(())
         }
-        Some((cmd, _)) => Err(anyhow!("unknown `avd` command '{cmd}' — run `avm android avd --help`")),
+        Some((cmd, _)) => Err(anyhow!(
+            "unknown `avd` command '{cmd}' — run `avm android avd --help`"
+        )),
     };
 
     match result {
@@ -37,7 +39,9 @@ fn print_help() {
     println!();
     println!("Commands:");
     println!("  list                 Show AVDs (Android Virtual Devices)");
-    println!("  create [name]        Create a new AVD (picks the API/system image and device for you)");
+    println!(
+        "  create [name]        Create a new AVD (picks the API/system image and device for you)"
+    );
     println!("  start <name>         Launch the emulator with the given AVD");
     println!("  delete <name>        Remove an AVD");
 }
@@ -182,7 +186,12 @@ fn cmd_create(args: &[String]) -> Result<()> {
 
     println!("Creating AVD '{name}' ({package})...");
     let mut cmd = tool_command(&active, "avdmanager");
-    cmd.arg("create").arg("avd").arg("-n").arg(&name).arg("-k").arg(&package);
+    cmd.arg("create")
+        .arg("avd")
+        .arg("-n")
+        .arg(&name)
+        .arg("-k")
+        .arg(&package);
     if let Some(device) = &device {
         cmd.arg("-d").arg(device);
     }
@@ -212,7 +221,9 @@ fn image_tags(device: Option<&str>) -> &'static [&'static str] {
     match device {
         Some(d) if d.starts_with("tv_") => &["android-tv", "google-tv"],
         Some(d) if d.starts_with("wear_") => &["android-wear"],
-        Some(d) if d.starts_with("automotive_") => &["android-automotive", "android-automotive-playstore"],
+        Some(d) if d.starts_with("automotive_") => {
+            &["android-automotive", "android-automotive-playstore"]
+        }
         _ => &[install::DEFAULT_TAG],
     }
 }
@@ -231,10 +242,21 @@ fn resolve_image(listing: &str, api: &str, device: Option<&str>) -> Result<(&'st
 /// avdmanager writes `hw.keyboard=no`, so the host keyboard is dead in the
 /// emulator until it's flipped by hand; do it once at creation.
 fn enable_hw_keyboard(name: &str) {
-    let Ok(home) = install::home_dir() else { return };
-    let path = home.join(".android").join("avd").join(format!("{name}.avd")).join("config.ini");
-    let Ok(contents) = std::fs::read_to_string(&path) else { return };
-    let mut lines: Vec<&str> = contents.lines().filter(|l| !l.starts_with("hw.keyboard=")).collect();
+    let Ok(home) = install::home_dir() else {
+        return;
+    };
+    let path = home
+        .join(".android")
+        .join("avd")
+        .join(format!("{name}.avd"))
+        .join("config.ini");
+    let Ok(contents) = std::fs::read_to_string(&path) else {
+        return;
+    };
+    let mut lines: Vec<&str> = contents
+        .lines()
+        .filter(|l| !l.starts_with("hw.keyboard="))
+        .collect();
     lines.push("hw.keyboard=yes");
     let _ = std::fs::write(&path, lines.join("\n") + "\n");
 }
@@ -258,8 +280,13 @@ fn fix_avd_target_api(name: &str, system_image: &str) {
     let Some(major) = system_image.split('.').next() else {
         return;
     };
-    let Ok(home) = install::home_dir() else { return };
-    let ini_path = home.join(".android").join("avd").join(format!("{name}.ini"));
+    let Ok(home) = install::home_dir() else {
+        return;
+    };
+    let ini_path = home
+        .join(".android")
+        .join("avd")
+        .join(format!("{name}.ini"));
     let Ok(contents) = std::fs::read_to_string(&ini_path) else {
         return;
     };
@@ -292,11 +319,19 @@ fn parse_create_args(args: &[String]) -> Result<(Option<String>, Option<String>,
         match args[i].as_str() {
             "--api" => {
                 i += 1;
-                api = Some(args.get(i).ok_or_else(|| anyhow!("--api requires a value"))?.clone());
+                api = Some(
+                    args.get(i)
+                        .ok_or_else(|| anyhow!("--api requires a value"))?
+                        .clone(),
+                );
             }
             "--device" => {
                 i += 1;
-                device = Some(args.get(i).ok_or_else(|| anyhow!("--device requires a value"))?.clone());
+                device = Some(
+                    args.get(i)
+                        .ok_or_else(|| anyhow!("--device requires a value"))?
+                        .clone(),
+                );
             }
             value if !value.starts_with('-') && name.is_none() => {
                 name = Some(value.to_string());

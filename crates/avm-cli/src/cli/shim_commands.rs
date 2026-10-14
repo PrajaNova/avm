@@ -66,7 +66,9 @@ pub fn cmd_exec_shim(args: ExecShimArgs) -> Result<()> {
     // ponytail: reshims on any pkg-manager install verb; prune stale shims later if it matters.
     if status.success() && is_node_pkg_install(&args.tool, &args.args) {
         if let Err(err) = shims::reshim() {
-            eprintln!("avm: couldn't refresh shims after the install ({err:#}); run `avm shims install`");
+            eprintln!(
+                "avm: couldn't refresh shims after the install ({err:#}); run `avm shims install`"
+            );
         }
     }
 
@@ -127,9 +129,16 @@ pub fn merge_env(cfg: &ResolvedConfig) -> HashMap<String, String> {
     merged
 }
 
-pub fn extend_env(env: &mut HashMap<String, String>, values: impl IntoIterator<Item = (String, String)>) {
+pub fn extend_env(
+    env: &mut HashMap<String, String>,
+    values: impl IntoIterator<Item = (String, String)>,
+) {
     for (key, value) in values {
-        let key = if cfg!(windows) { key.to_ascii_uppercase() } else { key };
+        let key = if cfg!(windows) {
+            key.to_ascii_uppercase()
+        } else {
+            key
+        };
         env.insert(key, value);
     }
 }
@@ -170,7 +179,9 @@ fn resolved_tool_path_prefix(cfg: &ResolvedConfig) -> Option<String> {
 
     let mut paths: Vec<PathBuf> = Vec::new();
     for (tool, (version, _)) in tools {
-        if let Some(dir) = managed_tool_bin_path(tool, version, tool).and_then(|bin| bin.parent().map(Path::to_path_buf)) {
+        if let Some(dir) = managed_tool_bin_path(tool, version, tool)
+            .and_then(|bin| bin.parent().map(Path::to_path_buf))
+        {
             if !paths.contains(&dir) {
                 paths.push(dir);
             }
@@ -182,15 +193,23 @@ fn resolved_tool_path_prefix(cfg: &ResolvedConfig) -> Option<String> {
     if let Some(existing) = std::env::var_os("PATH") {
         paths.extend(std::env::split_paths(&existing));
     }
-    std::env::join_paths(paths).ok().map(|p| p.to_string_lossy().into_owned())
+    std::env::join_paths(paths)
+        .ok()
+        .map(|p| p.to_string_lossy().into_owned())
 }
 
 fn managed_tool_bin_path(tool: &str, version: &str, binary: &str) -> Option<PathBuf> {
     avm_plugin_api::download::validate_version(version).ok()?;
     avm_plugin_api::download::validate_version(binary).ok()?;
-    let bin = avm_plugin_api::tool_dir(tool).ok()?.join(version).join("bin");
+    let bin = avm_plugin_api::tool_dir(tool)
+        .ok()?
+        .join(version)
+        .join("bin");
     // `node` → `node.exe` / `npm.cmd` on Windows.
-    shims::command_names(binary).into_iter().map(|name| bin.join(name)).find(|p| p.exists())
+    shims::command_names(binary)
+        .into_iter()
+        .map(|name| bin.join(name))
+        .find(|p| p.exists())
 }
 
 pub fn alias_source_label(source: &AliasSource) -> &'static str {

@@ -5,7 +5,8 @@ use std::collections::HashSet;
 const DEFAULT_REPOSITORY_URL: &str = "https://dl.google.com/android/repository/repository2-3.xml";
 
 pub fn available_versions(query: ToolVersionQuery) -> Result<Vec<ToolVersion>> {
-    let url = std::env::var("AVM_ANDROID_REPOSITORY_URL").unwrap_or_else(|_| DEFAULT_REPOSITORY_URL.to_string());
+    let url = std::env::var("AVM_ANDROID_REPOSITORY_URL")
+        .unwrap_or_else(|_| DEFAULT_REPOSITORY_URL.to_string());
     let xml = String::from_utf8(avm_plugin_api::fetch(&url, 30)?)
         .context("Android repository index was not valid UTF-8")?;
     let mut levels = platform_levels(&xml);
@@ -35,7 +36,10 @@ struct ApiLevel {
 /// `s` as exactly `len` dot-separated numbers (missing trailing parts are 0);
 /// `None` for more parts or anything non-numeric (`CANARY`, `37.2-beta3`, ...).
 pub fn nums(s: &str, len: usize) -> Option<Vec<u64>> {
-    let mut parts: Vec<u64> = s.split('.').map(|p| p.parse().ok()).collect::<Option<_>>()?;
+    let mut parts: Vec<u64> = s
+        .split('.')
+        .map(|p| p.parse().ok())
+        .collect::<Option<_>>()?;
     if parts.len() > len {
         return None;
     }
@@ -58,7 +62,11 @@ fn platform_levels(xml: &str) -> Vec<ApiLevel> {
         rest = &after[end..];
         if seen.insert(raw) {
             if let Some(n) = nums(raw, 2) {
-                levels.push(ApiLevel { major: n[0], minor: n[1], raw: raw.to_string() });
+                levels.push(ApiLevel {
+                    major: n[0],
+                    minor: n[1],
+                    raw: raw.to_string(),
+                });
             }
         }
     }

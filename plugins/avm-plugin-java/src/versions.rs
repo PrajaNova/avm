@@ -43,7 +43,11 @@ pub fn find_package(java_version: &str) -> Result<Package> {
         .into_iter()
         .find(|pkg| pkg.java_version == java_version || pkg.distribution_version == java_version)
         .ok_or_else(|| {
-            anyhow!("no Temurin OpenJDK build found for version '{java_version}' ({} {})", host_os_param().unwrap_or("?"), host_arch_param().unwrap_or("?"))
+            anyhow!(
+                "no Temurin OpenJDK build found for version '{java_version}' ({} {})",
+                host_os_param().unwrap_or("?"),
+                host_arch_param().unwrap_or("?")
+            )
         })
 }
 
@@ -134,24 +138,39 @@ fn host_arch_param() -> Result<&'static str> {
     }
 }
 
-pub fn resolve_downloads(version: &str, platforms: &[String]) -> Result<avm_plugin_api::protocol::ResolveResponse> {
+pub fn resolve_downloads(
+    version: &str,
+    platforms: &[String],
+) -> Result<avm_plugin_api::protocol::ResolveResponse> {
     use avm_plugin_api::protocol::{LockedAsset, ResolveResponse};
     avm_plugin_api::download::validate_version(version)?;
     let mut assets = std::collections::BTreeMap::new();
     for platform in platforms {
         avm_plugin_api::download::validate_platform(platform)?;
-        let (os, arch) = platform.split_once('_').ok_or_else(|| anyhow!("invalid platform"))?;
+        let (os, arch) = platform
+            .split_once('_')
+            .ok_or_else(|| anyhow!("invalid platform"))?;
         let os = if os == "darwin" { "macos" } else { os };
         let arch = if arch == "amd64" { "x64" } else { "aarch64" };
         let archive = if os == "windows" { "zip" } else { "tar.gz" };
-        let package = package_index_for(os, arch, archive)?.into_iter()
-            .find(|p| p.java_version == strip_avm_prefix(version) || p.distribution_version == strip_avm_prefix(version))
+        let package = package_index_for(os, arch, archive)?
+            .into_iter()
+            .find(|p| {
+                p.java_version == strip_avm_prefix(version)
+                    || p.distribution_version == strip_avm_prefix(version)
+            })
             .ok_or_else(|| anyhow!("no Temurin {version} build for {platform}"))?;
-        let asset = LockedAsset { sha256: package_sha256(&package)?, url: package.links.pkg_download_redirect };
+        let asset = LockedAsset {
+            sha256: package_sha256(&package)?,
+            url: package.links.pkg_download_redirect,
+        };
         avm_plugin_api::download::validate_asset(&asset)?;
         assets.insert(platform.clone(), asset);
     }
-    Ok(ResolveResponse { version: version.to_string(), assets })
+    Ok(ResolveResponse {
+        version: version.to_string(),
+        assets,
+    })
 }
 
 #[cfg(test)]
@@ -162,7 +181,9 @@ mod tests {
     fn parses_sha256_from_package_info() {
         let ok = br#"{"result":[{"checksum":"ab12","checksum_type":"sha256","filename":"x"}]}"#;
         assert_eq!(parse_sha256(ok).unwrap(), "ab12");
-        assert!(parse_sha256(br#"{"result":[{"checksum":"ab12","checksum_type":"md5"}]}"#).is_err());
+        assert!(
+            parse_sha256(br#"{"result":[{"checksum":"ab12","checksum_type":"md5"}]}"#).is_err()
+        );
         assert!(parse_sha256(br#"{"result":[{"checksum":"","checksum_type":"sha256"}]}"#).is_err());
     }
 }

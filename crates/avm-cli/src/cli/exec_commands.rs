@@ -9,9 +9,15 @@ pub fn cmd_exec(args: ExecArgs) -> Result<()> {
         .ok_or_else(|| anyhow!("command required after --"))?;
     #[cfg(windows)]
     let program = if Path::new(program).components().count() == 1 {
-        shims::which_in_path(program, std::ffi::OsStr::new(env.get("PATH").map(String::as_str).unwrap_or("")), false)
-            .ok_or_else(|| anyhow!("command '{program}' not found in PATH"))?
-    } else { PathBuf::from(program) };
+        shims::which_in_path(
+            program,
+            std::ffi::OsStr::new(env.get("PATH").map(String::as_str).unwrap_or("")),
+            false,
+        )
+        .ok_or_else(|| anyhow!("command '{program}' not found in PATH"))?
+    } else {
+        PathBuf::from(program)
+    };
     let mut command = Command::new(program);
     command.args(arguments).envs(env);
     #[cfg(unix)]
@@ -162,7 +168,7 @@ mod tests {
                 "--help",
             ])
             .unwrap();
-            let Commands::Exec(args) = cli.command else {
+            let Some(Commands::Exec(args)) = cli.command else {
                 panic!("expected exec")
             };
             assert!(args.no_install);
@@ -174,21 +180,24 @@ mod tests {
             "avm", "run", "dev", "--with", "node@18", "--with", "java@21", "--", "--help",
         ])
         .unwrap();
-        let Commands::Run(args) = cli.command else {
+        let Some(Commands::Run(args)) = cli.command else {
             panic!("expected run")
         };
         assert_eq!(args.key, "dev");
         assert_eq!(args.tools, ["node@18", "java@21"]);
         assert_eq!(args.args, ["--help"]);
         let cli = Cli::try_parse_from(["avm", "run", "dev", "--port", "3000"]).unwrap();
-        let Commands::Run(args) = cli.command else {
+        let Some(Commands::Run(args)) = cli.command else {
             panic!("expected run")
         };
         assert_eq!(args.args, ["--port", "3000"]);
-        let cli = Cli::try_parse_from(["avm", "--env", "ci", "run", "dev", "--", "--env", "target"]).unwrap();
+        let cli =
+            Cli::try_parse_from(["avm", "--env", "ci", "run", "dev", "--", "--env", "target"])
+                .unwrap();
         assert_eq!(cli.profiles.as_deref(), Some("ci"));
-        let Commands::Run(args) = cli.command else { panic!("expected run") };
+        let Some(Commands::Run(args)) = cli.command else {
+            panic!("expected run")
+        };
         assert_eq!(args.args, ["--env", "target"]);
-
     }
 }

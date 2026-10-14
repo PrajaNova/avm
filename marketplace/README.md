@@ -71,6 +71,9 @@ pnpm install --frozen-lockfile
 # Start local development server
 pnpm dev
 
+# Check public CLI coverage, guide routes and JSON examples
+pnpm check:docs
+
 # Build for production
 pnpm build
 
@@ -80,7 +83,7 @@ pnpm preview
 
 ### GitHub Pages Deployment
 
-CI builds the site on every PR. Deployment is manual via [`.github/workflows/release-web.yml`](../.github/workflows/release-web.yml) in `PrajaNova/avm`.
+CI checks documentation coverage and builds the site on every PR. Command entries live in `src/data/cliReference.ts`, feature guides in `src/data/featureGuides.ts`, and navigation in `src/components/docs/DocsSidebar.tsx`. Update them alongside CLI changes. Deployment is manual via [`.github/workflows/release-web.yml`](../.github/workflows/release-web.yml) in `PrajaNova/avm`.
 
 To enable GitHub Pages in your repository settings:
 1. Navigate to **Settings > Pages** in your GitHub repository.

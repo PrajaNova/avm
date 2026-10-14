@@ -48,6 +48,7 @@ export const CliReference: React.FC<CliReferenceProps> = ({ onCopy }) => {
             <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
             <input
               type="text"
+              aria-label="Search commands"
               placeholder="Search commands (e.g. init, plugin, shims, versions)..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
@@ -59,6 +60,7 @@ export const CliReference: React.FC<CliReferenceProps> = ({ onCopy }) => {
             {categories.map((cat) => (
               <button
                 key={cat}
+                aria-pressed={selectedCategory === cat}
                 onClick={() => setSelectedCategory(cat)}
                 className={`px-3 py-1.5 rounded-lg text-xs font-mono transition-all ${
                   selectedCategory === cat
@@ -72,6 +74,7 @@ export const CliReference: React.FC<CliReferenceProps> = ({ onCopy }) => {
           </div>
         </div>
 
+        {filteredCommands.length === 0 && <p role="status" className="text-slate-300 py-6">No matching commands. Try another search or category.</p>}
         {/* Command List */}
         <div className="space-y-4">
           {filteredCommands.map((item, idx) => (
@@ -129,7 +132,7 @@ export const CliReference: React.FC<CliReferenceProps> = ({ onCopy }) => {
 
         {/* Group summary reminder */}
         <div className="mt-8 p-4 rounded-xl bg-slate-900/40 border border-slate-800 text-center text-xs text-slate-400 font-mono">
-          Tip: run <code className="text-emerald-400">avm --help</code> (or <code className="text-emerald-400">avm Tip: You can also run <code className="text-emerald-400">avm all</code> in your terminal to see grouped help in real-time.lt;commandTip: You can also run <code className="text-emerald-400">avm all</code> in your terminal to see grouped help in real-time.gt; --help</code>) in your terminal for the same reference.
+          Tip: run <code className="text-emerald-400">avm --help</code> or <code className="text-emerald-400">avm &lt;command&gt; --help</code>. Use <code className="text-emerald-400">avm --env ci &lt;command&gt;</code> to select profiles for one invocation.
         </div>
 
       </div>

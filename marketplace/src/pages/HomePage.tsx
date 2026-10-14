@@ -64,15 +64,18 @@ export const HomePage: React.FC<HomePageProps> = ({ onCopy }) => {
 
   const corePillars = [
     { icon: FileJson, title: 'Project & global alias resolution', desc: 'Aliases in .avm.json execute with injected environment variables and tool versions.' },
-    { icon: FolderGit2, title: 'Directory-aware local precedence', desc: 'Local project configuration takes immediate precedence over global ~/.avm.json settings.' },
+    { icon: FolderGit2, title: 'Directory-aware local precedence', desc: 'Parent and child configs merge by key, with named environment profiles and personal overrides.' },
     { icon: FileSearch, title: 'Works with your existing version files', desc: '.nvmrc, .node-version, .tool-versions, package.json engines, .java-version and .sdkmanrc are read as-is — no config rewrite to try avm.' },
     { icon: Lock, title: 'Nothing runs until you trust it', desc: "A cloned repo's .avm.json aliases/env and .env files stay inert until you run avm trust; editing them re-blocks." },
-    { icon: ShieldCheck, title: 'Verified downloads', desc: 'Plugins, avm itself, and Node/Java/Android downloads are sha256-checked before extraction; releases carry build provenance attestations.' },
-    { icon: Monitor, title: 'macOS, Linux, and Windows', desc: 'Apple Silicon and Intel Macs, Linux x64/arm64, and Windows via PowerShell (phase 1).' },
+    { icon: ShieldCheck, title: 'Verified downloads', desc: 'AVM, native plugins, Node/Java archives and the Android command-line tools bootstrap are SHA-256 checked; sdkmanager verifies Android components.' },
+    { icon: Monitor, title: 'macOS, Linux, and Windows', desc: 'Apple Silicon and Intel Macs, Linux x64/arm64, and Windows x64 with native plugins and executable shims.' },
     { icon: Package, title: 'Runtime plugin marketplace', desc: 'avm plugin add fetches a precompiled native binary on demand from GitHub Releases — never built from source.' },
     { icon: Sparkles, title: 'Automatic package.json discovery', desc: 'Scripts in package.json become instant avm <script> commands, using your detected package manager.' },
     { icon: Share2, title: 'Global package sharing across versions', desc: 'A globally pinned tool (like npm -g packages) stays reachable even when a different local version is active.' },
     { icon: Layers, title: 'Isolated subprocess wire protocol', desc: 'Plugins run as standalone OS processes speaking a typed JSON-over-stdio contract — failures stay isolated.' },
+    { icon: Lock, title: 'Reproducible Node and Java installs', desc: 'Commit .avm.lock and run avm install --frozen to enforce exact versions and verified archive checksums.' },
+    { icon: Terminal, title: 'Temporary runtimes', desc: 'avm exec and avm run --with try versions without changing project pins.' },
+    { icon: Package, title: 'Updates and cleanup', desc: 'Inspect updates with outdated, upgrade selected tools, and preview unused versions with prune --dry-run.' },
     { icon: Workflow, title: 'Workflow orchestration', desc: 'Unifies multi-runtime dependencies, env vars, and team scripts into one reproducible development experience.' },
     { icon: AlertTriangle, title: 'Safe host fallback', desc: "If a managed version isn't installed, avm falls back to the host/system tool with a clear warning." },
   ];

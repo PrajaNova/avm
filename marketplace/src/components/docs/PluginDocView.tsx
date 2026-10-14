@@ -88,6 +88,7 @@ export const PluginDocView: React.FC<PluginDocViewProps> = ({
           </span>
         </div>
 
+        <p className="text-xs text-slate-400 mb-4">Illustrative walkthrough: release versions, output and timings vary by platform and network. Install a JDK before setting up Android.</p>
         {/* Multi-mode Walkthrough Component */}
         <WalkthroughVideo
           steps={walkthrough.steps}
@@ -129,7 +130,7 @@ export const PluginDocView: React.FC<PluginDocViewProps> = ({
             <span>Key Commands</span>
           </div>
 
-          <div className="rounded-xl border border-slate-800 overflow-hidden bg-slate-900/40">
+          <div className="rounded-xl border border-slate-800 overflow-x-auto bg-slate-900/40">
             <table className="w-full text-left text-xs border-collapse">
               <thead>
                 <tr className="border-b border-slate-800 bg-slate-950/80 font-mono text-slate-400">
@@ -187,6 +188,23 @@ export const PluginDocView: React.FC<PluginDocViewProps> = ({
             ))}
           </div>
         </div>
+      )}
+
+      {cleanName === 'android' && (
+        <section className="rounded-2xl bg-slate-900/50 border border-slate-800 p-6 space-y-4 text-sm text-slate-300">
+          <h2 className="text-xl font-bold text-white">SDK setup and overrides</h2>
+          <p>Install a JDK first, then select an installed SDK with <code>avm android use 34</code>. AVD commands operate on that selected SDK. Raw adb, sdkmanager, avdmanager and emulator commands are also available through shims.</p>
+          <p>ANDROID_BUILD_TOOLS_VERSION overrides the build-tools selection. ANDROID_SYSTEM_IMAGE_API selects a system-image API ID. For a custom command-line tools build, set both ANDROID_CMDLINE_TOOLS_BUILD and ANDROID_CMDLINE_TOOLS_SHA256.</p>
+          <p>AVM_ANDROID_CURL_TIMEOUT, AVM_ANDROID_UNZIP_TIMEOUT and AVM_ANDROID_SDKMANAGER_TIMEOUT are measured in seconds. Large SDK and emulator downloads may need longer timeouts.</p>
+          <p>Android components are installed and verified by sdkmanager. Their revisions are not captured by .avm.lock, so use ordinary installs for Android.</p>
+        </section>
+      )}
+      {cleanName === 'node' && (
+        <section className="rounded-2xl bg-slate-900/50 border border-slate-800 p-6 space-y-4 text-sm text-slate-300">
+          <h2 className="text-xl font-bold text-white">Scripts and global npm commands</h2>
+          <p>Scripts from the current directory’s package.json are available as aliases. Package-manager detection checks Bun lockfiles, then pnpm-lock.yaml, then yarn.lock, and otherwise uses npm. Explicit project aliases win over discovered scripts.</p>
+          <p>Global package executables remain reachable through the globally selected Node installation when a project selects another version. Successful package-manager installs regenerate shims; run <code>avm shims install</code> if a command is missing.</p>
+        </section>
       )}
 
       {/* Sample .avm.json Snippet */}

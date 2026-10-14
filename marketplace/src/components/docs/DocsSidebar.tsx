@@ -37,6 +37,12 @@ export const ASDF_SIDEBAR_CONFIG: SidebarGroup[] = [
       { id: 'usage-core', text: 'Core (CLI & Precedence)', link: '/docs/manage/core' },
       { id: 'usage-plugins', text: 'Plugins (Add, List, Update)', link: '/docs/manage/plugins' },
       { id: 'usage-versions', text: 'Versions (Browse, Install, Pin)', link: '/docs/manage/versions' },
+      { id: 'configuration', text: 'Config, Profiles & Monorepos', link: '/docs/manage/configuration' },
+      { id: 'lockfiles', text: 'Lockfiles & CI', link: '/docs/manage/lockfiles' },
+      { id: 'temporary-runtimes', text: 'Temporary Runtimes', link: '/docs/manage/temporary-runtimes' },
+      { id: 'environment', text: 'Environment Variables', link: '/docs/manage/environment' },
+      { id: 'maintenance', text: 'Updates & Cleanup', link: '/docs/manage/maintenance' },
+      { id: 'windows', text: 'Windows & IDEs', link: '/docs/manage/windows' },
       { id: 'usage-aliases', text: 'Aliases & Scripts Discovery', link: '/docs/manage/aliases' },
       { id: 'version-files', text: 'Version Files (.nvmrc, .tool-versions)', link: '/docs/manage/version-files', badge: 'New' },
       { id: 'security', text: 'Security & Trust', link: '/docs/manage/security', badge: 'New' },
@@ -45,7 +51,6 @@ export const ASDF_SIDEBAR_CONFIG: SidebarGroup[] = [
   {
     text: 'Reference',
     items: [
-      { id: 'configuration', text: 'Configuration (.avm.json)', link: '/docs/manage/configuration' },
       { id: 'commands', text: 'All Commands', link: '/docs/manage/commands' },
       { id: 'dependencies', text: 'Dependencies & Host Env', link: '/docs/manage/dependencies' },
       { id: 'architecture', text: 'Architecture & Wire Protocol', link: '/docs/manage/architecture' },
@@ -129,6 +134,7 @@ export const DocsSidebar: React.FC<DocsSidebarProps> = ({
     return (
       <li key={item.id}>
         <button
+          aria-current={isActive ? 'page' : undefined}
           onClick={() => {
             onSelectSection(item.link);
             if (onCloseMobile) onCloseMobile();
@@ -163,8 +169,8 @@ export const DocsSidebar: React.FC<DocsSidebarProps> = ({
 
       {/* Sidebar Navigation */}
       <aside
-        className={`fixed top-0 bottom-0 z-40 w-72 bg-slate-950 border-r border-slate-800 lg:bg-transparent lg:static lg:w-64 lg:z-auto transition-transform duration-200 ease-in-out flex flex-col justify-between shrink-0 ${
-          isOpenMobile ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
+        className={`fixed left-0 top-0 bottom-0 z-40 w-72 bg-slate-950 border-r border-slate-800 lg:bg-transparent lg:static lg:w-64 lg:z-auto transition-transform duration-200 ease-in-out flex flex-col justify-between shrink-0 ${
+          isOpenMobile ? 'visible translate-x-0' : 'invisible lg:visible -translate-x-full lg:translate-x-0'
         }`}
       >
         <div className="flex-1 overflow-y-auto px-4 py-6">
@@ -195,6 +201,7 @@ export const DocsSidebar: React.FC<DocsSidebarProps> = ({
                   
                   {/* Group Title with Collapse Toggle */}
                   <button
+                    aria-expanded={!isCollapsed}
                     onClick={() => toggleGroup(group.text)}
                     className="w-full flex items-center justify-between text-left px-2 py-1 text-xs font-bold uppercase tracking-wider text-slate-300 hover:text-white transition-colors"
                   >

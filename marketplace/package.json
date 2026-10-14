@@ -7,7 +7,8 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build && cp registry.json dist/",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "check:docs": "node scripts/check-docs.mjs"
   },
   "dependencies": {
     "lucide-react": "^0.475.0",

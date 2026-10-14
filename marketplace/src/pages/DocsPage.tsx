@@ -15,6 +15,8 @@ import { PluginDocView } from '../components/docs/PluginDocView';
 import { TerminalInstallBox } from '../components/TerminalInstallBox';
 import { CliReference } from '../components/CliReference';
 import { ComparisonTable } from '../components/ComparisonTable';
+import { FeatureGuideView } from '../components/docs/FeatureGuideView';
+import { FEATURE_GUIDES } from '../data/featureGuides';
 import { SHELL_SETUP_GUIDE } from '../data/guideData';
 
 interface DocsPageProps {
@@ -40,6 +42,7 @@ export const DocsPage: React.FC<DocsPageProps> = ({ onCopy }) => {
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col antialiased">
       
+      <a href="#docs-content" onClick={(event) => { event.preventDefault(); document.getElementById('docs-content')?.focus(); }} className="sr-only focus:not-sr-only focus:p-4 focus:text-emerald-300">Skip documentation navigation</a>
       {/* Mobile Bar */}
       <div className="lg:hidden sticky top-14 z-30 bg-slate-950/95 backdrop-blur-md border-b border-slate-800 px-4 py-3 flex items-center justify-between">
         <button
@@ -67,7 +70,7 @@ export const DocsPage: React.FC<DocsPageProps> = ({ onCopy }) => {
         />
 
         {/* Content View */}
-        <main className="flex-1 min-w-0 pb-16">
+        <div id="docs-content" tabIndex={-1} className="flex-1 min-w-0 pb-16">
           
           {/* Breadcrumb Header */}
           <div className="flex items-center gap-2 text-xs font-mono text-slate-400 mb-6 pb-2 border-b border-slate-800/60">
@@ -81,7 +84,9 @@ export const DocsPage: React.FC<DocsPageProps> = ({ onCopy }) => {
           {/* SECTION ROUTING */}
 
           {/* 1. Official Plugin Views with Embedded Video Tutorials */}
-          {activeSection.startsWith('plugin-') ? (
+          {FEATURE_GUIDES[activeSection] ? (
+            <FeatureGuideView guide={FEATURE_GUIDES[activeSection]} onCopy={onCopy} />
+          ) : activeSection.startsWith('plugin-') ? (
             <PluginDocView
               pluginName={activeSection.replace('plugin-', '')}
               onCopy={onCopy}
@@ -99,6 +104,12 @@ export const DocsPage: React.FC<DocsPageProps> = ({ onCopy }) => {
                   It manages multiple runtime versions (like Node.js, OpenJDK Temurin, Android SDK) and anchors directory-scoped command aliases and environment variables in a single version-controlled configuration.
                 </p>
               </div>
+
+              <nav aria-label="Feature guides" className="flex flex-wrap gap-3 text-sm">
+                {Object.entries(FEATURE_GUIDES).map(([id, guide]) => (
+                  <button key={id} onClick={() => navigate(`/docs/manage/${id}`)} className="rounded-lg border border-slate-700 px-3 py-2 text-emerald-300 hover:bg-slate-900 focus-visible:outline focus-visible:outline-emerald-400">{guide.title}</button>
+                ))}
+              </nav>
 
               {/* Motivation */}
               <div className="rounded-2xl bg-slate-900/50 border border-slate-800 p-6 sm:p-8 space-y-4">
@@ -142,7 +153,7 @@ export const DocsPage: React.FC<DocsPageProps> = ({ onCopy }) => {
                     <Terminal className="w-5 h-5 text-emerald-400 mb-2" />
                     <h4 className="font-bold text-white text-sm mb-1">Static PATH Shims</h4>
                     <p className="text-xs text-slate-400">
-                      Zero subshell overhead. Commands resolve immediately on invocation.
+                      Commands resolve the selected runtime when invoked, including from IDEs.
                     </p>
                   </div>
                   <div className="p-5 rounded-xl bg-slate-900/60 border border-slate-800">
@@ -165,7 +176,7 @@ export const DocsPage: React.FC<DocsPageProps> = ({ onCopy }) => {
                   Getting Started
                 </h1>
                 <p className="text-slate-300 text-base leading-relaxed max-w-3xl">
-                  Install avm on macOS, Linux, or Windows in seconds. Every installer verifies the binary's sha256 before installing it.
+                  Install avm on macOS, Linux, or Windows in seconds. Prebuilt downloads are checksum-verified before installation.
                 </p>
               </div>
 
@@ -248,7 +259,7 @@ export const DocsPage: React.FC<DocsPageProps> = ({ onCopy }) => {
                         <span className="font-mono text-sm font-bold text-emerald-400 uppercase">{item.shell}</span>
                         <span className="font-mono text-xs text-slate-500">{item.file}</span>
                       </div>
-                      <pre className="font-mono text-xs text-slate-300 mb-4 whitespace-pre-wrap bg-slate-950 p-3 rounded-xl border border-slate-800/80">
+                      <pre className="font-mono text-xs text-slate-300 mb-4 whitespace-pre-wrap bg-slate-950 p-3 rounded-xl border border-slate-800/80 overflow-x-auto">
                         {item.snippet}
                       </pre>
                     </div>
@@ -283,8 +294,8 @@ export const DocsPage: React.FC<DocsPageProps> = ({ onCopy }) => {
                   <div className="p-4 rounded-xl bg-slate-950 border border-slate-800 flex items-start gap-3">
                     <span className="w-6 h-6 rounded bg-emerald-500 text-slate-950 font-bold flex items-center justify-center font-mono shrink-0">1</span>
                     <div>
-                      <strong className="text-white block mb-0.5">Local Project Pin (./.avm.json)</strong>
-                      <span className="text-slate-400">Takes absolute priority when running commands from inside that directory tree.</span>
+                      <strong className="text-white block mb-0.5">Merged Project Pins & Version Files</strong>
+                      <span className="text-slate-400">Parent JSON configs merge into child configs, with profiles and personal overrides. Explicit JSON pins win over version files; valid locks pin exact releases.</span>
                     </div>
                   </div>
                   <div className="p-4 rounded-xl bg-slate-950 border border-slate-800 flex items-start gap-3">
@@ -322,22 +333,22 @@ export const DocsPage: React.FC<DocsPageProps> = ({ onCopy }) => {
                 <div className="p-5 rounded-2xl bg-slate-900/60 border border-slate-800 space-y-2">
                   <div className="text-emerald-400 font-bold">avm plugin add &lt;name&gt;</div>
                   <div className="text-slate-400 font-sans text-xs">Downloads precompiled binary from marketplace registry and registers ToolProvider.</div>
-                  <pre className="p-2.5 rounded bg-slate-950 text-slate-300 mt-2">$ avm plugin add node</pre>
+                  <pre className="p-2.5 rounded bg-slate-950 text-slate-300 mt-2 overflow-x-auto">{"$ avm plugin add node"}</pre>
                 </div>
                 <div className="p-5 rounded-2xl bg-slate-900/60 border border-slate-800 space-y-2">
                   <div className="text-emerald-400 font-bold">avm plugin list</div>
                   <div className="text-slate-400 font-sans text-xs">Lists installed plugins in ~/.avm/plugins with their versions and manifests.</div>
-                  <pre className="p-2.5 rounded bg-slate-950 text-slate-300 mt-2">$ avm plugin list</pre>
+                  <pre className="p-2.5 rounded bg-slate-950 text-slate-300 mt-2 overflow-x-auto">{"$ avm plugin list"}</pre>
                 </div>
                 <div className="p-5 rounded-2xl bg-slate-900/60 border border-slate-800 space-y-2">
                   <div className="text-emerald-400 font-bold">avm plugin update &lt;name&gt;</div>
                   <div className="text-slate-400 font-sans text-xs">Checks upstream GitHub releases for the latest plugin binary and updates it.</div>
-                  <pre className="p-2.5 rounded bg-slate-950 text-slate-300 mt-2">$ avm plugin update java</pre>
+                  <pre className="p-2.5 rounded bg-slate-950 text-slate-300 mt-2 overflow-x-auto">{"$ avm plugin update java"}</pre>
                 </div>
                 <div className="p-5 rounded-2xl bg-slate-900/60 border border-slate-800 space-y-2">
                   <div className="text-emerald-400 font-bold">avm plugin remove &lt;name&gt;</div>
-                  <div className="text-slate-400 font-sans text-xs">Removes provider binary and cleans up shims.</div>
-                  <pre className="p-2.5 rounded bg-slate-950 text-slate-300 mt-2">$ avm plugin remove ruby</pre>
+                  <div className="text-slate-400 font-sans text-xs">Removes the installed plugin; managed runtime versions are separate.</div>
+                  <pre className="p-2.5 rounded bg-slate-950 text-slate-300 mt-2 overflow-x-auto">{"$ avm plugin remove ruby"}</pre>
                 </div>
               </div>
             </div>
@@ -359,23 +370,23 @@ export const DocsPage: React.FC<DocsPageProps> = ({ onCopy }) => {
                 <div>
                   <span className="text-emerald-400 font-bold text-sm block mb-1">1. Browse Available Releases</span>
                   <p className="text-slate-400 font-sans text-xs mb-2">Queries upstream indices directly without cloning heavy repositories:</p>
-                  <pre className="p-3 rounded-xl bg-slate-950 text-slate-300 border border-slate-800">$ avm node versions\n$ avm java versions\n$ avm android versions</pre>
+                  <pre className="p-3 rounded-xl bg-slate-950 text-slate-300 border border-slate-800 overflow-x-auto">{"$ avm node versions\n$ avm java versions\n$ avm android versions"}</pre>
                 </div>
 
                 <div>
                   <span className="text-emerald-400 font-bold text-sm block mb-1">2. Install Exact or Major Versions</span>
                   <p className="text-slate-400 font-sans text-xs mb-2">Fetches official prebuilt distributions:</p>
-                  <pre className="p-3 rounded-xl bg-slate-950 text-slate-300 border border-slate-800">$ avm node install 22.14.0\n$ avm java install 17\n$ avm android install 34</pre>
+                  <pre className="p-3 rounded-xl bg-slate-950 text-slate-300 border border-slate-800 overflow-x-auto">{"$ avm node install 22.14.0\n$ avm java install 17\n$ avm android install 34"}</pre>
                 </div>
 
                 <div>
                   <span className="text-emerald-400 font-bold text-sm block mb-1">3. Pin Local vs Global</span>
-                  <pre className="p-3 rounded-xl bg-slate-950 text-slate-300 border border-slate-800"># Pins in ./.avm.json for the current repository:\n$ avm node use 22.14.0\n\n# Pins machine default in ~/.avm.json:\n$ avm node use 22.14.0 --global</pre>
+                  <pre className="p-3 rounded-xl bg-slate-950 text-slate-300 border border-slate-800 overflow-x-auto">{"# Pins in ./.avm.json for the current repository:\n$ avm node use 22.14.0\n\n# Pins machine default in ~/.avm.json:\n$ avm node use 22.14.0 --global"}</pre>
                 </div>
                 <div>
                   <span className="text-emerald-400 font-bold text-sm block mb-1">4. Try a Version Without Changing Pins</span>
                   <p className="text-slate-400 font-sans text-xs mb-2">Run a command with temporary tool versions, provider env and trusted project env. Missing runtimes install automatically; plugins must already be installed. Use --no-install to select installed versions only.</p>
-                  <pre className="p-3 rounded-xl bg-slate-950 text-slate-300 border border-slate-800 overflow-x-auto">{'$ avm exec node@18 -- npm test\n$ avm x node@22 java@21 -- ./gradlew build\n$ avm run dev --with node@18 -- --port 3000'}</pre>
+                  <pre className="p-3 rounded-xl bg-slate-950 text-slate-300 border border-slate-800 overflow-x-auto">{'$ avm exec node@18 -- npm test\n$ avm x node@22 java@21 -- ./gradlew build\n$ avm run --with node@18 dev --port 3000'}</pre>
                   <p className="text-slate-400 font-sans text-xs mt-2">Project and global pins and lockfiles stay unchanged. Repeat --with for multiple tools and place it before alias arguments.</p>
                 </div>
                 <div>
@@ -403,7 +414,7 @@ export const DocsPage: React.FC<DocsPageProps> = ({ onCopy }) => {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs font-mono">
                 <div className="p-5 rounded-2xl bg-slate-900/60 border border-slate-800 space-y-3">
                   <h4 className="text-emerald-400 font-bold text-sm font-sans">Explicit Project Aliases</h4>
-                  <pre className="p-3 rounded-xl bg-slate-950 text-slate-300">$ avm alias add dev "pnpm run dev --port 3000"\n$ avm alias add release "npm run release $1"</pre>
+                  <pre className="p-3 rounded-xl bg-slate-950 text-slate-300 overflow-x-auto">{"$ avm alias add dev \"pnpm run dev --port 3000\"\n$ avm alias add release 'npm run release $1'"}</pre>
                   <p className="text-slate-400 font-sans text-xs">
                     Supports parameter forwarding ($1, $@) and runs with injected tools and env vars.
                   </p>
@@ -411,7 +422,7 @@ export const DocsPage: React.FC<DocsPageProps> = ({ onCopy }) => {
 
                 <div className="p-5 rounded-2xl bg-slate-900/60 border border-slate-800 space-y-3">
                   <h4 className="text-emerald-400 font-bold text-sm font-sans">Auto package.json Script Discovery</h4>
-                  <pre className="p-3 rounded-xl bg-slate-950 text-slate-300">$ avm test\n$ avm build\n$ avm lint</pre>
+                  <pre className="p-3 rounded-xl bg-slate-950 text-slate-300 overflow-x-auto">{"$ avm test\n$ avm build\n$ avm lint"}</pre>
                   <p className="text-slate-400 font-sans text-xs">
                     Discovers scripts defined in package.json and executes them using your detected package manager (pnpm, npm, yarn, bun).
                   </p>
@@ -435,7 +446,7 @@ export const DocsPage: React.FC<DocsPageProps> = ({ onCopy }) => {
               <div className="rounded-2xl bg-slate-900/50 border border-slate-800 p-6 sm:p-8 space-y-4 text-sm text-slate-300">
                 <h3 className="text-xl font-bold text-white">Precedence (nearest directory wins)</h3>
                 <ol className="list-decimal pl-5 space-y-1.5">
-                  <li><code className="text-emerald-300 font-mono text-xs bg-slate-950 px-1 py-0.5 rounded">.avm.json</code> <code className="text-emerald-300 font-mono text-xs bg-slate-950 px-1 py-0.5 rounded">tools</code> in the current directory</li>
+                  <li><code className="text-emerald-300 font-mono text-xs bg-slate-950 px-1 py-0.5 rounded">.avm.json</code> <code className="text-emerald-300 font-mono text-xs bg-slate-950 px-1 py-0.5 rounded">tools</code> merged from parent and child layers (including profiles and personal overrides)</li>
                   <li><code className="text-emerald-300 font-mono text-xs bg-slate-950 px-1 py-0.5 rounded">.tool-versions</code> (asdf format; <code className="text-emerald-300 font-mono text-xs bg-slate-950 px-1 py-0.5 rounded">nodejs</code> maps to <code className="text-emerald-300 font-mono text-xs bg-slate-950 px-1 py-0.5 rounded">node</code>)</li>
                   <li><code className="text-emerald-300 font-mono text-xs bg-slate-950 px-1 py-0.5 rounded">.nvmrc</code>, <code className="text-emerald-300 font-mono text-xs bg-slate-950 px-1 py-0.5 rounded">.node-version</code>, <code className="text-emerald-300 font-mono text-xs bg-slate-950 px-1 py-0.5 rounded">package.json</code> (<code className="text-emerald-300 font-mono text-xs bg-slate-950 px-1 py-0.5 rounded">volta.node</code>, else the <code className="text-emerald-300 font-mono text-xs bg-slate-950 px-1 py-0.5 rounded">engines.node</code> range), <code className="text-emerald-300 font-mono text-xs bg-slate-950 px-1 py-0.5 rounded">.java-version</code>, <code className="text-emerald-300 font-mono text-xs bg-slate-950 px-1 py-0.5 rounded">.sdkmanrc</code></li>
                   <li>Global <code className="text-emerald-300 font-mono text-xs bg-slate-950 px-1 py-0.5 rounded">~/.avm.json</code></li>
@@ -448,7 +459,7 @@ export const DocsPage: React.FC<DocsPageProps> = ({ onCopy }) => {
                   <div><span className="text-slate-500"># .java-version: 17</span> <span className="text-slate-400">→ openjdk-17.0.9+9</span></div>
                 </div>
                 <p>See which file won with <code className="text-emerald-300 font-mono text-xs bg-slate-950 px-1 py-0.5 rounded">avm which</code>:</p>
-                <pre className="p-4 rounded-xl bg-slate-950 border border-slate-800 font-mono text-xs text-slate-300">{`$ avm which node
+                <pre className="p-4 rounded-xl bg-slate-950 border border-slate-800 font-mono text-xs text-slate-300 overflow-x-auto">{`$ avm which node
 tool 'node': 20.11.1 (from ./.nvmrc)`}</pre>
                 <p>To ignore the tool-specific files (item 3), set <code className="text-emerald-300 font-mono text-xs bg-slate-950 px-1 py-0.5 rounded">"idiomatic_version_files": false</code> in <code className="text-emerald-300 font-mono text-xs bg-slate-950 px-1 py-0.5 rounded">~/.avm.json</code>.</p>
               </div>
@@ -472,7 +483,7 @@ tool 'node': 20.11.1 (from ./.nvmrc)`}</pre>
                 <p>
                   A project's <code className="text-emerald-300 font-mono text-xs bg-slate-950 px-1 py-0.5 rounded">.avm.json</code> aliases and <code className="text-emerald-300 font-mono text-xs bg-slate-950 px-1 py-0.5 rounded">env</code>, and its <code className="text-emerald-300 font-mono text-xs bg-slate-950 px-1 py-0.5 rounded">.env</code> files, run with your privileges and reach every shimmed <code className="text-emerald-300 font-mono text-xs bg-slate-950 px-1 py-0.5 rounded">node</code>/<code className="text-emerald-300 font-mono text-xs bg-slate-950 px-1 py-0.5 rounded">java</code>. So avm ignores them until you trust that exact file content. Tool pins only pick a version and always apply.
                 </p>
-                <pre className="p-4 rounded-xl bg-slate-950 border border-slate-800 font-mono text-xs text-slate-300">{`$ cd cloned-repo
+                <pre className="p-4 rounded-xl bg-slate-950 border border-slate-800 font-mono text-xs text-slate-300 overflow-x-auto">{`$ cd cloned-repo
 $ avm trust            # shows the aliases/env it enables, then trusts them
 $ avm trust --list     # everything you've trusted
 $ avm trust --revoke   # stop trusting this directory`}</pre>
@@ -492,48 +503,6 @@ $ avm trust --revoke   # stop trusting this directory`}</pre>
                   <li><strong className="text-white">Provenance:</strong> every release carries a GitHub build attestation. Check it with <code className="text-emerald-300 font-mono text-xs bg-slate-950 px-1 py-0.5 rounded">gh attestation verify &lt;archive&gt; --owner PrajaNova</code>.</li>
                   <li><code className="text-emerald-300 font-mono text-xs bg-slate-950 px-1 py-0.5 rounded">AVM_ALLOW_UNVERIFIED=1</code> is the only way to skip verification.</li>
                 </ul>
-              </div>
-            </div>
-
-          ) : activeSection === 'configuration' ? (
-
-            /* 9. Reference: Configuration */
-            <div className="space-y-10">
-              <div>
-                <h1 className="text-3xl sm:text-4xl font-extrabold text-white tracking-tight mb-4">
-                  Configuration (.avm.json)
-                </h1>
-                <p className="text-slate-300 text-base leading-relaxed max-w-3xl">
-                  Complete JSON specification for the <code className="text-emerald-300 font-mono text-xs bg-slate-950 px-1 py-0.5 rounded">.avm.json</code> file.
-                </p>
-              </div>
-
-              <div className="relative rounded-2xl bg-slate-950 border border-slate-800 p-5 font-mono text-xs text-slate-300 overflow-x-auto shadow-xl">
-<pre>{`{
-  // Project-specific aliases with injected environment variables
-  "aliases": {
-    "dev": "pnpm run dev",
-    "release": "npm run release $1",
-    "build:apk": "./gradlew assembleRelease"
-  },
-  // Injected environment variables for this workspace
-  "env": {
-    "NODE_ENV": "development",
-    "API_URL": "https://api.internal.dev"
-  },
-  // Pinned tool versions (intercepted via shims or avm commands)
-  "tools": {
-    "node": "22.14.0",
-    "java": "17.0.13+11",
-    "android": "34"
-  }
-}`}</pre>
-                <button
-                  onClick={() => onCopy(`{\n  "aliases": {\n    "dev": "pnpm run dev"\n  },\n  "tools": {\n    "node": "22.14.0"\n  }\n}`)}
-                  className="absolute top-4 right-4 p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300"
-                >
-                  <Copy className="w-4 h-4" />
-                </button>
               </div>
             </div>
 
@@ -561,13 +530,13 @@ $ avm trust --revoke   # stop trusting this directory`}</pre>
                   <ul className="space-y-1 text-slate-300 font-mono text-xs">
                     <li>&bull; macOS (Apple Silicon arm64, Intel x86_64)</li>
                     <li>&bull; Linux (x86_64, aarch64; glibc)</li>
-                    <li>&bull; Windows x64 via PowerShell (phase 1; Windows plugins coming)</li>
+                    <li>&bull; Windows x64 with PowerShell, cmd.exe forwarding and native plugins</li>
                   </ul>
                 </div>
                 <div className="p-5 rounded-2xl bg-slate-900/60 border border-slate-800 space-y-2">
                   <h4 className="font-bold text-white text-sm">Runtime Dependencies</h4>
                   <p className="text-slate-400 text-xs">
-                    <strong className="text-emerald-400">Zero dependencies.</strong> No Node.js, Python, Ruby, or GCC is required to run the core <code className="font-mono text-emerald-300">avm-bin</code>.
+                    <strong className="text-emerald-400">No language runtime required.</strong> Plugin installs use host tools such as curl and tar; Android also needs a JDK (and unzip on Unix). No Node.js, Python, Ruby, or GCC is required to run the core <code className="font-mono text-emerald-300">avm-bin</code>.
                   </p>
                 </div>
               </div>
@@ -612,6 +581,12 @@ $ avm trust --revoke   # stop trusting this directory`}</pre>
                   </div>
                 </div>
               </div>
+              <section className="rounded-2xl bg-slate-900/50 border border-slate-800 p-6 space-y-4 text-sm text-slate-300">
+                <h2 className="text-xl font-bold text-white">Discovery and plugin development</h2>
+                <p>All native providers use the same protocol: bundled executables beside avm-bin, then user-installed plugins, then the permanent legacy asdf adapter. No provider implementation is linked into the CLI.</p>
+                <p>Additional query verbs are is-installed and installed-versions. Optional resolve and install-locked verbs provide exact download metadata and checksum-verified installs. Native plugins can also expose custom commands, such as android avd.</p>
+                <p>Run <code>avm create kotlin</code> for template instructions. Read the <a className="text-emerald-300 underline" href="https://github.com/PrajaNova/avm/blob/main/docs/plugins/CREATING_A_PLUGIN.md">plugin author guide</a> for every wire verb, the ToolProvider contract, timeouts and release packaging.</p>
+              </section>
             </div>
 
           ) : activeSection === 'comparison' ? (
@@ -675,12 +650,12 @@ $ avm trust --revoke   # stop trusting this directory`}</pre>
               <div className="space-y-4 font-mono text-xs">
                 <div className="p-5 rounded-2xl bg-slate-900/60 border border-slate-800 space-y-2">
                   <h4 className="font-bold text-white font-sans text-sm">1. Check Active Environment Variables</h4>
-                  <pre className="p-3 rounded-xl bg-slate-950 text-emerald-300">$ avm env</pre>
+                  <pre className="p-3 rounded-xl bg-slate-950 text-emerald-300 overflow-x-auto">{"$ avm env"}</pre>
                   <p className="text-slate-400 font-sans text-xs">Prints exact exported variables including JAVA_HOME, ANDROID_HOME, and PATH order.</p>
                 </div>
                 <div className="p-5 rounded-2xl bg-slate-900/60 border border-slate-800 space-y-2">
                   <h4 className="font-bold text-white font-sans text-sm">2. Verify Shim Resolution</h4>
-                  <pre className="p-3 rounded-xl bg-slate-950 text-emerald-300">$ which node\n$ which java\n$ which adb</pre>
+                  <pre className="p-3 rounded-xl bg-slate-950 text-emerald-300 overflow-x-auto">{"$ which node\n$ which java\n$ which adb"}</pre>
                   <p className="text-slate-400 font-sans text-xs">Should point to ~/.avm/shims/&lt;binary&gt;.</p>
                 </div>
               </div>
@@ -701,7 +676,7 @@ $ avm trust --revoke   # stop trusting this directory`}</pre>
 
               <div className="p-6 rounded-2xl bg-slate-900/60 border border-slate-800 space-y-4 font-mono text-xs">
                 <span className="text-white font-bold text-sm font-sans">Build from Source</span>
-                <pre className="p-4 rounded-xl bg-slate-950 text-slate-300 border border-slate-800">$ git clone https://github.com/PrajaNova/avm.git\n$ cd avm\n$ cargo check\n$ cargo test\n$ cargo build --release</pre>
+                <pre className="p-4 rounded-xl bg-slate-950 text-slate-300 border border-slate-800 overflow-x-auto">{"$ git clone https://github.com/PrajaNova/avm.git\n$ cd avm\n$ cargo check\n$ cargo test\n$ cargo build --release"}</pre>
               </div>
             </div>
 
@@ -763,7 +738,7 @@ $ avm trust --revoke   # stop trusting this directory`}</pre>
             )}
           </div>
 
-        </main>
+        </div>
       </div>
 
     </div>

@@ -58,14 +58,6 @@ export const ASDF_SIDEBAR_CONFIG: SidebarGroup[] = [
     ],
   },
   {
-    text: 'Plugins',
-    items: [
-      { id: 'plugin-node', text: 'Node.js', link: '/docs/plugins/node', hasVideo: true, badge: 'Walkthrough' },
-      { id: 'plugin-java', text: 'Java (Temurin OpenJDK)', link: '/docs/plugins/java', hasVideo: true, badge: 'Walkthrough' },
-      { id: 'plugin-android', text: 'Android SDK & AVD', link: '/docs/plugins/android', hasVideo: true, badge: 'Walkthrough' },
-    ],
-  },
-  {
     text: 'Questions',
     items: [
       { id: 'faq', text: 'FAQ', link: '/docs/more/faq' },
@@ -122,10 +114,10 @@ export const DocsSidebar: React.FC<DocsSidebarProps> = ({
             href={item.link}
             target="_blank"
             rel="noreferrer"
-            className="flex items-center justify-between px-3 py-1.5 rounded-lg text-xs font-sans text-slate-400 hover:text-slate-200 hover:bg-slate-900/60 transition-colors"
+            className="flex items-center justify-between px-3 py-1.5 rounded-lg text-xs font-sans text-secondary hover:text-ink hover:bg-surface/60 transition-colors"
           >
             <span className="truncate">{item.text}</span>
-            <ExternalLink className="w-3 h-3 text-slate-500 shrink-0 ml-1.5" />
+            <ExternalLink className="w-3 h-3 text-secondary shrink-0 ml-1.5" />
           </a>
         </li>
       );
@@ -141,13 +133,13 @@ export const DocsSidebar: React.FC<DocsSidebarProps> = ({
           }}
           className={`w-full flex items-center justify-between text-left px-3 py-1.5 rounded-lg text-xs font-sans transition-all group ${
             isActive
-              ? 'bg-emerald-500/10 text-emerald-300 font-semibold border-l-2 border-emerald-400 shadow-sm'
-              : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/50'
+              ? 'bg-accent/10 text-accent font-semibold border-l-2 border-accent shadow-sm'
+              : 'text-secondary hover:text-ink hover:bg-surface/50'
           }`}
         >
           <span className="truncate">{item.text}</span>
           {item.hasVideo && (
-            <span className="flex items-center gap-1 text-[10px] font-mono px-1.5 py-0.2 rounded bg-emerald-500/15 text-emerald-400 border border-emerald-500/25 shrink-0 ml-1.5 font-medium">
+            <span className="flex items-center gap-1 text-xs font-mono px-1.5 py-0.2 rounded bg-accent/15 text-accent border border-accent/25 shrink-0 ml-1.5 font-medium">
               <PlayCircle className="w-2.5 h-2.5" />
               <span>{item.badge || 'Video'}</span>
             </span>
@@ -163,28 +155,28 @@ export const DocsSidebar: React.FC<DocsSidebarProps> = ({
       {isOpenMobile && (
         <div
           onClick={onCloseMobile}
-          className="fixed inset-0 z-40 bg-slate-950/80 backdrop-blur-sm lg:hidden transition-opacity"
+          className="fixed inset-0 z-40 bg-page/80 backdrop-blur-sm lg:hidden transition-opacity"
         />
       )}
 
       {/* Sidebar Navigation */}
       <aside
-        className={`fixed left-0 top-0 bottom-0 z-40 w-72 bg-slate-950 border-r border-slate-800 lg:bg-transparent lg:static lg:w-64 lg:z-auto transition-transform duration-200 ease-in-out flex flex-col justify-between shrink-0 ${
+        className={`fixed left-0 top-0 bottom-0 z-40 w-72 bg-page border-r border-line lg:bg-transparent lg:static lg:w-64 lg:z-auto transition-transform duration-200 ease-in-out flex flex-col justify-between shrink-0 ${
           isOpenMobile ? 'visible translate-x-0' : 'invisible lg:visible -translate-x-full lg:translate-x-0'
         }`}
       >
         <div className="flex-1 overflow-y-auto px-4 py-6">
           
           {/* Mobile Header with close button */}
-          <div className="flex items-center justify-between pb-4 mb-4 border-b border-slate-800 lg:hidden">
+          <div className="flex items-center justify-between pb-4 mb-4 border-b border-line lg:hidden">
             <div className="flex items-center gap-2">
-              <BookOpen className="w-4 h-4 text-emerald-400" />
-              <span className="font-sans text-sm font-bold text-white">Documentation</span>
+              <BookOpen className="w-4 h-4 text-accent" />
+              <span className="font-sans text-sm font-bold text-ink">Documentation</span>
             </div>
             {onCloseMobile && (
               <button
                 onClick={onCloseMobile}
-                className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+                className="p-1 rounded-lg text-secondary hover:text-ink hover:bg-muted transition-colors"
                 title="Close sidebar"
               >
                 <X className="w-5 h-5" />
@@ -197,16 +189,16 @@ export const DocsSidebar: React.FC<DocsSidebarProps> = ({
             {ASDF_SIDEBAR_CONFIG.map((group) => {
               const isCollapsed = !!collapsedGroups[group.text];
               return (
-                <div key={group.text} className="border-b border-slate-800/40 pb-4 last:border-b-0">
+                <div key={group.text} className="border-b border-line/40 pb-4 last:border-b-0">
                   
                   {/* Group Title with Collapse Toggle */}
                   <button
                     aria-expanded={!isCollapsed}
                     onClick={() => toggleGroup(group.text)}
-                    className="w-full flex items-center justify-between text-left px-2 py-1 text-xs font-bold uppercase tracking-wider text-slate-300 hover:text-white transition-colors"
+                    className="w-full flex items-center justify-between text-left px-2 py-1 text-xs font-bold uppercase tracking-wider text-secondary hover:text-ink transition-colors"
                   >
                     <span>{group.text}</span>
-                    <span className="text-slate-500 group-hover:text-slate-400">
+                    <span className="text-secondary group-hover:text-secondary">
                       {isCollapsed ? (
                         <ChevronRight className="w-3.5 h-3.5" />
                       ) : (
@@ -230,15 +222,15 @@ export const DocsSidebar: React.FC<DocsSidebarProps> = ({
         </div>
 
         {/* Sidebar Footer Link */}
-        <div className="p-4 border-t border-slate-800/80 bg-slate-950/40 text-xs">
+        <div className="p-4 border-t border-line/80 bg-page/40 text-xs">
           <a
             href="https://github.com/PrajaNova/avm"
             target="_blank"
             rel="noreferrer"
-            className="flex items-center justify-between text-slate-400 hover:text-white transition-colors font-mono text-[11px]"
+            className="flex items-center justify-between text-secondary hover:text-ink transition-colors font-mono text-xs"
           >
             <span>GitHub Repository</span>
-            <ExternalLink className="w-3.5 h-3.5 text-slate-500" />
+            <ExternalLink className="w-3.5 h-3.5 text-secondary" />
           </a>
         </div>
       </aside>

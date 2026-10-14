@@ -4,9 +4,11 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="%BASE_URL%favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <script>if (location.hash.indexOf('#/') === 0) location.replace(location.hash.slice(1)); // old hash-style links</script>
     <script>try { document.documentElement.dataset.theme = localStorage.getItem('avm-theme') === 'dark' ? 'dark' : 'light'; } catch { document.documentElement.dataset.theme = 'light'; }</script>
-    <title>avm — Any Version Manager</title>
-    <meta name="description" content="avm — one tool for project aliases, per-directory tool versions, and env vars. Plugins fetch as precompiled binaries at runtime, nothing to compile." />
+    <title>AVM: Any Version Manager for Node.js, Java and Android</title>
+    <meta name="description" content="AVM manages Node.js, Java and Android SDK versions per project, with aliases, environment variables and lockfiles. Open source for macOS, Linux and Windows." />
+    <meta name="theme-color" content="#FAFAF9" />
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">

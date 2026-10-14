@@ -16,6 +16,7 @@ import { CliReference } from '../components/CliReference';
 import { ComparisonTable } from '../components/ComparisonTable';
 import { FeatureGuideView } from '../components/docs/FeatureGuideView';
 import { FEATURE_GUIDES } from '../data/featureGuides';
+import { usePageMeta } from '../components/usePageMeta';
 import { SHELL_SETUP_GUIDE } from '../data/guideData';
 
 interface DocsPageProps {
@@ -34,6 +35,7 @@ export const DocsPage: React.FC<DocsPageProps> = ({ onCopy }) => {
 
   const currentPage = ALL_PAGES.find((p) => p.link === location.pathname) || ALL_PAGES[0];
   const activeSection = currentPage.id;
+  usePageMeta(`${FEATURE_GUIDES[currentPage.id]?.title ?? currentPage.text} | AVM docs`);
   const pageIndex = ALL_PAGES.indexOf(currentPage);
   const prevPage = pageIndex > 0 ? ALL_PAGES[pageIndex - 1] : null;
   const nextPage = pageIndex < ALL_PAGES.length - 1 ? ALL_PAGES[pageIndex + 1] : null;

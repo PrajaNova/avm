@@ -35,7 +35,7 @@ npm install -g @prajanova/avm                                               # an
 irm https://raw.githubusercontent.com/PrajaNova/avm/main/install.ps1 | iex  # Windows
 ```
 
-Then add the shell hook ([details for each shell](https://getavm.dev/#/docs/guide/shell-setup)):
+Then add the shell hook ([details for each shell](https://getavm.dev/docs/guide/shell-setup)):
 
 ```bash
 eval "$(avm-bin shell-init)"   # in ~/.zshrc or ~/.bashrc
@@ -91,9 +91,9 @@ asdf plugins support ordinary `avm install`, but cannot yet be locked.
 
 ## Learn more
 
-- [Getting started](https://getavm.dev/#/docs/guide/getting-started) · [All commands](https://getavm.dev/#/docs/manage/commands) · [Configuration](https://getavm.dev/#/docs/manage/configuration)
-- [Version files](https://getavm.dev/#/docs/manage/version-files) · [Security & trust](https://getavm.dev/#/docs/manage/security) · [Comparison with asdf, mise, proto](https://getavm.dev/#/docs/manage/comparison)
-- [Plugin marketplace](https://getavm.dev/#/marketplace) · [What's new](https://getavm.dev/#/changelog) · [Write a plugin](docs/plugins/CREATING_A_PLUGIN.md)
+- [Getting started](https://getavm.dev/docs/guide/getting-started) · [All commands](https://getavm.dev/docs/manage/commands) · [Configuration](https://getavm.dev/docs/manage/configuration)
+- [Version files](https://getavm.dev/docs/manage/version-files) · [Security & trust](https://getavm.dev/docs/manage/security) · [Comparison with asdf, mise, proto](https://getavm.dev/docs/manage/comparison)
+- [Plugin marketplace](https://getavm.dev/marketplace) · [What's new](https://getavm.dev/changelog) · [Write a plugin](docs/plugins/CREATING_A_PLUGIN.md)
 
 ## Contributing
 

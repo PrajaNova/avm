@@ -28,3 +28,4 @@ lerna-debug.log*
 
 # Vercel CLI link (org/project IDs)
 .vercel
+.env*

@@ -6,7 +6,7 @@
   "homepage": "https://getavm.dev",
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build && cp registry.json dist/",
+    "build": "tsc && vite build && cp registry.json dist/ && node scripts/seo.mjs",
     "preview": "vite preview",
     "check:docs": "node scripts/check-docs.mjs"
   },

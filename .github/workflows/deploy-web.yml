@@ -1,0 +1,56 @@
+name: Deploy web (Vercel)
+
+# Manual only: Actions → Deploy web (Vercel) → Run workflow
+# (or `gh workflow run deploy-web.yml -f production=true`). Merging to main doesn't deploy.
+# Builds on the runner and uploads the prebuilt output; the Vercel project needs no Git connection.
+# Repo secrets: VERCEL_TOKEN, VERCEL_ORG_ID, VERCEL_PROJECT_ID.
+on:
+  workflow_dispatch:
+    inputs:
+      production:
+        description: Deploy to production (otherwise a preview URL)
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: vercel-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: marketplace
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+          run_install: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'pnpm'
+          cache-dependency-path: marketplace/pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Pull Vercel project settings
+        run: pnpm dlx vercel@latest pull --yes --environment=${{ inputs.production && 'production' || 'preview' }}
+
+      - name: Build
+        run: pnpm dlx vercel@latest build ${{ inputs.production && '--prod' || '' }}
+
+      - name: Deploy prebuilt output
+        run: pnpm dlx vercel@latest deploy --prebuilt ${{ inputs.production && '--prod' || '' }}

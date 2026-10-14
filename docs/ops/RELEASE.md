@@ -88,11 +88,14 @@ tags and stable releases.
 
 ## Marketplace site
 
-**Actions → Release web (marketplace) → Run workflow** in `PrajaNova/avm`,
-or run `gh workflow run release-web.yml -R PrajaNova/avm`. Merging to
-`main` doesn't deploy. Enable **Settings → Pages → Source → GitHub
-Actions** in this repository before the first deployment. The site builds
-from `marketplace/` and publishes at `https://getavm.dev/`.
+**Actions → Deploy web (Vercel) → Run workflow** in `PrajaNova/avm`
+(tick *production* for the live site, otherwise it publishes a preview URL),
+or run `gh workflow run deploy-web.yml -R PrajaNova/avm -f production=true`.
+Merging to `main` doesn't deploy. The workflow builds `marketplace/` on the
+runner and uploads it with the Vercel CLI; the Vercel project has no Git
+connection and its Root Directory is left empty. Repo secrets required:
+`VERCEL_TOKEN`, `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID`. The site is served at
+`https://getavm.dev/`.
 
 The old `avm-marketplace` repository has been deleted; `marketplace/registry.json`
 in this repo is now the only copy CLI releases read.

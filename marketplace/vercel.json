@@ -37,5 +37,18 @@
       ]
     }
   ],
-  "installCommand": "pnpm install --frozen-lockfile"
+  "installCommand": "pnpm install --frozen-lockfile",
+  "redirects": [
+    {
+      "source": "/(.*)",
+      "has": [
+        {
+          "type": "host",
+          "value": "www.getavm.dev"
+        }
+      ],
+      "destination": "https://getavm.dev/$1",
+      "permanent": true
+    }
+  ]
 }

@@ -199,7 +199,7 @@ mod tests {
         for script in [shell_init_script(), pwsh_init_script()] {
             assert!(!script.contains("__AVM_BUILTINS"));
             for name in ["alias", "help", "run", "ls", "prune"] {
-                assert!(script.contains(&format!("{name}")), "{name}");
+                assert!(script.contains(name), "{name}");
             }
         }
         assert!(

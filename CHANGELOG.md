@@ -7,6 +7,9 @@ The format follows Keep a Changelog style, and releases use semantic versioning.
 ## [Unreleased]
 
 ### Fixed
+- A broken or BOM-prefixed `package.json` no longer stops `node`, shims or the prompt; scripts are only read by `run`, `resolve`, `which` and `list`, which warn and continue.
+- Aliases and plugin commands run through one `avm-bin run` call; the shell wrappers take their built-in lists from the CLI definition (`alias` was missing before).
+- Bash and PowerShell refresh project env when the directory changes (like zsh) instead of at every prompt.
 - `avm shims activate` appends to shell startup files instead of rewriting them, so non-UTF-8 files are no longer wiped.
 - `avm prune` no longer holds the project-tracking lock while waiting for confirmation, so shims and prompts don't hang; it aborts if a project was tracked meanwhile.
 - Plugin updates keep the working binary until the new one is in place; archives are staged in a private dir instead of shared `/tmp` and cleaned on every exit.
@@ -28,6 +31,8 @@ The format follows Keep a Changelog style, and releases use semantic versioning.
 - Run live Node/Java/Android download suites with the checkout's plugins on Linux and Windows.
 
 ### Added
+- Bare `avm` on a terminal opens a picker of the project's aliases and tools. Pickers use the alternate screen, close with Esc, support PageUp/PageDown/Home/End and wrap, show each alias's command and source, mark installed and selected versions, and offer local or global pinning without an existing `.avm.json`.
+- CI runs `cargo fmt --check` and `cargo clippy -D warnings`.
 - Hierarchical `.avm.json` configs merge parent values with nearest-directory precedence and support `root: true`. `which` and `list` show exact origins; merged config caching keeps prompt resolution fast.
 - `.avm.local.json` personal overrides and `.avm.<profile>.json` profiles selected with `AVM_ENV` or `--env` (comma-separated, later profiles win). `init` gitignores personal overrides, and each file requires its own trust.
 - `avm exec` (alias `avm x`) runs commands with temporary `tool@version` selections, auto-installing missing runtimes without changing pins or lockfiles. `avm run --with` applies the same overrides to aliases; `--no-install` uses installed versions only.

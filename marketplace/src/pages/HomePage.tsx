@@ -1,5 +1,6 @@
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import { ArrowRight, Check, Terminal, FileCode2, ShieldCheck, Layers, GitBranch, ArrowUpRight } from 'lucide-react';
+import { SEO_GUIDES } from '../data/seoGuides';
 import { Platforms } from '../components/OsIcons';
 import { TerminalInstallBox } from '../components/TerminalInstallBox';
 
@@ -59,6 +60,12 @@ export const HomePage = ({ onCopy }: { onCopy: (text: string) => void }) => (
       <div><ShieldCheck className="w-7 h-7 text-accent mb-5" /><h2 className="text-3xl sm:text-4xl font-medium tracking-tight mb-5">Confidence comes<br />from clear guarantees.</h2><p className="text-secondary">Understand what gets installed, which configuration applies, and what your project is allowed to run.</p><Link to="/docs/manage/security" className="inline-flex items-center gap-2 text-accent text-sm font-medium mt-6">Read about security <ArrowRight className="w-4 h-4" /></Link></div>
       <div className="space-y-7">
         {[['Verified downloads','Native plugin archives and supported runtime downloads are checked before installation. Android components are verified by sdkmanager.'],['Explicit configuration trust','Cloned project aliases and environment settings stay inactive until you trust their contents. Tool selections still apply.'],['Clear limits, documented','Node and Java support frozen installs. Android and legacy asdf plugins currently use standard installs.']].map(([title,body]) => <div key={title} className="border-b border-line pb-6"><h3 className="text-lg font-medium mb-2">{title}</h3><p className="text-secondary text-sm">{body}</p></div>)}
+      </div>
+    </section>
+    <section className="max-w-7xl mx-auto px-5 sm:px-8 pb-20">
+      <h2 className="text-2xl sm:text-3xl font-medium tracking-tight mb-8">Guides</h2>
+      <div className="grid md:grid-cols-3 gap-5">
+        {SEO_GUIDES.map((guide) => <Link key={guide.slug} to={`/guides/${guide.slug}`} className="group p-6 border border-line rounded-lg hover:border-accent transition-colors"><h3 className="text-lg font-medium mb-3 group-hover:text-accent">{guide.title}</h3><p className="text-secondary text-sm">{guide.description}</p></Link>)}
       </div>
     </section>
     <section className="max-w-7xl mx-auto px-5 sm:px-8 pb-16"><div className="border-t border-line pt-10 flex flex-wrap items-center justify-between gap-6"><div><h2 className="text-2xl font-medium mb-2">Make your workspace feel settled.</h2><p className="text-secondary">Start with one project. Keep the version files you already have.</p></div><Link to="/docs/guide/getting-started" className="button-primary">Set up AVM <ArrowRight className="w-4 h-4" /></Link></div><div className="mt-8 flex flex-wrap gap-6 text-sm text-secondary"><Link to="/docs/manage/comparison" className="hover:text-accent">Compare version managers</Link><Link to="/docs/manage/architecture" className="hover:text-accent">Explore the architecture</Link><Link to="/changelog" className="hover:text-accent">Follow the changelog</Link></div></section>

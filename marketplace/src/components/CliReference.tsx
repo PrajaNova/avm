@@ -34,9 +34,9 @@ export const CliReference: React.FC<CliReferenceProps> = ({ onCopy }) => {
             <Layers className="w-3.5 h-3.5" />
             CLI Cheat Sheet
           </div>
-          <h2 className="text-3xl sm:text-4xl font-semibold text-ink tracking-tight">
+          <h1 className="text-3xl sm:text-4xl font-semibold text-ink tracking-tight">
             Complete Command Reference
-          </h2>
+          </h1>
           <p className="mt-3 text-secondary text-sm sm:text-base">
             Every command supported by <code className="text-accent font-mono text-xs">avm-cli</code> with real usage patterns.
           </p>

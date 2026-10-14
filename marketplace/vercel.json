@@ -1,12 +1,30 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "framework": "vite",
+  "framework": null,
   "buildCommand": "pnpm run build",
-  "outputDirectory": "dist",
-  "rewrites": [
+  "installCommand": "pnpm install --frozen-lockfile",
+  "outputDirectory": "build/client",
+  "redirects": [
     {
       "source": "/(.*)",
-      "destination": "/index.html"
+      "has": [
+        {
+          "type": "host",
+          "value": "www.getavm.dev"
+        }
+      ],
+      "destination": "https://getavm.dev/$1",
+      "permanent": true
+    },
+    {
+      "source": "/docs/plugins/:name",
+      "destination": "/marketplace/:name",
+      "permanent": true
+    },
+    {
+      "source": "/commands",
+      "destination": "/docs/manage/commands",
+      "permanent": true
     }
   ],
   "headers": [
@@ -35,20 +53,6 @@
           "value": "DENY"
         }
       ]
-    }
-  ],
-  "installCommand": "pnpm install --frozen-lockfile",
-  "redirects": [
-    {
-      "source": "/(.*)",
-      "has": [
-        {
-          "type": "host",
-          "value": "www.getavm.dev"
-        }
-      ],
-      "destination": "https://getavm.dev/$1",
-      "permanent": true
     }
   ]
 }

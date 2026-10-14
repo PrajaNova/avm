@@ -1,8 +1,7 @@
-import { Link } from 'react-router-dom';
-import { usePageMeta } from '../components/usePageMeta';
+import { Link } from 'react-router';
+
 
 export const NotFoundPage = () => {
-  usePageMeta('Page not found | AVM', true);
   return (
     <div className="max-w-2xl mx-auto px-5 sm:px-8 py-24">
       <h1 className="text-4xl font-medium tracking-tight mb-4">Page not found</h1>

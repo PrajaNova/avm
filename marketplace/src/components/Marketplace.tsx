@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import { Search, Package, Copy } from 'lucide-react';
 import { Platforms } from './OsIcons';
 import registry from '../../registry.json';
@@ -34,9 +34,9 @@ export const Marketplace: React.FC<MarketplaceProps> = ({ onCopy }) => {
                 registry.json (v1)
               </span>
             </div>
-            <h2 className="text-3xl sm:text-4xl font-semibold text-ink tracking-tight">
+            <h1 className="text-3xl sm:text-4xl font-semibold text-ink tracking-tight">
               AVM Plugin Marketplace
-            </h2>
+            </h1>
             <p className="mt-2 text-secondary text-sm sm:text-base max-w-2xl">
               Plugins are standalone precompiled executables fetched on-demand. 
               Install with <code className="text-accent font-mono text-xs bg-surface px-1.5 py-0.5 rounded">avm plugin add &lt;name&gt;</code>.

@@ -24,7 +24,7 @@ for (const [enumName, prefix] of [['Commands', 'avm'], ['PluginCommands', 'avm p
     assert.ok(commands.some((entry) => entry === command || entry.startsWith(`${command} `)), `Undocumented command: ${command}`);
   }
 }
-const sidebar = await read('../src/components/docs/DocsSidebar.tsx');
+const sidebar = await read('../src/data/docsNav.ts');
 const page = await read('../src/pages/DocsPage.tsx');
 const ids = [...sidebar.matchAll(/id: '([^']+)'/g)].map((match) => match[1]);
 for (const id of ids) {

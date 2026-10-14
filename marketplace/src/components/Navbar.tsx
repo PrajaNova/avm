@@ -1,10 +1,11 @@
-import { useState } from 'react';
-import { NavLink, Link } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { NavLink, Link } from 'react-router';
 import { Menu, X, Github, Moon, Sun, Terminal } from 'lucide-react';
 
 export const Navbar = () => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [dark, setDark] = useState(() => document.documentElement.dataset.theme === 'dark');
+  const [dark, setDark] = useState(false);
+  useEffect(() => setDark(document.documentElement.dataset.theme === 'dark'), []);
   const navItems = [{ to: '/docs', label: 'Documentation' }, { to: '/marketplace', label: 'Plugins' }, { to: '/changelog', label: 'Changelog' }];
   const toggleTheme = () => {
     const theme = dark ? 'light' : 'dark';

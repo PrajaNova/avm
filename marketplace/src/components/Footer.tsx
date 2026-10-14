@@ -1,5 +1,6 @@
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import { Github, ExternalLink } from 'lucide-react';
+import { SEO_GUIDES } from '../data/seoGuides';
 
 export const Footer: React.FC = () => {
   return (
@@ -51,6 +52,13 @@ export const Footer: React.FC = () => {
                   Changelog
                 </Link>
               </li>
+              {SEO_GUIDES.map((guide) => (
+                <li key={guide.slug}>
+                  <Link to={`/guides/${guide.slug}`} className="hover:text-accent transition-colors">
+                    {guide.title}
+                  </Link>
+                </li>
+              ))}
             </ul>
           </div>
 

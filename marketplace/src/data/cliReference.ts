@@ -83,7 +83,7 @@ Env:
     args: '<alias> [--with <tool@version>]... [--no-install] [-- args...]',
     category: 'Aliases',
     description: 'Runs an alias, optionally with temporary tool versions. Repeat --with for multiple tools and place options before alias arguments. Missing versions install automatically unless --no-install is set.',
-    example: 'avm run dev --with node@18 -- --port 3000'
+    example: 'avm run --with node@18 dev --port 3000'
   },
   {
     command: 'avm install',
@@ -112,7 +112,7 @@ $env:JAVA_HOME = 'C:\\Users\\dev\\.avm\\tools\\java\\openjdk-17.0.13+11'`
     command: 'avm env add',
     args: '[-g] <KEY> <value>',
     category: 'Env',
-    description: 'Adds an env var to local (or global with -g) .avm.json. Also: avm env remove, avm env list.',
+    description: 'Adds an env var to local (or global with -g) .avm.json. Also avm ea. See env remove and env list for other operations.',
     example: 'avm env add NODE_ENV development',
     outputExample: "✓ Added local env var 'NODE_ENV=development'"
   },
@@ -120,17 +120,18 @@ $env:JAVA_HOME = 'C:\\Users\\dev\\.avm\\tools\\java\\openjdk-17.0.13+11'`
   // Plugins
   {
     command: 'avm plugin add',
-    args: '<name | org/repo | git-url>',
+    args: '<name | org/repo | git-url | path>',
     category: 'Plugins',
-    description: "Installs a plugin's compiled release for your platform from the marketplace, after verifying its sha256 against the release's checksums.txt. A mismatch aborts with nothing installed.",
+    description: "Installs a plugin's compiled release for your platform from the marketplace, after verifying its sha256 against the release's checksums.txt. A mismatch aborts with nothing installed. Also avm pa. Legacy asdf plugins use the compatibility adapter.",
     example: 'avm plugin add node',
     outputExample: `Fetching 'node' from PrajaNova/avm-plugin-node...
 ✓ Installed node v0.2.0`
   },
   {
     command: 'avm plugin list',
+    args: '[--all]',
     category: 'Plugins',
-    description: 'Lists all currently installed plugins and their discovery paths.',
+    description: 'Lists installed plugins and their discovery paths. --all also prints marketplace plugins.',
     example: 'avm plugin list',
     outputExample: `Installed plugins:
   - node    (~/.avm/plugins/avm-plugin-node/bin/avm-plugin)
@@ -140,7 +141,7 @@ $env:JAVA_HOME = 'C:\\Users\\dev\\.avm\\tools\\java\\openjdk-17.0.13+11'`
   {
     command: 'avm plugin available',
     category: 'Plugins',
-    description: 'Queries the marketplace registry and lists all installable plugins.',
+    description: 'Queries the marketplace registry and lists all installable plugins. Also avm plugin all or avm plugin marketplace.',
     example: 'avm plugin available'
   },
   {
@@ -152,7 +153,7 @@ $env:JAVA_HOME = 'C:\\Users\\dev\\.avm\\tools\\java\\openjdk-17.0.13+11'`
   },
   {
     command: 'avm plugin update',
-    args: '<name>',
+    args: '<name> | --all',
     category: 'Plugins',
     description: 'Checks for newer releases of the plugin and updates the binary.',
     example: 'avm plugin update node'
@@ -186,9 +187,9 @@ $env:JAVA_HOME = 'C:\\Users\\dev\\.avm\\tools\\java\\openjdk-17.0.13+11'`
   },
   {
     command: 'avm <plugin> install',
-    args: '<version>',
+    args: '<version> [--global | --no-pin]',
     category: 'Versions',
-    description: 'Downloads, extracts, and manages a runtime version.',
+    description: 'Installs a runtime and pins it locally, also setting a global pin if none exists. --global pins globally only; --no-pin installs without changing pins. Fuzzy versions resolve before installation.',
     example: 'avm java install 17'
   },
   {
@@ -203,7 +204,7 @@ $env:JAVA_HOME = 'C:\\Users\\dev\\.avm\\tools\\java\\openjdk-17.0.13+11'`
   {
     command: 'avm shell-init',
     category: 'Shims',
-    args: '[pwsh]',
+    args: '[sh | pwsh]',
     description: 'Prints the shell hook that puts shims on PATH and applies env after each avm call (bash/zsh by default, or PowerShell).',
     example: 'eval "$(avm shell-init)"'
   },
@@ -219,5 +220,146 @@ $env:JAVA_HOME = 'C:\\Users\\dev\\.avm\\tools\\java\\openjdk-17.0.13+11'`
     description: 'Prints the absolute path to the avm shims directory.',
     example: 'avm shims path',
     outputExample: '~/.avm/shims'
+  },
+  {
+    "command": "avm --version",
+    "args": "",
+    "category": "Core",
+    "description": "Print the installed CLI version; -v is the short form.",
+    "example": "avm --version"
+  },
+  {
+    "command": "avm alias add",
+    "args": "[-g] <key> <command...>",
+    "category": "Aliases",
+    "description": "Add a local or global alias. Equivalent to avm add (also avm aa).",
+    "example": "avm alias add test \"npm test\""
+  },
+  {
+    "command": "avm alias remove",
+    "args": "[-g] <key>",
+    "category": "Aliases",
+    "description": "Remove an alias. Also avm alias rm, avm remove and avm rm.",
+    "example": "avm alias remove test"
+  },
+  {
+    "command": "avm alias list",
+    "args": "",
+    "category": "Aliases",
+    "description": "List merged configured aliases. Also avm alias ls; avm list has the shortcut avm ls.",
+    "example": "avm alias list"
+  },
+
+  {
+    "command": "avm env remove",
+    "args": "[-g] <key>",
+    "category": "Env",
+    "description": "Remove a configured variable from the local or global base config. Also avm env rm.",
+    "example": "avm env remove NODE_ENV"
+  },
+  {
+    "command": "avm env list",
+    "args": "",
+    "category": "Env",
+    "description": "List merged configured environment values; use bare avm env for provider variables and shell exports. Also avm env ls.",
+    "example": "avm env list"
+  },
+  {
+    "command": "avm outdated",
+    "args": "[--json]",
+    "category": "Versions",
+    "description": "Show current runtime selections, newest releases within the selected range and overall, and pin sources.",
+    "example": "avm outdated --json"
+  },
+  {
+    "command": "avm upgrade",
+    "args": "[tools...] [--bump] [--dry-run] [-y]",
+    "category": "Versions",
+    "description": "Install newer versions within each pin range and update editable base pins. --bump allows major changes and asks for confirmation; -y confirms. Inherited/profile/version-file pins are kept at their source. Regenerate locks after pin changes.",
+    "example": "avm upgrade node --dry-run"
+  },
+  {
+    "command": "avm prune",
+    "args": "[--older-than 90d] [--include-unrecorded] [--dry-run] [-y]",
+    "category": "Versions",
+    "description": "Remove versions unused by global pins or tracked projects. Preview first. --include-unrecorded considers versions without usage records; -y confirms deletion.",
+    "example": "avm prune --older-than 90d --dry-run"
+  },
+  {
+    "command": "avm self-update",
+    "args": "[--version <version>]",
+    "category": "Core",
+    "description": "Update direct installations with checksum verification. For package-manager installations, print the matching upgrade command.",
+    "example": "avm self-update"
+  },
+  {
+    "command": "avm plugin outdated",
+    "args": "[--json]",
+    "category": "Plugins",
+    "description": "Compare installed marketplace plugin versions against available releases.",
+    "example": "avm plugin outdated --json"
+  },
+  {
+    "command": "avm create",
+    "args": "<name>",
+    "category": "Plugins",
+    "description": "Print instructions to create a plugin from the official template. Does not create or publish the repository automatically.",
+    "example": "avm create kotlin"
+  },
+  {
+    "command": "avm <plugin>",
+    "args": "",
+    "category": "Versions",
+    "description": "Open the interactive provider menu in a terminal; show status when interactive input is unavailable.",
+    "example": "avm node"
+  },
+  {
+    "command": "avm <plugin> list",
+    "args": "",
+    "category": "Versions",
+    "description": "Show selected and installed versions. Also avm <plugin> ls. versions has the alias available, and use has the alias set.",
+    "example": "avm java list"
+  },
+  {
+    "command": "avm shims activate",
+    "args": "",
+    "category": "Shims",
+    "description": "Add the shim directory to Unix shell startup files (.zshenv, .bashrc, .profile). On Windows, add the output of shims path to user PATH separately.",
+    "example": "avm shims activate"
+  },
+  {
+    "command": "avm shims remove",
+    "args": "<tool>",
+    "category": "Shims",
+    "description": "Remove one shim without uninstalling its runtime. Regenerate with shims install (also shims reshim).",
+    "example": "avm shims remove node"
+  },
+  {
+    "command": "avm android avd list",
+    "args": "",
+    "category": "Plugins",
+    "description": "List Android Virtual Devices using the selected installed Android SDK. Also avd ls.",
+    "example": "avm android avd list"
+  },
+  {
+    "command": "avm android avd create",
+    "args": "[name] [--api <level>] [--device <id>]",
+    "category": "Plugins",
+    "description": "Create an AVD interactively or supply name, API and device for scripting. Automatically install its matching system image in the selected SDK; device type selects the appropriate phone/TV/Wear/Automotive image tag. Also avd new.",
+    "example": "avm android avd create pixel-test --api 34 --device pixel_6"
+  },
+  {
+    "command": "avm android avd start",
+    "args": "<name> [emulator args...]",
+    "category": "Plugins",
+    "description": "Launch an AVD with the selected SDK emulator. Additional arguments are forwarded. Also avd run.",
+    "example": "avm android avd start pixel-test -no-snapshot"
+  },
+  {
+    "command": "avm android avd delete",
+    "args": "<name>",
+    "category": "Plugins",
+    "description": "Delete an AVD using the selected SDK. Also avd remove or avd rm.",
+    "example": "avm android avd delete pixel-test"
   }
 ];

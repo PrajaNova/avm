@@ -173,34 +173,34 @@ export const WalkthroughVideo: React.FC<WalkthroughVideoProps> = ({
 
   return (
     <div className={className || "w-full max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 mb-20"}>
-      <div className="rounded-2xl border border-slate-700/80 bg-slate-900/90 shadow-2xl overflow-hidden backdrop-blur-xl">
+      <div className="rounded-lg border border-line/80 bg-surface/90 shadow-sm overflow-hidden backdrop-blur-xl">
         
         {/* Top Header Bar */}
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-700/80 px-4 sm:px-6 py-3.5 bg-slate-950/70">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line/80 px-4 sm:px-6 py-3.5 bg-page/70">
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-1.5">
               <span className="w-3 h-3 rounded-full bg-rose-500/80 inline-block" />
               <span className="w-3 h-3 rounded-full bg-amber-500/80 inline-block" />
-              <span className="w-3 h-3 rounded-full bg-emerald-500/80 inline-block" />
+              <span className="w-3 h-3 rounded-full bg-accent/80 inline-block" />
             </div>
-            <div className="h-4 w-px bg-slate-800 hidden sm:block" />
-            <div className="flex items-center gap-2 text-xs font-mono text-slate-400">
-              <Terminal className="w-3.5 h-3.5 text-emerald-400" />
-              <span className="text-slate-200 font-semibold hidden sm:inline">{title || 'avm walkthrough'}</span>
-              <span className="text-slate-600 hidden sm:inline">&mdash;</span>
-              <span className="text-slate-400 text-[11px]">{badge || '60-second tour'}</span>
+            <div className="h-4 w-px bg-muted hidden sm:block" />
+            <div className="flex items-center gap-2 text-xs font-mono text-secondary">
+              <Terminal className="w-3.5 h-3.5 text-accent" />
+              <span className="text-ink font-semibold hidden sm:inline">{title || 'avm walkthrough'}</span>
+              <span className="text-secondary hidden sm:inline">&mdash;</span>
+              <span className="text-secondary text-xs">{badge || '60-second tour'}</span>
             </div>
           </div>
 
           <div className="flex items-center gap-2">
-            <span className="text-xs font-mono px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-medium">
+            <span className="text-xs font-mono px-2 py-0.5 rounded bg-accent/10 text-accent border border-accent/20 font-medium">
               Interactive CLI
             </span>
           </div>
         </div>
 
         {/* Step Progression Scrubber */}
-        <div className="border-b border-slate-800 bg-slate-950/40 px-4 sm:px-6 py-2.5 overflow-x-auto">
+        <div className="border-b border-line bg-page/40 px-4 sm:px-6 py-2.5 overflow-x-auto">
           <div className="flex items-center gap-2 min-w-max">
             {steps.map((step, idx) => {
               const isActive = idx === currentStepIndex;
@@ -211,19 +211,19 @@ export const WalkthroughVideo: React.FC<WalkthroughVideoProps> = ({
                   onClick={() => handleStepClick(idx)}
                   className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-mono transition-all ${
                     isActive
-                      ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30'
+                      ? 'bg-accent/10 text-accent border border-accent/30'
                       : isCompleted
-                      ? 'text-slate-300 bg-slate-800/60 border border-slate-700 hover:border-slate-600'
-                      : 'text-slate-500 border border-transparent hover:text-slate-300'
+                      ? 'text-secondary bg-muted/60 border border-line hover:border-line'
+                      : 'text-secondary border border-transparent hover:text-secondary'
                   }`}
                 >
                   <span
-                    className={`w-4 h-4 rounded-full flex items-center justify-center text-[10px] font-bold ${
+                    className={`w-4 h-4 rounded-full flex items-center justify-center text-xs font-bold ${
                       isActive
-                        ? 'bg-emerald-400 text-slate-950'
+                        ? 'bg-accent text-on-accent'
                         : isCompleted
-                        ? 'bg-slate-700 text-emerald-400'
-                        : 'bg-slate-800 text-slate-500'
+                        ? 'bg-muted text-accent'
+                        : 'bg-muted text-secondary'
                     }`}
                   >
                     {isCompleted ? '✓' : step.stepNumber}
@@ -236,35 +236,35 @@ export const WalkthroughVideo: React.FC<WalkthroughVideoProps> = ({
         </div>
 
         {/* Main Content Area - Interactive Terminal */}
-        <div className="relative min-h-[340px] sm:min-h-[380px] bg-slate-950 flex flex-col justify-between">
+        <div className="relative min-h-[340px] sm:min-h-[380px] bg-page flex flex-col justify-between">
           <div className="p-5 sm:p-7 font-mono text-xs sm:text-sm overflow-x-auto flex-1">
             
             {/* Step info commentary */}
-            <div className="flex flex-wrap items-center justify-between gap-2 pb-3 mb-3 border-b border-slate-800/80 text-xs">
-              <div className="text-slate-400 font-sans flex items-center gap-2">
-                <span className="text-emerald-400 font-mono font-semibold">
+            <div className="flex flex-wrap items-center justify-between gap-2 pb-3 mb-3 border-b border-line/80 text-xs">
+              <div className="text-secondary font-sans flex items-center gap-2">
+                <span className="text-accent font-mono font-semibold">
                   Step {currentStep.stepNumber} of {String(steps.length).padStart(2, '0')}:
                 </span>
-                <span className="text-slate-300 font-medium">{currentStep.label}</span>
+                <span className="text-secondary font-medium">{currentStep.label}</span>
               </div>
-              <div className="flex items-center gap-2 text-[11px] font-mono text-slate-500">
+              <div className="flex items-center gap-2 text-xs font-mono text-secondary">
                 <span>Execution overhead:</span>
-                <span className="text-emerald-400 font-semibold">{currentStep.timing}</span>
+                <span className="text-accent font-semibold">{currentStep.timing}</span>
               </div>
             </div>
 
             {/* Explanatory comment line */}
-            <div className="text-slate-500 italic select-none mb-3">
+            <div className="text-secondary italic select-none mb-3">
               {currentStep.comment}
             </div>
 
             {/* Typed command prompt */}
-            <div className="flex items-center gap-2 text-slate-100 font-semibold text-sm sm:text-base mb-4">
-              <span className="text-emerald-400 select-none">$</span>
-              <span className="text-slate-100">{typedCommand}</span>
+            <div className="flex items-center gap-2 text-ink font-semibold text-sm sm:text-base mb-4">
+              <span className="text-accent select-none">$</span>
+              <span className="text-ink">{typedCommand}</span>
               <span
-                className={`w-2 h-4 bg-emerald-400 inline-block transition-opacity ${
-                  isPlaying ? 'animate-pulse' : 'opacity-80'
+                className={`w-2 h-4 bg-accent inline-block transition-opacity ${
+                  isPlaying ? '' : 'opacity-80'
                 }`}
               />
             </div>
@@ -272,7 +272,7 @@ export const WalkthroughVideo: React.FC<WalkthroughVideoProps> = ({
             {/* Output block */}
             {showOutput && (
               <div>
-                <pre className="text-slate-300 whitespace-pre-wrap pl-4 border-l-2 border-slate-700/80 text-xs sm:text-sm font-mono leading-relaxed bg-slate-900/30 p-3 rounded-r-lg">
+                <pre className="text-secondary whitespace-pre-wrap pl-4 border-l-2 border-line/80 text-xs sm:text-sm font-mono leading-relaxed bg-surface/30 p-3 rounded-r-lg">
                   {currentStep.output}
                 </pre>
               </div>
@@ -280,11 +280,11 @@ export const WalkthroughVideo: React.FC<WalkthroughVideoProps> = ({
           </div>
 
           {/* Bottom Control Bar */}
-          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-800 bg-slate-950/90 px-4 sm:px-6 py-3 text-xs font-mono">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line bg-page/90 px-4 sm:px-6 py-3 text-xs font-mono">
             <div className="flex items-center gap-2">
               <button
                 onClick={handleTogglePlay}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-emerald-400 text-slate-950 font-semibold hover:bg-emerald-300 transition-colors"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-accent text-on-accent font-semibold hover:bg-accent transition-colors"
               >
                 {isPlaying ? (
                   <>
@@ -301,7 +301,7 @@ export const WalkthroughVideo: React.FC<WalkthroughVideoProps> = ({
 
               <button
                 onClick={handleRestart}
-                className="p-1.5 rounded-md border border-slate-700 text-slate-400 hover:text-slate-200 hover:border-slate-600 transition-colors"
+                className="p-1.5 rounded-md border border-line text-secondary hover:text-ink hover:border-line transition-colors"
                 title="Restart from Step 1"
               >
                 <RotateCcw className="w-3.5 h-3.5" />
@@ -309,7 +309,7 @@ export const WalkthroughVideo: React.FC<WalkthroughVideoProps> = ({
 
               <button
                 onClick={cycleSpeed}
-                className="px-2.5 py-1 rounded border border-slate-700 text-slate-300 hover:border-slate-500 transition-colors text-[11px]"
+                className="px-2.5 py-1 rounded border border-line text-secondary hover:border-line transition-colors text-xs"
                 title="Change playback speed"
               >
                 {playbackSpeed}x Speed
@@ -319,13 +319,13 @@ export const WalkthroughVideo: React.FC<WalkthroughVideoProps> = ({
             <div className="flex items-center gap-3">
               <button
                 onClick={() => onCopy(currentStep.command)}
-                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded border border-slate-700 text-slate-300 hover:text-white hover:border-slate-500 transition-colors text-xs"
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded border border-line text-secondary hover:text-ink hover:border-line transition-colors text-xs"
               >
                 <Copy className="w-3.5 h-3.5" />
                 <span>{`Copy $ ${currentStep.command}`}</span>
               </button>
 
-              <div className="text-[11px] text-slate-500 hidden sm:inline">
+              <div className="text-xs text-secondary hidden sm:inline">
                 Pure Rust &bull; verified plugins
               </div>
             </div>

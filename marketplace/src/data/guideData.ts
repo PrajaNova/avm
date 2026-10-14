@@ -45,7 +45,7 @@ export const COMPARISONS: ComparisonItem[] = [
   },
   {
     feature: 'Windows',
-    avm: 'PowerShell (phase 1); Windows plugins coming',
+    avm: 'Native plugins and .exe shims; PowerShell integration and cmd.exe forwarding',
     asdf: 'WSL only',
     vfox: 'Native',
     mise: 'Native',
@@ -53,7 +53,7 @@ export const COMPARISONS: ComparisonItem[] = [
   },
   {
     feature: 'Lockfile',
-    avm: 'Not yet (roadmap #25)',
+    avm: '.avm.lock for Node/Java; exact versions, archive SHA-256 and frozen installs',
     asdf: 'No',
     vfox: 'Not documented',
     mise: 'mise.lock (opt-in)',
@@ -112,7 +112,7 @@ export const INSTALL_METHODS = [
     id: 'npm',
     name: 'npm / npx',
     tag: 'Node ecosystem',
-    command: 'npm install -g @prajanova/avm@beta',
+    command: 'npm install -g @prajanova/avm',
     description: 'Downloads the prebuilt, checksum-verified binary for your platform (macOS, Linux, Windows).'
   },
   {

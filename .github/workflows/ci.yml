@@ -32,6 +32,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Check documentation coverage
+        run: pnpm run check:docs
+
       - name: Build marketplace
         run: pnpm run build
 

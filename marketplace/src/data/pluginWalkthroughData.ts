@@ -97,7 +97,7 @@ export const PLUGIN_WALKTHROUGHS: Record<string, { title: string; badge: string;
         id: 'java-use-pin',
         stepNumber: '04',
         label: 'Pin Local Version',
-        command: 'avm java use 17.0.13+11',
+        command: 'avm java use openjdk-17.0.13+11',
         comment: '# Pin OpenJDK specifically for this project directory',
         output: '✓ Updated ./.avm.json:\n  "tools": {\n    "java": "openjdk-17.0.13+11"\n  }\nDirectory activated: OpenJDK 17',
         timing: '<1ms'
@@ -158,9 +158,9 @@ export const PLUGIN_WALKTHROUGHS: Record<string, { title: string; badge: string;
         id: 'android-avd-create',
         stepNumber: '04',
         label: 'Create AVD',
-        command: 'avm android avd create pixel_test --api 34',
+        command: 'avm android avd create pixel_test --api 34 --device pixel_6',
         comment: '# Guided wizard creates hardware-accelerated Android Virtual Device',
-        output: 'Creating AVD \'pixel_test\' (system-images;android-34;google_apis;arm64-v8a)...\nAuto-configuring hardware profile: medium_phone\n✓ Created AVD \'pixel_test\' in ~/.android/avd/pixel_test.avd',
+        output: 'Creating AVD \'pixel_test\' (system-images;android-34;google_apis;arm64-v8a)...\nAuto-configuring hardware profile: pixel_6\n✓ Created AVD \'pixel_test\' in ~/.android/avd/pixel_test.avd',
         timing: '1.2s'
       },
       {

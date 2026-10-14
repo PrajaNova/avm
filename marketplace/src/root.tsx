@@ -1,4 +1,5 @@
 import { Links, Meta, Outlet, Scripts, ScrollRestoration } from 'react-router';
+import { Analytics } from '@vercel/analytics/react';
 import { Navbar } from './components/Navbar';
 import { Footer } from './components/Footer';
 import { CopyProvider } from './components/CopyContext';
@@ -36,6 +37,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
             <Footer />
           </div>
         </CopyProvider>
+        <Analytics />
         <ScrollRestoration />
         <Scripts />
       </body>

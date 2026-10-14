@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import { ArrowRight, Check, Terminal, FileCode2, ShieldCheck, Layers, GitBranch, ArrowUpRight } from 'lucide-react';
 import { Platforms } from '../components/OsIcons';
 import { TerminalInstallBox } from '../components/TerminalInstallBox';

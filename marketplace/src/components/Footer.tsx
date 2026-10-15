@@ -1,6 +1,7 @@
 import { Link } from 'react-router';
 import { Github, ExternalLink } from 'lucide-react';
 import { SEO_GUIDES } from '../data/seoGuides';
+import { version } from '../../../package.json';
 
 export const Footer: React.FC = () => {
   return (
@@ -16,6 +17,9 @@ export const Footer: React.FC = () => {
             <p className="text-secondary text-xs leading-relaxed">
               Any Version Manager &mdash; a Rust-native tool for per-directory runtime versions, project aliases, and env vars, with verified plugins fetched on demand from the marketplace. macOS, Linux, and Windows.
             </p>
+            <a href={`https://github.com/PrajaNova/avm/releases/tag/v${version}`} className="inline-flex items-center min-h-11 font-mono text-accent hover:underline">
+              AVM v{version} &middot; Release notes
+            </a>
             <div className="text-xs text-secondary font-mono">
               Designed by PrajaNova &bull; MIT Licensed
             </div>

@@ -1,6 +1,6 @@
 {
   "name": "@prajanova/avm",
-  "version": "0.4.1",
+  "version": "0.5.0",
   "description": "Rust-native any version manager with aliases, shims, and provider plugins",
   "bin": {
     "avm": "bin/avm-bin.js",
@@ -13,7 +13,7 @@
   "bugs": {
     "url": "https://github.com/prajanova/avm/issues"
   },
-  "homepage": "https://github.com/prajanova/avm#readme",
+  "homepage": "https://getavm.dev/",
   "author": "prajanova",
   "license": "MIT",
   "scripts": {

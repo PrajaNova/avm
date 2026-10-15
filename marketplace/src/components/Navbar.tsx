@@ -24,12 +24,13 @@ export const Navbar = () => {
           {navItems.map(item => <NavLink key={item.to} to={item.to} end={item.to !== '/docs'} className={({ isActive }) => isActive ? 'text-accent font-medium' : 'text-secondary hover:text-ink'}>{item.label}</NavLink>)}
         </nav>
         <div className="flex items-center gap-2">
+          <a href="https://www.npmjs.com/package/@prajanova/avm" className="hidden sm:inline-flex items-center px-3 min-h-11 text-sm text-secondary hover:text-ink">npm</a>
           <a href="https://github.com/PrajaNova/avm" className="hidden sm:inline-flex items-center gap-2 px-3 min-h-11 text-sm text-secondary hover:text-ink"><Github className="w-4 h-4" /> GitHub</a>
           <button aria-label={dark ? 'Switch to light theme' : 'Switch to dark theme'} onClick={toggleTheme} className="p-3 rounded-md hover:bg-muted">{dark ? <Sun className="w-7 h-7 sm:w-5 sm:h-5" /> : <Moon className="w-7 h-7 sm:w-5 sm:h-5" />}</button>
           <button aria-label="Toggle navigation menu" aria-expanded={mobileMenuOpen} onClick={() => setMobileMenuOpen(!mobileMenuOpen)} className="lg:hidden p-3 rounded-md hover:bg-muted">{mobileMenuOpen ? <X className="w-7 h-7" /> : <Menu className="w-7 h-7" />}</button>
         </div>
       </div>
-      {mobileMenuOpen && <nav aria-label="Mobile navigation" className="lg:hidden border-t border-line px-5 py-3 bg-surface flex flex-col">{navItems.map(item => <Link key={item.to} to={item.to} onClick={() => setMobileMenuOpen(false)} className="py-4 text-xl font-semibold text-ink hover:text-accent">{item.label}</Link>)}</nav>}
+      {mobileMenuOpen && <nav aria-label="Mobile navigation" className="lg:hidden border-t border-line px-5 py-3 bg-surface flex flex-col">{navItems.map(item => <Link key={item.to} to={item.to} onClick={() => setMobileMenuOpen(false)} className="py-4 text-xl font-semibold text-ink hover:text-accent">{item.label}</Link>)}<a href="https://www.npmjs.com/package/@prajanova/avm" className="py-4 text-xl font-semibold text-ink hover:text-accent">npm</a></nav>}
     </header>
   );
 };

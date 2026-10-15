@@ -65,12 +65,18 @@ export const Footer: React.FC = () => {
           {/* Ecosystem Repos */}
           <div className="space-y-2">
             <div className="font-mono text-ink font-semibold uppercase tracking-wider text-xs">
-              Repository
+              Resources
             </div>
             <ul className="space-y-1.5 font-mono text-xs">
               <li>
                 <a href="https://github.com/PrajaNova/avm" target="_blank" rel="noreferrer" className="hover:text-ink flex items-center gap-1">
                   <span>PrajaNova/avm</span>
+                  <ExternalLink className="w-3 h-3 text-secondary" />
+                </a>
+              </li>
+              <li>
+                <a href="https://www.npmjs.com/package/@prajanova/avm" target="_blank" rel="noreferrer" className="hover:text-ink flex items-center gap-1">
+                  <span>npm: @prajanova/avm</span>
                   <ExternalLink className="w-3 h-3 text-secondary" />
                 </a>
               </li>

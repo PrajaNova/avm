@@ -1,127 +1,44 @@
 # avm — Any Version Manager
 
-**One version manager for Node, Java and the Android SDK.** avm picks the
-right runtime for every project, and runs the project's aliases and env too.
-It's a single Rust binary for macOS, Linux and Windows.
+Manage Node.js, Java and Android SDK versions per project, with aliases and
+environment variables. Built in Rust for macOS, Linux and Windows.
 
-**📖 Docs, guides and full command reference: [getavm.dev](https://getavm.dev/)**
-
-```console
-~/shop-app $ node -v
-v20.19.5
-~/shop-app $ avm which node
-tool 'node': 20.19.5 (from ./.nvmrc)
-```
-
-## Why avm
-
-- **Works with the files you already have:** `.nvmrc`, `.node-version`, `.tool-versions`, `.java-version`, `.sdkmanrc` and `package.json` engines.
-- **Global npm tools survive version switches:** install a CLI once, use it in projects pinned to other Node versions.
-- **Monorepo configs:** parent configs merge with nearest-directory precedence; environment profiles and personal overrides are supported. See [config layering](docs/ops/CONFIG_LAYERING.md).
-- **Safe by default:** avm, plugins and runtimes are checked against the sha256 their release publishes before install (this catches corrupt or altered downloads, not a compromised release), and a cloned repo's aliases and env stay off until you run `avm trust`.
-- **Android SDK, build tools and emulator** in one install, next to Node and Java.
-- **Everywhere:** macOS (Apple Silicon and Intel), Linux (x64 and arm64), and Windows (PowerShell, with `.exe` shims your IDE can run).
-- **Stays current:** `avm outdated`, `avm upgrade` and `avm self-update`.
+**[Website & documentation](https://getavm.dev/)** ·
+**[npm package](https://www.npmjs.com/package/@prajanova/avm)**
 
 ## Install
 
 ```bash
-brew install prajanova/tap/avm                                              # macOS / Linux
-curl -fsSL https://raw.githubusercontent.com/PrajaNova/avm/main/install.sh | bash  # macOS / Linux
-npm install -g @prajanova/avm                                               # any OS with Node
+npm install -g @prajanova/avm
 ```
 
-```powershell
-irm https://raw.githubusercontent.com/PrajaNova/avm/main/install.ps1 | iex  # Windows
-```
+Prefer Homebrew or a standalone installer? See [all installation methods](https://getavm.dev/docs/guide/getting-started).
 
-Then add the shell hook ([details for each shell](https://getavm.dev/docs/guide/shell-setup)):
+Set up your shell using the [shell setup guide](https://getavm.dev/docs/guide/shell-setup).
+For Bash or zsh, add this to `~/.bashrc` or `~/.zshrc`:
 
 ```bash
-eval "$(avm-bin shell-init)"   # in ~/.zshrc or ~/.bashrc
+eval "$(avm-bin shell-init)"
 ```
-
-Shell setup refreshes project environment variables when the directory changes
-(at the prompt in Bash/PowerShell, via `chpwd` in zsh) and before and after `avm`
-commands. After editing `.avm.json` by hand, `cd` out and back in or run any
-`avm` command to apply it.
-Leaving a project restores each variable's original value, or unsets it if it
-was originally absent. Re-run shell setup in existing sessions after upgrading.
-
-The Windows installer also adds an `avm` command for `cmd.exe`. It forwards
-CLI commands to the installed binary; automatic shell environment updates
-still require the PowerShell hook.
 
 ## Quick start
 
 ```bash
-avm plugin add node        # plugins are compiled binaries, verified on install
-avm node use 22            # pin Node 22 for this project (installs it if needed)
-avm add dev "npm run dev"  # a project alias → run it with `avm dev`
+avm plugin add node
+avm node use 22
+avm add dev "npm run dev"
+avm dev
 ```
-
-Try another runtime without changing project or global pins:
-
-```bash
-avm exec node@18 -- npm test
-avm x node@22 java@21 -- ./gradlew build
-avm run dev --with node@18 -- --port 3000
-```
-
-Missing versions install automatically; `--no-install` uses installed versions
-only, including the newest installed match for fuzzy specs. Plugins must already
-be installed. Repeat `--with` for multiple tools, before any alias arguments.
-These commands inherit trusted project env and provider vars, prepend the
-selected tools to PATH, and leave `.avm.json` and lockfiles unchanged. The shell
-hook forwards `exec` and `x` directly to the CLI.
-
-Install every tool selected by project, version-file and global pins:
-
-```bash
-avm install
-avm lock --platform linux_amd64,darwin_arm64,windows_amd64
-avm install --frozen       # CI: require the committed lockfile to match config
-```
-
-Commit `.avm.lock` to keep fuzzy versions on the same exact release. Locking
-fetches download metadata without installing; locked downloads always verify
-their SHA-256. A stale lock fails with instructions to run `avm lock`.
-Node and Java support lockfiles with the updated plugins. Android and legacy
-asdf plugins support ordinary `avm install`, but cannot yet be locked.
 
 ## Learn more
 
-- [Getting started](https://getavm.dev/docs/guide/getting-started) · [All commands](https://getavm.dev/docs/manage/commands) · [Configuration](https://getavm.dev/docs/manage/configuration)
-- [Version files](https://getavm.dev/docs/manage/version-files) · [Security & trust](https://getavm.dev/docs/manage/security) · [Comparison with asdf, mise, proto](https://getavm.dev/docs/manage/comparison)
-- [Plugin marketplace](https://getavm.dev/marketplace) · [What's new](https://getavm.dev/changelog) · [Write a plugin](docs/plugins/CREATING_A_PLUGIN.md)
+- [Getting started](https://getavm.dev/docs/guide/getting-started)
+- [Commands & configuration](https://getavm.dev/docs)
+- [Plugin marketplace](https://getavm.dev/marketplace)
+- [Changelog](https://getavm.dev/changelog)
 
-## Contributing
+Contributions welcome: [Contributing](https://github.com/PrajaNova/avm/blob/main/CONTRIBUTING.md) ·
+[Report an issue](https://github.com/PrajaNova/avm/issues) ·
+[Security](https://github.com/PrajaNova/avm/blob/main/SECURITY.md).
 
-Issues and PRs are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for setup,
-the code layout and the end-to-end tests, and [SECURITY.md](SECURITY.md) to
-report a vulnerability.
-
-## License
-
-[MIT](LICENSE)
-
-## Rust workspace
-
-The CLI and first-party plugins share one Cargo workspace:
-
-```text
-crates/avm-cli
-crates/avm-plugin-api
-plugins/avm-plugin-node
-plugins/avm-plugin-java
-plugins/avm-plugin-android
-```
-
-```bash
-cargo build --workspace
-cargo test --workspace
-cargo build -p avm-plugin-node  # one plugin
-```
-
-Plugins remain separate executables; the CLI discovers them at runtime.
-See [Contributing](CONTRIBUTING.md) and [Releasing](docs/ops/RELEASE.md).
+[MIT License](https://github.com/PrajaNova/avm/blob/main/LICENSE)

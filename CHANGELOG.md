@@ -6,6 +6,12 @@ The format follows Keep a Changelog style, and releases use semantic versioning.
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-10-15
+
+### Changed
+- Shorten the npm and repository READMEs, link to getavm.dev for full documentation, and use the website as the npm package homepage.
+- Add npm package links to the website navigation and footer.
+
 ### Fixed
 - A broken or BOM-prefixed `package.json` no longer stops `node`, shims or the prompt; scripts are only read by `run`, `resolve`, `which` and `list`, which warn and continue.
 - Aliases and plugin commands run through one `avm-bin run` call; the shell wrappers take their built-in lists from the CLI definition (`alias` was missing before).

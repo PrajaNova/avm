@@ -817,3 +817,25 @@ fn pinned_tool_without_plugin_makes_no_network_call() {
     assert!(listener.accept().is_err(), "marketplace was contacted");
     assert!(start.elapsed() < std::time::Duration::from_secs(5));
 }
+
+#[cfg(unix)]
+#[test]
+fn list_starts_each_plugin_once() {
+    use std::os::unix::fs::PermissionsExt;
+    let p = Project::new();
+    let calls = p.0.join("calls");
+    for tool in ["node", "java"] {
+        let bin = p.0.join(format!("home/.avm/plugins/avm-plugin-{tool}/bin"));
+        fs::create_dir_all(&bin).unwrap();
+        let script = format!("#!/bin/sh\necho \"{tool} $1\" >> '{}'\nif [ \"$1\" = installed-versions ]; then echo '{{\"versions\":[\"1.0.0\"]}}'; fi\n", calls.display());
+        fs::write(bin.join("avm-plugin"), script).unwrap();
+        fs::set_permissions(bin.join("avm-plugin"), fs::Permissions::from_mode(0o755)).unwrap();
+    }
+    let out = stdout(p.run(&["list"]));
+    assert!(
+        out.contains("node: 1.0.0") && out.contains("java: 1.0.0"),
+        "{out}"
+    );
+    let log = fs::read_to_string(calls).unwrap();
+    assert_eq!(log.lines().count(), 2, "one start per plugin: {log}");
+}

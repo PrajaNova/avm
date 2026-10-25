@@ -295,7 +295,9 @@ fn locks_installs_and_rejects_drift_before_installing() {
     )
     .unwrap();
     failure(project.run(&["install", "--frozen"]), "out of date");
-    failure(project.run(&["env"]), "out of date");
+    let env = project.run(&["env"]);
+    assert!(String::from_utf8_lossy(&env.stderr).contains("out of date"));
+    success(env);
     assert_eq!(fs::read(project.0.join("installs")).unwrap(), installs);
     fs::write(project.0.join("project/.avm.json"), config).unwrap();
 
@@ -378,7 +380,8 @@ fn locks_installs_and_rejects_drift_before_installing() {
     assert_eq!(old, fs::read(project.0.join("project/.avm.lock")).unwrap());
     fs::remove_file(project.0.join("project/.avm.lock")).unwrap();
     success(project.run(&["install"]));
-    assert!(!project.0.join("project/.avm.lock").exists());
+    assert!(project.0.join("project/.avm.lock").exists());
+    fs::remove_file(project.0.join("project/.avm.lock")).unwrap();
     assert!(fs::read_to_string(project.0.join("installs"))
         .unwrap()
         .contains("node:20.3.0"));
@@ -410,4 +413,80 @@ fn locks_installs_and_rejects_drift_before_installing() {
         .exists());
     failure(project.run(&["lock"]), "requires a native plugin");
     assert!(!project.0.join("project/.avm.lock").exists());
+}
+
+fn write_project(project: &Project, config: &str) {
+    fs::write(project.0.join("project/.avm.json"), config).unwrap();
+}
+
+#[test]
+fn install_writes_the_lock_when_missing() {
+    let project = Project::new();
+    success(project.run(&["install"]));
+    assert_eq!(project.lock()["tools"]["node"]["resolved"], "20.2.0");
+}
+
+#[test]
+fn install_in_a_project_without_tools_says_so() {
+    let project = Project::new();
+    write_project(&project, "{}");
+    let out = success(project.run(&["install"]));
+    assert!(out.contains("No tools in .avm.json"), "{out}");
+    assert!(out.contains("java") && out.contains("(global)"), "{out}");
+    assert!(!project.0.join("project/.avm.lock").exists());
+    let again = success(project.run(&["install"]));
+    assert!(again.contains("already installed"), "{again}");
+}
+
+#[test]
+fn upgrade_without_pins_says_so() {
+    let project = Project::new();
+    write_project(&project, "{}");
+    fs::write(project.0.join("home/.avm.json"), "{}").unwrap();
+    assert!(success(project.run(&["upgrade"])).contains("No tools pinned here."));
+}
+
+#[test]
+fn lock_and_frozen_install_without_tools_are_explicit() {
+    let project = Project::new();
+    write_project(&project, "{}");
+    assert!(success(project.run(&["lock"])).contains("Nothing to lock"));
+    assert!(!project.0.join("project/.avm.lock").exists());
+    assert!(success(project.run(&["install", "--frozen"])).contains("Nothing to install"));
+}
+
+#[test]
+fn a_stale_lock_warns_but_does_not_break_commands() {
+    let project = Project::new();
+    success(project.run(&["lock"]));
+    write_project(&project, r#"{"tools":{"node":"21"}}"#);
+    let which = project.run(&["which", "node"]);
+    assert!(String::from_utf8_lossy(&which.stderr).contains("out of date"));
+    success(which);
+    success(project.run(&["env"]));
+    failure(project.run(&["install", "--frozen"]), "out of date");
+}
+
+#[test]
+fn changing_a_pin_refreshes_an_existing_lock() {
+    let project = Project::new();
+    success(project.run(&["lock"]));
+    success(project.run(&["node", "use", "20.2.0"]));
+    let out = project.run(&["env"]);
+    assert!(!String::from_utf8_lossy(&out.stderr).contains("out of date"));
+    assert_eq!(project.lock()["tools"]["node"]["requested"], "20.2.0");
+}
+
+#[test]
+fn old_plugins_are_told_how_to_update() {
+    let project = Project::new();
+    let plugin = project
+        .0
+        .join("home/.avm/plugins/avm-plugin-node/bin/avm-plugin");
+    let script = fs::read_to_string(&plugin).unwrap();
+    fs::write(&plugin, script.replace("cmd == 'resolve'", "cmd == 'old'")).unwrap();
+    failure(project.run(&["lock"]), "avm plugin update node");
+    let out = project.run(&["install"]);
+    assert!(String::from_utf8_lossy(&out.stderr).contains("avm plugin update node"));
+    success(out);
 }

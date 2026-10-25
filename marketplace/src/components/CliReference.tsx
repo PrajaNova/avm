@@ -84,9 +84,9 @@ export const CliReference: React.FC<CliReferenceProps> = ({ onCopy }) => {
             >
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-2">
                 <div className="flex items-center gap-2 flex-wrap">
-                  <span className="font-mono text-sm sm:text-base font-bold text-accent">
+                  <h2 className="font-mono text-sm sm:text-base font-bold text-accent">
                     {item.command}
-                  </span>
+                  </h2>
                   {item.args && (
                     <span className="font-mono text-xs text-secondary bg-page px-2 py-0.5 rounded border border-line">
                       {item.args}

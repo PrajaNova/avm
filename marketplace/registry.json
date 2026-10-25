@@ -16,6 +16,13 @@
       "release_tag": "avm-plugin-java-v0.3.1"
     },
     {
+      "name": "python",
+      "description": "CPython (python-build-standalone) — versions, install, .python-version",
+      "section_label": "Python",
+      "repo": "PrajaNova/avm",
+      "release_tag": "avm-plugin-python-v0.1.0"
+    },
+    {
       "name": "android",
       "description": "Android SDK (cmdline-tools, platform-tools, sdkmanager) — versions, install, ANDROID_HOME",
       "section_label": "Android SDK",

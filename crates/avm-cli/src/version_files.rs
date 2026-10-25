@@ -187,6 +187,11 @@ pub(crate) fn numbers(name: &str) -> Option<Vec<u64>> {
     Some(nums)
 }
 
+/// Oldest to newest by numeric components then build, not as text (`9` < `10`).
+pub(crate) fn sort_versions(versions: &mut [String]) {
+    versions.sort_by_cached_key(|v| (numbers(v), build(v), v.clone()));
+}
+
 /// The `+N` build number (Java), 0 when there is none.
 pub(crate) fn build(name: &str) -> u64 {
     name.split_once('+')

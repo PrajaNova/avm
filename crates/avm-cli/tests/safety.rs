@@ -155,11 +155,13 @@ fn json_pins_resolve_installed_versions_in_both_scopes() {
     fs::write(p.0.join("home/.avm.json"), r#"{"tools":{"node":"18"}}"#).unwrap();
     let global = p.run(&["list"]);
     assert!(global.status.success());
-    assert!(String::from_utf8_lossy(&global.stdout).contains("node = 18.3.0"));
+    let text = String::from_utf8_lossy(&global.stdout);
+    assert!(text.contains("node") && text.contains("18.3.0") && text.contains("global"));
     fs::write(p.0.join("project/.avm.json"), r#"{"tools":{"node":"20"}}"#).unwrap();
     let local = p.run(&["list"]);
     assert!(local.status.success());
-    assert!(String::from_utf8_lossy(&local.stdout).contains("node = 20.2.0"));
+    let text = String::from_utf8_lossy(&local.stdout);
+    assert!(text.contains("node") && text.contains("20.2.0") && text.contains("local"));
     let cfg: serde_json::Value =
         serde_json::from_slice(&fs::read(p.0.join("project/.avm.json")).unwrap()).unwrap();
     assert_eq!(cfg["tools"]["node"], "20");
@@ -388,12 +390,17 @@ fn hierarchical_profiles_merge_and_report_origins() {
         "MODE=staging",
         "CI_ONLY=yes",
         "GLOBAL=yes",
-        "node = 22",
-        "java = 17",
         ".avm.staging.json",
         ".avm.ci.json",
     ] {
         assert!(list.contains(text), "missing {text}: {list}");
+    }
+    for (tool, version, scope) in [("node", "22", "local"), ("java", "17", "global")] {
+        assert!(
+            list.lines()
+                .any(|l| l.starts_with(tool) && l.contains(version) && l.contains(scope)),
+            "missing {tool} row: {list}"
+        );
     }
     assert!(run(&["which", "build"]).contains(".avm.staging.json"));
     assert_eq!(run(&["run", "parent"]).trim(), "inherited");
@@ -798,6 +805,58 @@ fn bare_avm_without_a_terminal_prints_help_instead_of_failing() {
     assert!(String::from_utf8_lossy(&out.stdout).contains("Usage: avm"));
 }
 
+#[cfg(unix)]
+#[test]
+fn list_shows_scope_active_and_numerically_sorted_installs() {
+    use std::os::unix::fs::PermissionsExt;
+    let p = Project::new();
+    let plugin = p.0.join("home/.avm/plugins/avm-plugin-node/bin/avm-plugin");
+    fs::create_dir_all(plugin.parent().unwrap()).unwrap();
+    fs::write(
+        &plugin,
+        "#!/bin/sh\ncase \"$1\" in\nmanifest) echo '{\"name\":\"node\",\"version\":\"1.0.0\",\"api_version\":1}';;\ninstalled-versions) echo '{\"versions\":[\"10.2.0\",\"18.3.0\",\"9.1.0\"]}';;\n*) exit 1;;\nesac\n",
+    )
+    .unwrap();
+    fs::set_permissions(&plugin, fs::Permissions::from_mode(0o755)).unwrap();
+    for v in ["9.1.0", "10.2.0", "18.3.0"] {
+        fs::create_dir_all(p.0.join("home/.avm/tools/node").join(v).join("bin")).unwrap();
+    }
+    fs::write(p.0.join("home/.avm.json"), r#"{"tools":{"node":"10"}}"#).unwrap();
+    let out = stdout(p.run(&["list"]));
+    assert!(out.contains("Project: none here"), "{out}");
+    assert!(out.contains("~/.avm.json"), "{out}");
+    assert!(out.contains("9.1.0  10.2.0*  18.3.0"), "{out}");
+    fs::write(p.0.join("project/.avm.json"), r#"{"tools":{"node":"99"}}"#).unwrap();
+    let out = stdout(p.run(&["list"]));
+    assert!(
+        out.contains("local") && out.contains("./.avm.json"),
+        "{out}"
+    );
+    assert!(out.contains("(not installed)"), "{out}");
+    assert!(!out.contains(p.0.to_str().unwrap()), "{out}");
+}
+
+#[test]
+fn prune_removes_only_stale_config_cache_files() {
+    let p = Project::new();
+    let cache = p.0.join("home/.avm/cache");
+    fs::create_dir_all(&cache).unwrap();
+    let old = cache.join("config-0000000000000001.json");
+    let fresh = cache.join("config-0000000000000002.json");
+    fs::write(&old, "{}").unwrap();
+    fs::write(&fresh, "{}").unwrap();
+    let month_ago = std::time::SystemTime::now() - std::time::Duration::from_secs(31 * 86_400);
+    fs::File::options()
+        .write(true)
+        .open(&old)
+        .unwrap()
+        .set_modified(month_ago)
+        .unwrap();
+    fs::write(p.0.join("home/.avm.json"), "{}").unwrap();
+    assert!(p.run(&["prune", "--yes"]).status.success());
+    assert!(!old.exists() && fresh.exists());
+}
+
 #[test]
 fn pinned_tool_without_plugin_makes_no_network_call() {
     let p = Project::new();
@@ -832,10 +891,13 @@ fn list_starts_each_plugin_once() {
         fs::set_permissions(bin.join("avm-plugin"), fs::Permissions::from_mode(0o755)).unwrap();
     }
     let out = stdout(p.run(&["list"]));
-    assert!(
-        out.contains("node: 1.0.0") && out.contains("java: 1.0.0"),
-        "{out}"
-    );
+    for tool in ["node", "java"] {
+        assert!(
+            out.lines()
+                .any(|l| l.starts_with(tool) && l.ends_with("1.0.0")),
+            "{out}"
+        );
+    }
     let log = fs::read_to_string(calls).unwrap();
     assert_eq!(log.lines().count(), 2, "one start per plugin: {log}");
 }
@@ -873,25 +935,4 @@ fn outdated_lists_versions_for_all_tools_concurrently() {
         "{:?}",
         start.elapsed()
     );
-}
-
-#[test]
-fn prune_removes_only_stale_config_cache_files() {
-    let p = Project::new();
-    let cache = p.0.join("home/.avm/cache");
-    fs::create_dir_all(&cache).unwrap();
-    let old = cache.join("config-0000000000000001.json");
-    let fresh = cache.join("config-0000000000000002.json");
-    fs::write(&old, "{}").unwrap();
-    fs::write(&fresh, "{}").unwrap();
-    let month_ago = std::time::SystemTime::now() - std::time::Duration::from_secs(31 * 86_400);
-    fs::File::options()
-        .write(true)
-        .open(&old)
-        .unwrap()
-        .set_modified(month_ago)
-        .unwrap();
-    fs::write(p.0.join("home/.avm.json"), "{}").unwrap();
-    assert!(p.run(&["prune", "--yes"]).status.success());
-    assert!(!old.exists() && fresh.exists());
 }

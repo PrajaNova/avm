@@ -358,7 +358,7 @@ fn print_provider_status(
     } else {
         println!("Selected version: none");
     }
-    print_installed_versions(provider)?;
+    print_installed_versions(provider, cfg.resolve_tool(provider_name).map(|(v, _)| v))?;
     println!();
     println!("Commands:");
     println!("  avm {provider_name} versions");
@@ -368,15 +368,17 @@ fn print_provider_status(
     Ok(())
 }
 
-fn print_installed_versions(provider: &dyn ToolProvider) -> Result<()> {
-    let installed = provider.installed_versions()?;
-    if installed.is_empty() {
+fn print_installed_versions(provider: &dyn ToolProvider, active: Option<String>) -> Result<()> {
+    let mut installed = provider.installed_versions()?;
+    crate::version_files::sort_versions(&mut installed);
+    let active = active.as_deref();
+    if installed.is_empty() && active.is_none() {
         println!("Installed {} versions: none", provider.name());
     } else {
         println!(
             "Installed {} versions: {}",
             provider.name(),
-            installed.join(", ")
+            installed_cell(&installed, active).replace("  ", ", ")
         );
     }
     Ok(())

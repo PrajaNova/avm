@@ -1,0 +1,24 @@
+# AVM (Any Version Manager)
+
+> AVM manages Node.js, Java (Temurin OpenJDK) and Android SDK versions per project, with aliases, environment variables and checksum-verified lockfiles. Open source (MIT) for macOS, Linux and Windows.
+
+## Docs
+- [Introduction](https://getavm.dev/docs/guide/introduction): what AVM is and why
+- [Getting started](https://getavm.dev/docs/guide/getting-started): install and quickstart
+- [Command reference](https://getavm.dev/docs/manage/commands): every CLI command
+- [Version files](https://getavm.dev/docs/manage/version-files): .nvmrc, .node-version, .avm.json and more
+- [Lockfiles](https://getavm.dev/docs/manage/lockfiles): reproducible, verified installs
+- [Comparison](https://getavm.dev/docs/manage/comparison): AVM vs asdf, mise, nvm and others
+- [FAQ](https://getavm.dev/docs/more/faq)
+
+## Guides
+- [An nvm alternative for Node.js, Java and Android](https://getavm.dev/guides/nvm-alternative)
+- [Switch Node.js versions per project](https://getavm.dev/guides/switch-node-versions-per-project)
+- [Manage multiple Java versions](https://getavm.dev/guides/manage-java-versions)
+
+## Plugins
+- [Plugin marketplace](https://getavm.dev/marketplace): Node.js, Java and Android SDK plugins
+
+## Source
+- [GitHub](https://github.com/PrajaNova/avm)
+- [npm](https://www.npmjs.com/package/@prajanova/avm)

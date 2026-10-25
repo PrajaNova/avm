@@ -106,7 +106,7 @@ export const DocsPage: React.FC<DocsPageProps> = ({ onCopy }) => {
 
               {/* Motivation */}
               <div className="rounded-lg bg-surface/50 border border-line p-6 sm:p-8 space-y-4">
-                <h3 className="text-xl font-bold text-ink">Why avm?</h3>
+                <h2 className="text-xl font-bold text-ink">Why avm?</h2>
                 <p className="text-sm text-secondary leading-relaxed">
                   Version managers like <em>nvm</em> and <em>rbenv</em> rely on shell scripts, and most tools split their state across fragmented configuration files (<code className="text-accent font-mono text-xs bg-page px-1 py-0.5 rounded">.tool-versions</code>, <code className="text-accent font-mono text-xs bg-page px-1 py-0.5 rounded">.nvmrc</code>, <code className="text-accent font-mono text-xs bg-page px-1 py-0.5 rounded">.ruby-version</code>).
                 </p>
@@ -133,7 +133,7 @@ export const DocsPage: React.FC<DocsPageProps> = ({ onCopy }) => {
 
               {/* Core Features */}
               <div className="space-y-4">
-                <h3 className="text-xl font-bold text-ink">Core Capabilities</h3>
+                <h2 className="text-xl font-bold text-ink">Core Capabilities</h2>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <div className="p-5 rounded-lg bg-surface/60 border border-line">
                     <Package className="w-5 h-5 text-accent mb-2" />
@@ -176,7 +176,7 @@ export const DocsPage: React.FC<DocsPageProps> = ({ onCopy }) => {
               {/* Installation Methods */}
               <div className="rounded-lg bg-surface/50 border border-line p-6 sm:p-8 space-y-6">
                 <div>
-                  <h3 className="text-xl font-bold text-ink mb-1">1. Install avm CLI</h3>
+                  <h2 className="text-xl font-bold text-ink mb-1">1. Install avm CLI</h2>
                   <p className="text-xs sm:text-sm text-secondary">
                     Select your installation target (macOS Apple Silicon or Intel, Linux x86_64 or arm64, Windows x64):
                   </p>
@@ -192,7 +192,7 @@ export const DocsPage: React.FC<DocsPageProps> = ({ onCopy }) => {
 
               {/* Quickstart 5 commands */}
               <div className="rounded-lg bg-surface/40 border border-line p-6 sm:p-8 space-y-4">
-                <h3 className="text-xl font-bold text-ink">2. Quickstart in 60 Seconds</h3>
+                <h2 className="text-xl font-bold text-ink">2. Quickstart in 60 Seconds</h2>
                 <p className="text-xs sm:text-sm text-secondary">
                   Run these 5 simple commands inside any directory to pin tools and configure aliases:
                 </p>
@@ -282,7 +282,7 @@ export const DocsPage: React.FC<DocsPageProps> = ({ onCopy }) => {
               </div>
 
               <div className="rounded-lg bg-surface/60 border border-line p-6 sm:p-8 space-y-4">
-                <h3 className="text-xl font-bold text-ink">Hierarchical Precedence</h3>
+                <h2 className="text-xl font-bold text-ink">Hierarchical Precedence</h2>
                 <div className="space-y-3 text-xs sm:text-sm">
                   <div className="p-4 rounded-lg bg-page border border-line flex items-start gap-3">
                     <span className="w-6 h-6 rounded bg-accent text-on-accent font-bold flex items-center justify-center font-mono shrink-0">1</span>
@@ -437,7 +437,7 @@ export const DocsPage: React.FC<DocsPageProps> = ({ onCopy }) => {
               </div>
 
               <div className="rounded-lg bg-surface/50 border border-line p-6 sm:p-8 space-y-4 text-sm text-secondary">
-                <h3 className="text-xl font-bold text-ink">Precedence (nearest directory wins)</h3>
+                <h2 className="text-xl font-bold text-ink">Precedence (nearest directory wins)</h2>
                 <ol className="list-decimal pl-5 space-y-1.5">
                   <li><code className="text-accent font-mono text-xs bg-page px-1 py-0.5 rounded">.avm.json</code> <code className="text-accent font-mono text-xs bg-page px-1 py-0.5 rounded">tools</code> merged from parent and child layers (including profiles and personal overrides)</li>
                   <li><code className="text-accent font-mono text-xs bg-page px-1 py-0.5 rounded">.tool-versions</code> (asdf format; <code className="text-accent font-mono text-xs bg-page px-1 py-0.5 rounded">nodejs</code> maps to <code className="text-accent font-mono text-xs bg-page px-1 py-0.5 rounded">node</code>)</li>
@@ -472,7 +472,7 @@ tool 'node': 20.11.1 (from ./.nvmrc)`}</pre>
               </div>
 
               <div className="rounded-lg bg-surface/50 border border-line p-6 sm:p-8 space-y-4 text-sm text-secondary">
-                <h3 className="text-xl font-bold text-ink">Trusting a project</h3>
+                <h2 className="text-xl font-bold text-ink">Trusting a project</h2>
                 <p>
                   A project's <code className="text-accent font-mono text-xs bg-page px-1 py-0.5 rounded">.avm.json</code> aliases and <code className="text-accent font-mono text-xs bg-page px-1 py-0.5 rounded">env</code>, and its <code className="text-accent font-mono text-xs bg-page px-1 py-0.5 rounded">.env</code> files, run with your privileges and reach every shimmed <code className="text-accent font-mono text-xs bg-page px-1 py-0.5 rounded">node</code>/<code className="text-accent font-mono text-xs bg-page px-1 py-0.5 rounded">java</code>. So avm ignores them until you trust that exact file content. Tool pins only pick a version and always apply.
                 </p>
@@ -488,7 +488,7 @@ $ avm trust --revoke   # stop trusting this directory`}</pre>
               </div>
 
               <div className="rounded-lg bg-surface/50 border border-line p-6 sm:p-8 space-y-4 text-sm text-secondary">
-                <h3 className="text-xl font-bold text-ink">Verified downloads</h3>
+                <h2 className="text-xl font-bold text-ink">Verified downloads</h2>
                 <ul className="space-y-1.5 list-disc pl-5">
                   <li><strong className="text-ink">Plugins:</strong> <code className="text-accent font-mono text-xs bg-page px-1 py-0.5 rounded">avm plugin add</code> checks the archive against the release's <code className="text-accent font-mono text-xs bg-page px-1 py-0.5 rounded">checksums.txt</code> before extracting. A mismatch aborts with nothing installed.</li>
                   <li><strong className="text-ink">Runtimes:</strong> Node.js is checked against <code className="text-accent font-mono text-xs bg-page px-1 py-0.5 rounded">SHASUMS256.txt</code>, Temurin JDKs against foojay's sha256, and the Android cmdline-tools zip against a pinned sha256 (<code className="text-accent font-mono text-xs bg-page px-1 py-0.5 rounded">sdkmanager</code> verifies the rest).</li>
@@ -549,10 +549,10 @@ $ avm trust --revoke   # stop trusting this directory`}</pre>
               </div>
 
               <div className="p-6 rounded-lg bg-surface/60 border border-line space-y-4">
-                <h3 className="text-lg font-bold text-ink flex items-center gap-2">
+                <h2 className="text-lg font-bold text-ink flex items-center gap-2">
                   <Cpu className="w-5 h-5 text-accent" />
                   <span>Typed Wire Protocol Commands</span>
-                </h3>
+                </h2>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs font-mono">
                   <div className="p-4 rounded-lg bg-page border border-line space-y-1.5">
                     <span className="text-accent font-bold uppercase tracking-wider block mb-1">Queries (Read)</span>

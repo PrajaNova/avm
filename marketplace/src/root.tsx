@@ -5,13 +5,17 @@ import { Footer } from './components/Footer';
 import { CopyProvider } from './components/CopyContext';
 import { NotFoundPage } from './pages/NotFoundPage';
 import { isRouteErrorResponse, useRouteError } from 'react-router';
+import '@fontsource/ibm-plex-sans/latin-400.css';
+import '@fontsource/ibm-plex-sans/latin-500.css';
+import '@fontsource/ibm-plex-sans/latin-600.css';
+import '@fontsource/ibm-plex-sans/latin-700.css';
+import '@fontsource/ibm-plex-mono/latin-400.css';
+import '@fontsource/ibm-plex-mono/latin-500.css';
+import '@fontsource/ibm-plex-mono/latin-600.css';
 import './index.css';
 
 export const links = () => [
   { rel: 'icon', type: 'image/svg+xml', href: '/favicon.svg' },
-  { rel: 'preconnect', href: 'https://fonts.googleapis.com' },
-  { rel: 'preconnect', href: 'https://fonts.gstatic.com', crossOrigin: 'anonymous' },
-  { rel: 'stylesheet', href: 'https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap' },
 ];
 
 // Runs before first paint: restores old #/path links and the saved theme.

@@ -5,6 +5,7 @@ members = [
     "crates/avm-plugin-api",
     "plugins/avm-plugin-node",
     "plugins/avm-plugin-java",
+    "plugins/avm-plugin-python",
     "plugins/avm-plugin-android",
 ]
 

@@ -10,10 +10,11 @@ shims, and a runtime plugin marketplace.
 | `crates/avm-cli` | The `avm-bin` binary. Modules: `cli/` (command routing, shell protocol), `config`/`resolver` (`.avm.json` parsing, local/global merge rules, alias/env/tool resolution), `shims` (shim generation, PATH lookup), `runtime` (plugin discovery, the protocol host runner `PluginProcess`, the marketplace installer, the legacy asdf compatibility adapter). |
 | `crates/avm-plugin-api` | The `ToolProvider` trait, the plugin wire-protocol types (`protocol` module), and the `runner` module every plugin's `main.rs` calls. This is the one crate a plugin repo depends on. |
 
-**Nothing else is compiled into `avm-bin`.** node, java, and android are
+**Nothing else is compiled into `avm-bin`.** node, java, python, and android are
 workspace members under `plugins/` with local API dependencies
 ([avm-plugin-node](https://github.com/PrajaNova/avm/tree/main/plugins/avm-plugin-node),
 [avm-plugin-java](https://github.com/PrajaNova/avm/tree/main/plugins/avm-plugin-java),
+[avm-plugin-python](https://github.com/PrajaNova/avm/tree/main/plugins/avm-plugin-python),
 [avm-plugin-android](https://github.com/PrajaNova/avm/tree/main/plugins/avm-plugin-android)),
 fetched at runtime the same way a third-party plugin would be. See
 [Creating a plugin](../plugins/CREATING_A_PLUGIN.md) to add one.

@@ -45,10 +45,10 @@ case included.
 1. Bump `version` in `plugins/avm-plugin-<name>/Cargo.toml`, refresh the
    root `Cargo.lock`, and merge to `main`.
 2. Run the matching workflow in `PrajaNova/avm`:
-   **Actions → Release node plugin / Release java plugin / Release android
+   **Actions → Release node plugin / Release java plugin / Release python plugin / Release android
    plugin → Run workflow**, or:
    `gh workflow run release-node-plugin.yml -R PrajaNova/avm -f version=0.3.2`
-   (swap `node` for `java`/`android` in the workflow name as needed).
+   (swap `node` for `java`/`python`/`android` in the workflow name as needed).
 3. After the release succeeds, update that plugin's marketplace entry:
 
    ```json

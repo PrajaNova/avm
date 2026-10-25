@@ -54,6 +54,29 @@ export const EXTENDED_PLUGIN_METADATA: Record<string, PluginDetail> = {
   }
 }`
   },
+  python: {
+    envVars: ['PATH (via shims)'],
+    highlights: [
+      'Relocatable CPython builds from python-build-standalone',
+      'Full version history from Astral\'s versions feed, cached locally',
+      'SHA-256 verified installs, no compiler or system headers needed',
+      'Reads .python-version and .tool-versions',
+      'Cross-platform lock metadata for avm lock'
+    ],
+    keyCommands: [
+      { command: 'avm plugin add python', description: 'Install native CPython provider binary' },
+      { command: 'avm python versions', description: 'List recent CPython releases' },
+      { command: 'avm python 12 versions', description: 'List every 3.12 patch release' },
+      { command: 'avm python install 3.12.3', description: 'Download and install an exact CPython version' },
+      { command: 'avm python use 3.12.3', description: 'Pin Python for the current project in .avm.json' },
+      { command: 'avm python list', description: 'Show selected and installed Python versions' }
+    ],
+    sampleConfig: `{
+  "tools": {
+    "python": "3.12.3"
+  }
+}`
+  },
   android: {
     envVars: ['ANDROID_HOME', 'ANDROID_SDK_ROOT', 'PATH (adb, sdkmanager, avdmanager, emulator)'],
     highlights: [

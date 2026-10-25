@@ -29,7 +29,7 @@ export const COMPARISONS: ComparisonItem[] = [
   },
   {
     feature: 'Existing version files',
-    avm: '.tool-versions, .nvmrc, .node-version, package.json, .java-version, .sdkmanrc, on by default',
+    avm: '.tool-versions, .nvmrc, .node-version, package.json, .java-version, .sdkmanrc, .python-version, on by default',
     asdf: '.tool-versions; others opt-in',
     vfox: '.tool-versions, .nvmrc, .node-version, .sdkmanrc',
     mise: 'Opt-in per tool',

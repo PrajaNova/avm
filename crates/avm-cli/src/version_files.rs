@@ -51,6 +51,7 @@ const IDIOMATIC: &[(&str, &str, Parser)] = &[
     ("package.json", "node", parse_package_json),
     (".java-version", "java", first_line),
     (".sdkmanrc", "java", parse_sdkmanrc),
+    (".python-version", "python", first_line),
 ];
 
 fn first_line(raw: &str) -> Option<String> {
@@ -288,6 +289,8 @@ mod tests {
         assert_eq!(p("20.x").as_deref(), Some("20.11.1"));
         assert_eq!(p("~20.9").as_deref(), Some("20.9.0"));
         assert_eq!(p("19"), None);
+        let python = installed(&["3.11.9", "3.12.3", "3.12.10"]);
+        assert_eq!(pick("python", "3.12", python).as_deref(), Some("3.12.10"));
         let java = installed(&["openjdk-17.0.9+9", "openjdk-21.0.2+13"]);
         assert_eq!(
             pick("java", "17", java.clone()).as_deref(),

@@ -123,6 +123,58 @@ export const PLUGIN_WALKTHROUGHS: Record<string, { title: string; badge: string;
     ]
   },
 
+  python: {
+    title: 'CPython Plugin Walkthrough',
+    badge: 'avm-plugin-python',
+    steps: [
+      {
+        id: 'python-install-plugin',
+        stepNumber: '01',
+        label: 'Add Plugin',
+        command: 'avm plugin add python',
+        comment: '# Install the native CPython provider (python-build-standalone builds)',
+        output: 'Fetching \'python\' from PrajaNova/avm...\n✓ Installed python v0.1.0',
+        timing: '0.8s'
+      },
+      {
+        id: 'python-list-versions',
+        stepNumber: '02',
+        label: 'Browse Versions',
+        command: 'avm python 12 versions',
+        comment: '# Every 3.12 patch release that has a relocatable build',
+        output: 'Available Python versions:\n  3.12.15\n  3.12.14\n  3.12.13\n  ...\n  3.12.3',
+        timing: '0.8s'
+      },
+      {
+        id: 'python-install-version',
+        stepNumber: '03',
+        label: 'Install Python',
+        command: 'avm python install 3.12.3',
+        comment: '# Downloads a SHA-256 verified archive; no compiler needed',
+        output: 'Extracting to ~/.avm/tools/python/3.12.3...\n✓ Successfully installed Python 3.12.3',
+        timing: '1.6s'
+      },
+      {
+        id: 'python-use-pin',
+        stepNumber: '04',
+        label: 'Pin Local Version',
+        command: 'avm python use 3.12.3',
+        comment: '# Pin Python for this project directory',
+        output: '✓ Updated ./.avm.json:\n  "tools": {\n    "python": "3.12.3"\n  }',
+        timing: '<1ms'
+      },
+      {
+        id: 'python-verify',
+        stepNumber: '05',
+        label: 'Verify Python',
+        command: 'python3 --version',
+        comment: '# Shims route to the directory\'s pinned CPython',
+        output: 'Python 3.12.3',
+        timing: '<0.4ms'
+      }
+    ]
+  },
+
   android: {
     title: 'Android SDK & Emulator Plugin Walkthrough',
     badge: 'avm-plugin-android',

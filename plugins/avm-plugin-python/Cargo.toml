@@ -1,0 +1,13 @@
+[package]
+name = "avm-plugin-python"
+version = "0.1.0"
+edition = "2021"
+description = "avm native provider for CPython (python-build-standalone builds). Speaks avm's plugin protocol (https://github.com/PrajaNova/avm)."
+license = "MIT"
+repository = "https://github.com/PrajaNova/avm"
+
+[dependencies]
+avm-plugin-api = { path = "../../crates/avm-plugin-api" }
+anyhow = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }

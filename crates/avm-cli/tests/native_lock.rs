@@ -30,6 +30,9 @@ impl Disco {
         let thread = thread::spawn(move || {
             while !stopped.load(Ordering::Relaxed) {
                 if let Ok((mut stream, _)) = listener.accept() {
+                    // Windows sockets inherit the listener's non-blocking mode; a
+                    // read before the request lands would drop the connection.
+                    stream.set_nonblocking(false).unwrap();
                     stream
                         .set_read_timeout(Some(std::time::Duration::from_secs(2)))
                         .unwrap();

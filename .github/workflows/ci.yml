@@ -7,7 +7,52 @@ on:
       - main
 
 jobs:
+  # Decides what to run from the files a PR touches; pushes to main run everything.
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      site: ${{ steps.diff.outputs.site }}
+      workspace: ${{ steps.diff.outputs.workspace }}
+      plugins: ${{ steps.diff.outputs.plugins }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Detect changed areas
+        id: diff
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = pull_request ]; then
+            # The PR checkout is a merge commit; its first parent is the base branch.
+            files=$(git diff --name-only HEAD^1 HEAD)
+          else
+            files=ALL
+          fi
+          has() { [ "$files" = ALL ] || grep -Eq "$1" <<<"$files"; }
+          # Code every plugin builds against, plus this pipeline itself.
+          shared='^(crates/|Cargo\.(toml|lock)$|rust-toolchain|\.github/workflows/(ci|plugin-ci)\.yml$)'
+
+          has "^marketplace/|^crates/avm-cli/src/cli/args\.rs$|^\.github/workflows/ci\.yml$" && site=true || site=false
+          # Workspace-wide jobs also exercise the cli e2e plugins (node, java, android);
+          # a python-only change is covered by its own plugin job.
+          has "$shared|^(scripts/|e2e/|bin/|install\.|package\.json$|CHANGELOG\.md$|plugins/avm-plugin-(node|java|android)/)" && workspace=true || workspace=false
+
+          list=()
+          for p in node java python android; do
+            if has "$shared|^plugins/avm-plugin-$p/"; then list+=("avm-plugin-$p"); fi
+          done
+          plugins=$(jq -nc '$ARGS.positional' --args ${list[@]+"${list[@]}"})
+
+          echo "site=$site" >> "$GITHUB_OUTPUT"
+          echo "workspace=$workspace" >> "$GITHUB_OUTPUT"
+          echo "plugins=$plugins" >> "$GITHUB_OUTPUT"
+          echo "changed: site=$site workspace=$workspace plugins=$plugins"
+
   marketplace:
+    needs: changes
+    if: needs.changes.outputs.site == 'true'
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -39,6 +84,8 @@ jobs:
         run: pnpm run build
 
   rust:
+    needs: changes
+    if: needs.changes.outputs.workspace == 'true'
     strategy:
       fail-fast: false
       matrix:
@@ -77,6 +124,8 @@ jobs:
         run: bash scripts/check-changelog.sh
 
   windows:
+    needs: changes
+    if: needs.changes.outputs.workspace == 'true'
     runs-on: windows-latest
     timeout-minutes: 60
     steps:
@@ -100,6 +149,8 @@ jobs:
   # Every PR: build avm from the PR, install it with the PR's install.sh on
   # a clean Ubuntu container, and run the core, node, java and android suites.
   e2e:
+    needs: changes
+    if: needs.changes.outputs.workspace == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
@@ -112,10 +163,12 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # GitHub API rate limits on shared runners
 
   plugins:
+    needs: changes
+    if: needs.changes.outputs.plugins != '[]'
     strategy:
       fail-fast: false
       matrix:
-        plugin: [avm-plugin-node, avm-plugin-java, avm-plugin-python, avm-plugin-android]
+        plugin: ${{ fromJSON(needs.changes.outputs.plugins) }}
     uses: ./.github/workflows/plugin-ci.yml
     with:
       plugin: ${{ matrix.plugin }}

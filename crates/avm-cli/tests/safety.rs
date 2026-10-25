@@ -797,3 +797,23 @@ fn bare_avm_without_a_terminal_prints_help_instead_of_failing() {
     assert!(out.status.success());
     assert!(String::from_utf8_lossy(&out.stdout).contains("Usage: avm"));
 }
+
+#[test]
+fn pinned_tool_without_plugin_makes_no_network_call() {
+    let p = Project::new();
+    fs::write(
+        p.0.join("project/.avm.json"),
+        r#"{"tools":{"ruby":"3.2.0"}}"#,
+    )
+    .unwrap();
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    listener.set_nonblocking(true).unwrap();
+    let url = format!("http://{}/registry.json", listener.local_addr().unwrap());
+    let start = std::time::Instant::now();
+    p.command(&["env"])
+        .env("AVM_MARKETPLACE_URL", url)
+        .output()
+        .unwrap();
+    assert!(listener.accept().is_err(), "marketplace was contacted");
+    assert!(start.elapsed() < std::time::Duration::from_secs(5));
+}

@@ -313,7 +313,8 @@ fn load_config_layers(cwd: &Path, home: &Path, names: &[String]) -> anyhow::Resu
         }
     }
     cfg.tool_specs = cfg.local_tools.clone();
-    if let Some(path) = cache_path.filter(|_| signature(&paths) == input_signature) {
+    // The signature was taken before loading, so a file edited mid-load just misses next time.
+    if let Some(path) = cache_path {
         let cache = ConfigCache {
             key,
             signature: input_signature,

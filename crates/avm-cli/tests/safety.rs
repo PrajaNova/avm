@@ -874,3 +874,24 @@ fn outdated_lists_versions_for_all_tools_concurrently() {
         start.elapsed()
     );
 }
+
+#[test]
+fn prune_removes_only_stale_config_cache_files() {
+    let p = Project::new();
+    let cache = p.0.join("home/.avm/cache");
+    fs::create_dir_all(&cache).unwrap();
+    let old = cache.join("config-0000000000000001.json");
+    let fresh = cache.join("config-0000000000000002.json");
+    fs::write(&old, "{}").unwrap();
+    fs::write(&fresh, "{}").unwrap();
+    let month_ago = std::time::SystemTime::now() - std::time::Duration::from_secs(31 * 86_400);
+    fs::File::options()
+        .write(true)
+        .open(&old)
+        .unwrap()
+        .set_modified(month_ago)
+        .unwrap();
+    fs::write(p.0.join("home/.avm.json"), "{}").unwrap();
+    assert!(p.run(&["prune", "--yes"]).status.success());
+    assert!(!old.exists() && fresh.exists());
+}

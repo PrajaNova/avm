@@ -175,6 +175,8 @@ pub fn wait_deadline(
                 "timeout exceeds the clock's range",
             )
         })?;
+    // Poll in growing steps (1, 2, 4 ... 50 ms) so fast children return in a few ms.
+    let mut step_ms = 1;
     loop {
         if let Some(status) = child.try_wait()? {
             return Ok(Some(status));
@@ -186,7 +188,8 @@ pub fn wait_deadline(
             let _ = child.wait();
             return Ok(None);
         }
-        std::thread::sleep(std::time::Duration::from_millis(50));
+        std::thread::sleep(std::time::Duration::from_millis(step_ms));
+        step_ms = (step_ms * 2).min(50);
     }
 }
 
@@ -513,6 +516,15 @@ mod tests {
             assert_eq!(err.kind(), std::io::ErrorKind::InvalidInput);
         }
         assert!(child.wait().unwrap().success());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn fast_child_is_not_held_for_a_fixed_poll_interval() {
+        let mut child = std::process::Command::new("true").spawn().unwrap();
+        let start = std::time::Instant::now();
+        assert!(wait_deadline(&mut child, 5_000).unwrap().is_some());
+        assert!(start.elapsed() < std::time::Duration::from_millis(40));
     }
 
     #[test]

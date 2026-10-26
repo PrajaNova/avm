@@ -1,0 +1,39 @@
+name: Action
+on:
+  pull_request:
+    paths: [action/**, .github/workflows/action.yml]
+  push:
+    branches: [main]
+    paths: [action/**, .github/workflows/action.yml]
+jobs:
+  smoke:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, ubuntu-24.04-arm, macos-latest, macos-15-intel]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          mkdir fixture && cd fixture
+          echo '{"tools":{"node":"20"},"env":{"FOO":"bar"}}' > .avm.json
+      - uses: ./action
+        with: { working-directory: fixture, install: "false" }
+      - run: avm-bin --version && test "$FOO" = bar
+
+  # No lock -> plain install writes one; second run takes the --frozen path.
+  lock:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          mkdir fixture && cd fixture
+          echo '{"tools":{"node":"20"}}' > .avm.json
+      - uses: ./action
+        with: { working-directory: fixture }
+      - run: test -f fixture/.avm.lock && avm-bin which node
+        working-directory: fixture
+      - uses: ./action
+        with: { working-directory: fixture, cache: "false" }
+      - run: avm-bin which node
+        working-directory: fixture

@@ -6,6 +6,9 @@ The format follows Keep a Changelog style, and releases use semantic versioning.
 
 ## [Unreleased]
 
+### Added
+- GitHub Action (`PrajaNova/avm/action`) and `scripts/ci-setup.sh` for any CI: install avm and plugins, use `.avm.lock` when present (`--frozen`), cache tools and plugins, and export PATH and env. Documented in `docs/ops/CI.md` and the website's Lockfiles & CI page.
+
 ## [0.5.1-beta.1] - 2026-10-26
 
 ### Fixed

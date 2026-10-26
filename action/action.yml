@@ -1,0 +1,65 @@
+name: Setup avm
+description: Install avm and the project's tools (using .avm.lock when present), and export PATH and env for later steps.
+inputs:
+  version:
+    description: avm release tag to install (e.g. v0.5.1), or "latest".
+    default: latest
+  install:
+    description: Install the project's tools (`--frozen` when a .avm.lock exists).
+    default: "true"
+  plugins:
+    description: Plugins to add first, space or comma separated (names, paths or URLs). Bundled plugins need no entry.
+    default: ""
+  cache:
+    description: Cache ~/.avm/tools and ~/.avm/plugins, keyed by lock/config hash, OS and arch.
+    default: "true"
+  working-directory:
+    description: Directory holding .avm.json / .avm.lock.
+    default: "."
+  env:
+    description: Config profile(s) exported as AVM_ENV (e.g. ci).
+    default: ""
+runs:
+  using: composite
+  steps:
+    - name: Restore tool cache
+      if: inputs.cache == 'true'
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.avm/tools
+          ~/.avm/plugins
+        key: avm-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('**/.avm.lock', '**/.avm.json') }}
+
+    - name: Install avm and tools
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      env:
+        AVM_VERSION: ${{ inputs.version }}
+        AVM_PLUGINS: ${{ inputs.plugins }}
+        AVM_INSTALL: ${{ inputs.install }}
+        AVM_ENV: ${{ inputs.env }}
+        AVM_TRUST_ALL: "1"
+      run: |
+        "$GITHUB_ACTION_PATH/../scripts/ci-setup.sh"
+        {
+          echo "$HOME/.local/bin"
+          echo "$HOME/.avm/shims"
+        } >> "$GITHUB_PATH"
+
+    - name: Export env
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      env:
+        AVM_ENV: ${{ inputs.env }}
+        AVM_TRUST_ALL: "1"
+      run: |
+        export PATH="$HOME/.local/bin:/usr/local/bin:$PATH"
+        echo "AVM_TRUST_ALL=1" >> "$GITHUB_ENV"
+        [ -z "$AVM_ENV" ] || echo "AVM_ENV=$AVM_ENV" >> "$GITHUB_ENV"
+        out="$(avm-bin env)"
+        eval "$out"
+        # Random delimiter: a value must not be able to end its own entry and add variables.
+        d="AVM_EOF_$(openssl rand -hex 8)"
+        sed -n 's/^export \([A-Za-z_][A-Za-z0-9_]*\)=.*/\1/p' <<<"$out" | grep -v '^_AVM_' |
+          while read -r k; do printf '%s<<%s\n%s\n%s\n' "$k" "$d" "${!k}" "$d" >> "$GITHUB_ENV"; done

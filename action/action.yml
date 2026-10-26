@@ -61,5 +61,5 @@ runs:
         eval "$out"
         # Random delimiter: a value must not be able to end its own entry and add variables.
         d="AVM_EOF_$(openssl rand -hex 8)"
-        sed -n 's/^export \([A-Za-z_][A-Za-z0-9_]*\)=.*/\1/p' <<<"$out" | grep -v '^_AVM_' |
+        sed -n 's/^export \([A-Za-z_][A-Za-z0-9_]*\)=.*/\1/p' <<<"$out" | { grep -v '^_AVM_' || true; } |
           while read -r k; do printf '%s<<%s\n%s\n%s\n' "$k" "$d" "${!k}" "$d" >> "$GITHUB_ENV"; done

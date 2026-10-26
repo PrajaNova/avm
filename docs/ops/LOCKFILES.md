@@ -10,6 +10,12 @@ selections. Personal global pins are neither locked nor installed by a frozen
 install; changing them does not invalidate the project lock. Unlocked installs
 continue to include global selections.
 
+A non-frozen `avm install` in a project with tools and no lock also writes
+`.avm.lock` (best effort: if a plugin cannot lock, it prints a warning and the
+install still succeeds; update old plugins with `avm plugin update <tool>`).
+With no project tools, `avm lock` and `avm install --frozen` print
+`Nothing to lock` / `Nothing to install` and write nothing.
+
 ```bash
 avm lock
 avm lock --platform linux_amd64,darwin_arm64,windows_amd64
@@ -49,7 +55,11 @@ Tools, platforms and plugin fingerprints are sorted for stable diffs.
 
 Commit the lockfile. Aliases, shims, `avm env`, `avm which`
 and ordinary `avm install` use its resolved versions. Changing a selected tool
-or its requested spec fails with `run avm lock`; explicit `avm lock` reads
+or its requested spec makes the lock stale. A stale lock prints one warning and
+commands fall back to the `.avm.json` versions, so shims and the prompt keep
+working; only `avm install --frozen` fails (`run avm lock`). `avm node use`,
+`avm upgrade` and other local pin changes regenerate an existing lock, and a
+non-frozen `avm install` regenerates a stale one. Explicit `avm lock` reads
 unlocked config so it can regenerate a stale or malformed lock. Resolution uses
 the nearest lock in the current directory or an ancestor. Subdirectories must
 still select the same tools (for example through inherited version files), or

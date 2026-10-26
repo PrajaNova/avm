@@ -21,11 +21,20 @@ fn plugin_pin(process: &runtime::PluginProcess, platform: &str) -> Result<Plugin
     })
 }
 
-pub fn cmd_lock(mut platforms: Vec<String>) -> Result<()> {
+pub fn cmd_lock(platforms: Vec<String>) -> Result<()> {
     let cwd = std::env::current_dir()?;
     let home = home_dir()?;
     let root = lock_root(&cwd, &home)?;
     let cfg = crate::resolver::load_unlocked(&root, &home, HashMap::new())?;
+    if lockfile::requested_tools(&cfg).is_empty() {
+        println!("Nothing to lock. Add a tool first: avm node use 20");
+        return Ok(());
+    }
+    write_lock(&root, &cfg, platforms)
+}
+
+/// Resolve every project tool and write `<root>/.avm.lock`.
+fn write_lock(root: &Path, cfg: &ResolvedConfig, mut platforms: Vec<String>) -> Result<()> {
     let host = host_platform()?;
     if platforms.is_empty() {
         platforms.push(host.clone());
@@ -40,7 +49,7 @@ pub fn cmd_lock(mut platforms: Vec<String>) -> Result<()> {
         version: 1,
         tools: BTreeMap::new(),
     };
-    for (tool, requested) in lockfile::requested_tools(&cfg) {
+    for (tool, requested) in lockfile::requested_tools(cfg) {
         lockfile::validate_tool(&tool)?;
         let provider = manager.protocol_provider(&tool)
             .ok_or_else(|| anyhow!("{tool} requires a native plugin with lockfile support; legacy asdf plugins can use `avm install` without a lockfile"))?;
@@ -49,7 +58,7 @@ pub fn cmd_lock(mut platforms: Vec<String>) -> Result<()> {
             .resolve_downloads(&resolved, &platforms)
             .with_context(|| {
                 format!(
-                    "{tool} cannot lock downloads; update its plugin to one supporting `resolve`"
+                    "{tool} cannot lock downloads; its plugin is too old, run `avm plugin update {tool}`"
                 )
             })?;
         if downloads.version != resolved {
@@ -85,7 +94,7 @@ pub fn cmd_lock(mut platforms: Vec<String>) -> Result<()> {
             },
         );
     }
-    lock.save(&root)?;
+    lock.save(root)?;
     println!(
         "✓ Locked {} tools in {} ({})",
         lock.tools.len(),
@@ -115,14 +124,28 @@ fn lock_root(cwd: &Path, home: &Path) -> Result<PathBuf> {
 pub fn cmd_install(frozen: bool) -> Result<()> {
     let cwd = std::env::current_dir()?;
     let cfg = unlocked_state()?;
-    let lock = lockfile::load(&cwd)?;
+    let project_tools = !lockfile::requested_tools(&cfg).is_empty();
+    if frozen && !project_tools {
+        println!("Nothing to install: no tools in .avm.json.");
+        return Ok(());
+    }
+    let mut lock = lockfile::load(&cwd)?;
     if frozen && lock.is_none() {
         return Err(anyhow!(
             "--frozen requires .avm.lock; run `avm lock` and commit it first"
         ));
     }
-    if let Some(lock) = &lock {
-        lock.validate_config(&cfg)?;
+    if let Some(current) = &lock {
+        if let Err(err) = current.validate_config(&cfg) {
+            if frozen {
+                return Err(err);
+            }
+            eprintln!("avm: {err:#}; installing from .avm.json and refreshing the lock");
+            lock = None;
+        }
+    }
+    if !project_tools {
+        println!("No tools in .avm.json. Add one: avm node use 20");
     }
     let platform = host_platform()?;
     let mut plan = Vec::new();
@@ -161,7 +184,11 @@ pub fn cmd_install(frozen: bool) -> Result<()> {
     // Android's sdkmanager requires a JDK; install Java first when selected.
     plan.sort_by(|a, b| (a.0 != "java", &a.0).cmp(&(b.0 != "java", &b.0)));
     for (tool, version, provider, asset) in plan {
-        if !provider.is_installed(&version) {
+        let global = !project_tools || !cfg.local_tools.contains_key(&tool);
+        let label = if global { " (global)" } else { "" };
+        if provider.is_installed(&version) {
+            println!("✓ {tool} {version} already installed{label}");
+        } else {
             if let Some(asset) = asset {
                 provider.install_locked(&version, &asset)?;
             } else {
@@ -172,11 +199,41 @@ pub fn cmd_install(frozen: bool) -> Result<()> {
                     "{tool} {version} installer succeeded but the tool is not installed"
                 ));
             }
+            println!("✓ Installed {tool} {version}{label}");
         }
-        println!("✓ Installed {tool} {version}");
     }
     shims::reshim()?;
+    if project_tools && lock.is_none() {
+        // Best-effort: an old or asdf plugin must not turn a good install into a failure.
+        let root = lock_root(&cwd, &home_dir()?)?;
+        if let Err(err) = write_lock(&root, &cfg, Vec::new()) {
+            eprintln!("avm: installed, but could not write .avm.lock: {err:#}");
+        }
+    }
     Ok(())
+}
+
+/// After a project pin changes, regenerate an existing `.avm.lock` so it never goes stale.
+pub fn refresh_lock() {
+    let refresh = || -> Result<()> {
+        let home = home_dir()?;
+        let root = lock_root(&std::env::current_dir()?, &home)?;
+        let Some(old) = lockfile::load(&root)? else {
+            return Ok(());
+        };
+        let mut platforms: Vec<String> = old
+            .tools
+            .values()
+            .flat_map(|tool| tool.assets.keys().cloned())
+            .collect();
+        platforms.sort();
+        platforms.dedup();
+        let cfg = crate::resolver::load_unlocked(&root, &home, HashMap::new())?;
+        write_lock(&root, &cfg, platforms)
+    };
+    if let Err(err) = refresh() {
+        eprintln!("avm: could not refresh .avm.lock ({err:#}); run `avm lock`");
+    }
 }
 
 fn locked_asset(tool: &str, entry: &LockedTool, platform: &str) -> Result<LockedAsset> {

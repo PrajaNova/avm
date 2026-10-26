@@ -182,8 +182,13 @@ fn confirm(question: &str, yes: bool) -> Result<bool> {
 
 pub fn cmd_upgrade(tools: Vec<String>, bump: bool, dry_run: bool, yes: bool) -> Result<()> {
     let cfg = load_state()?;
+    let rows = statuses(&cfg, &tools)?;
+    if rows.is_empty() {
+        println!("No tools pinned here.");
+        return Ok(());
+    }
     let mut plan = Vec::new();
-    for s in statuses(&cfg, &tools)? {
+    for s in rows {
         let target = if bump {
             s.latest.clone()
         } else {

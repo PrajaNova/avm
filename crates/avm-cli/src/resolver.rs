@@ -135,9 +135,18 @@ pub fn load(
     plugin_aliases: HashMap<String, ResolvedAlias>,
 ) -> anyhow::Result<ResolvedConfig> {
     let mut cfg = load_unlocked(cwd, home, plugin_aliases)?;
-    if let Some(lock) = crate::lockfile::load(cwd)? {
-        lock.apply(&mut cfg)?;
-    } else {
+    let locked = match crate::lockfile::load(cwd)? {
+        Some(lock) => match lock.apply(&mut cfg) {
+            Ok(()) => true,
+            // A stale lock must not break shims or the prompt; only `install --frozen` is strict.
+            Err(err) => {
+                eprintln!("avm: {err:#}; using .avm.json versions");
+                false
+            }
+        },
+        None => false,
+    };
+    if !locked {
         for (tool, version) in &mut cfg.local_tools {
             // Version-file pins were already resolved (their spec differs) in `load_unlocked`.
             if cfg.tool_specs.get(tool) == Some(version) {

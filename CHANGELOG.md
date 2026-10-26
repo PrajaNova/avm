@@ -6,6 +6,20 @@ The format follows Keep a Changelog style, and releases use semantic versioning.
 
 ## [Unreleased]
 
+## [0.5.1-beta.1] - 2026-10-26
+
+### Fixed
+- Plugin calls no longer wait a fixed 50 ms; process polling starts at 1 ms.
+- Shim and prompt calls skip tools with no installed plugin instead of fetching the marketplace.
+- `avm list` starts each plugin once; `avm outdated`/`upgrade` fetch version lists in parallel; the `avm` shell wrapper only re-applies env before a command when the directory changed.
+- A stale `.avm.lock` warns and falls back to `.avm.json` instead of breaking shims, `avm env` and every command; only `install --frozen` stays strict. Local pin changes refresh an existing lock.
+- Old plugins that cannot lock are told to run `avm plugin update <tool>`.
+
+### Changed
+- `avm install` writes `.avm.lock` when missing (best effort), says so when a project has no tools, labels global installs and reports `already installed`.
+- `avm lock` and `install --frozen` with no tools print `Nothing to lock` / `Nothing to install`; `avm upgrade` prints `No tools pinned here.`
+- `avm list` shows a tool table with active version, scope and installed versions, groups aliases and env under Global and Local, and sorts versions numerically.
+
 ## [0.5.0] - 2026-10-15
 
 ### Changed

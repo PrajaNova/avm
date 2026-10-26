@@ -308,21 +308,19 @@ pub fn cmd_list() -> Result<()> {
     }
 
     if let Ok(plugin_manager) = PluginManager::new() {
-        // list_plugins() keys are plugin *directory* names
-        // (e.g. "avm-plugin-android"); the short tool name
-        // provider_by_name expects lives on the manifest value.
-        let names: BTreeSet<String> = plugin_manager
-            .list_plugins()
-            .into_values()
-            .map(|m| m.name)
-            .collect();
         let mut lines = Vec::new();
-        for name in names {
-            if let Ok(provider) = provider_by_name(&name) {
-                if let Ok(versions) = provider.installed_versions() {
-                    if !versions.is_empty() {
-                        lines.push((name, versions));
-                    }
+        for name in plugin_manager.installed_tool_names() {
+            let provider: Option<Box<dyn ToolProvider>> =
+                if let Some(p) = plugin_manager.protocol_provider(&name) {
+                    Some(Box::new(p))
+                } else {
+                    plugin_manager
+                        .asdf_provider(&name)
+                        .map(|p| Box::new(p) as Box<dyn ToolProvider>)
+                };
+            if let Some(Ok(versions)) = provider.map(|p| p.installed_versions()) {
+                if !versions.is_empty() {
+                    lines.push((name, versions));
                 }
             }
         }

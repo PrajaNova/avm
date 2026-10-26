@@ -3,7 +3,7 @@ use super::*;
 use crate::version_files::{numbers, pick};
 use std::time::{Duration, SystemTime};
 
-// ponytail: version lists are fetched live (one plugin call per tool); add a
+// ponytail: version lists are fetched live, one thread per tool; add a
 // ~/.avm/cache with a TTL if outdated/upgrade ever feel slow.
 
 struct Status {
@@ -18,23 +18,37 @@ struct Status {
     from_file: bool,
 }
 
+fn available_versions(tool: &str) -> Option<Result<Vec<String>>> {
+    let provider = provider_by_name(tool).ok()?;
+    Some(
+        provider
+            .available_versions(ToolVersionQuery::Recent)
+            .map(|versions| versions.into_iter().map(|v| v.version).collect())
+            .with_context(|| format!("couldn't list {tool} versions")),
+    )
+}
+
 fn statuses(cfg: &ResolvedConfig, only: &[String]) -> Result<Vec<Status>> {
     let mut rows = Vec::new();
     let mut tools: Vec<_> = cfg.resolve_tools_with_source().into_iter().collect();
     tools.sort_by(|a, b| a.0.cmp(&b.0));
-    for (tool, (current, source)) in tools {
-        if !only.is_empty() && !only.contains(&tool) {
-            continue;
-        }
-        let Ok(provider) = provider_by_name(&tool) else {
+    tools.retain(|(tool, _)| only.is_empty() || only.contains(tool));
+    // `None` = no usable plugin for the tool, which is skipped.
+    let lists: Vec<Option<Result<Vec<String>>>> = std::thread::scope(|scope| {
+        let handles: Vec<_> = tools
+            .iter()
+            .map(|(tool, _)| scope.spawn(|| available_versions(tool)))
+            .collect();
+        handles
+            .into_iter()
+            .map(|handle| handle.join().unwrap_or(None))
+            .collect()
+    });
+    for ((tool, (current, source)), available) in tools.into_iter().zip(lists) {
+        let Some(available) = available else {
             continue;
         };
-        let available: Vec<String> = provider
-            .available_versions(ToolVersionQuery::Recent)
-            .with_context(|| format!("couldn't list {tool} versions"))?
-            .into_iter()
-            .map(|v| v.version)
-            .collect();
+        let available = available?;
         let origin = matches!(source, AliasSource::Local)
             .then(|| cfg.tool_origins.get(&tool))
             .flatten()

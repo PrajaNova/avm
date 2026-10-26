@@ -3,7 +3,7 @@ use avm_plugin_api::{
     env_timeout_ms, fetch, list_installed, remove_version, run_timed, sha256_file, tool_dir,
     verify_sha256, wait_deadline, Manifest, ToolProvider, ToolVersion, ToolVersionQuery,
 };
-use std::collections::HashMap;
+use std::collections::{BTreeSet, HashMap};
 use std::fs;
 use std::io::Read;
 use std::path::{Path, PathBuf};
@@ -81,6 +81,22 @@ impl PluginManager {
         }
         self.find(name, PROTOCOL_PREFIX, is_protocol_plugin_source)
             .or_else(|| self.find(name, ASDF_PREFIX, is_asdf_plugin_source))
+    }
+
+    /// Tool names of installed plugins, read from folder names (no plugin process is started).
+    pub fn installed_tool_names(&self) -> BTreeSet<String> {
+        self.plugin_dirs()
+            .into_iter()
+            .filter_map(|(name, path)| {
+                if is_protocol_plugin_source(&path) {
+                    Some(tool_name(&name, PROTOCOL_PREFIX).to_string())
+                } else if is_asdf_plugin_source(&path) {
+                    Some(tool_name(&name, ASDF_PREFIX).to_string())
+                } else {
+                    None
+                }
+            })
+            .collect()
     }
 
     pub fn list_plugins(&self) -> HashMap<String, Manifest> {

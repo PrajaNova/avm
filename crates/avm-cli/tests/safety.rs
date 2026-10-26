@@ -797,3 +797,80 @@ fn bare_avm_without_a_terminal_prints_help_instead_of_failing() {
     assert!(out.status.success());
     assert!(String::from_utf8_lossy(&out.stdout).contains("Usage: avm"));
 }
+
+#[test]
+fn pinned_tool_without_plugin_makes_no_network_call() {
+    let p = Project::new();
+    fs::write(
+        p.0.join("project/.avm.json"),
+        r#"{"tools":{"ruby":"3.2.0"}}"#,
+    )
+    .unwrap();
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    listener.set_nonblocking(true).unwrap();
+    let url = format!("http://{}/registry.json", listener.local_addr().unwrap());
+    let start = std::time::Instant::now();
+    p.command(&["env"])
+        .env("AVM_MARKETPLACE_URL", url)
+        .output()
+        .unwrap();
+    assert!(listener.accept().is_err(), "marketplace was contacted");
+    assert!(start.elapsed() < std::time::Duration::from_secs(5));
+}
+
+#[cfg(unix)]
+#[test]
+fn list_starts_each_plugin_once() {
+    use std::os::unix::fs::PermissionsExt;
+    let p = Project::new();
+    let calls = p.0.join("calls");
+    for tool in ["node", "java"] {
+        let bin = p.0.join(format!("home/.avm/plugins/avm-plugin-{tool}/bin"));
+        fs::create_dir_all(&bin).unwrap();
+        let script = format!("#!/bin/sh\necho \"{tool} $1\" >> '{}'\nif [ \"$1\" = installed-versions ]; then echo '{{\"versions\":[\"1.0.0\"]}}'; fi\n", calls.display());
+        fs::write(bin.join("avm-plugin"), script).unwrap();
+        fs::set_permissions(bin.join("avm-plugin"), fs::Permissions::from_mode(0o755)).unwrap();
+    }
+    let out = stdout(p.run(&["list"]));
+    assert!(
+        out.contains("node: 1.0.0") && out.contains("java: 1.0.0"),
+        "{out}"
+    );
+    let log = fs::read_to_string(calls).unwrap();
+    assert_eq!(log.lines().count(), 2, "one start per plugin: {log}");
+}
+
+#[cfg(unix)]
+#[test]
+fn outdated_lists_versions_for_all_tools_concurrently() {
+    use std::os::unix::fs::PermissionsExt;
+    let p = Project::new();
+    for tool in ["node", "java"] {
+        let bin = p.0.join(format!("home/.avm/plugins/avm-plugin-{tool}/bin"));
+        fs::create_dir_all(&bin).unwrap();
+        let script = "#!/bin/sh\nif [ \"$1\" = versions ]; then sleep 2; echo '{\"versions\":[{\"version\":\"2.0.0\",\"label\":\"2.0.0\",\"is_lts\":false,\"channel\":null,\"is_security\":false}]}'; fi\n";
+        fs::write(bin.join("avm-plugin"), script).unwrap();
+        fs::set_permissions(bin.join("avm-plugin"), fs::Permissions::from_mode(0o755)).unwrap();
+    }
+    fs::write(
+        p.0.join("project/.avm.json"),
+        r#"{"tools":{"node":"1.0.0","java":"1.0.0"}}"#,
+    )
+    .unwrap();
+    let start = std::time::Instant::now();
+    let out = p
+        .command(&["outdated"])
+        .env("AVM_TRUST_ALL", "1")
+        .output()
+        .unwrap();
+    let text = stdout(out);
+    assert!(
+        text.contains("node") && text.contains("java") && text.contains("2.0.0"),
+        "{text}"
+    );
+    assert!(
+        start.elapsed() < std::time::Duration::from_millis(3500),
+        "{:?}",
+        start.elapsed()
+    );
+}

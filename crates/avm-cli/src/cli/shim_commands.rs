@@ -162,7 +162,11 @@ pub fn child_env(cfg: &ResolvedConfig) -> Result<HashMap<String, String>> {
 pub fn resolved_tool_env(cfg: &ResolvedConfig) -> Result<HashMap<String, String>> {
     let mut env = HashMap::new();
     for (tool, (version, _)) in cfg.resolve_tools_with_source() {
-        // Unknown/uninstalled providers just contribute nothing.
+        // Unknown/uninstalled providers just contribute nothing. Check locally first:
+        // `provider_by_name` hits the marketplace for its hint, and this runs per shim/prompt.
+        if !is_installed_plugin(&tool) {
+            continue;
+        }
         if let Ok(provider) = provider_by_name(&tool) {
             if let Ok(vars) = provider.env_vars(&version) {
                 extend_env(&mut env, vars);

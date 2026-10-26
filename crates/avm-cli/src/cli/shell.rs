@@ -72,7 +72,7 @@ function global:prompt {
 }
 
 function global:avm {
-  _avm_apply_env
+  if ($PWD.Path -ne $global:_avm_last_pwd) { _avm_apply_env }
   $builtins = __AVM_BUILTINS_PWSH__
   if ($args.Count -eq 0 -or $builtins -contains $args[0] -or $args[0] -like '-*') {
     & avm-bin @args
@@ -163,7 +163,7 @@ elif [ -n "${BASH_VERSION:-}" ]; then
 fi
 
 avm() {
-  _avm_apply_env
+  _avm_prompt_env
   local _avm_key="${1:-}"
   local _avm_rc
   # Built-ins and flags go straight to the CLI; everything else is an alias or

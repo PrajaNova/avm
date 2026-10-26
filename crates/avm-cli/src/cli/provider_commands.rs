@@ -245,6 +245,7 @@ pub fn set_tool_version(tool: &str, version: &str, global: bool) -> Result<()> {
         println!("✓ Set global {tool} version to {version}");
     } else {
         println!("✓ Set local {tool} version to {version}");
+        install_commands::refresh_lock();
     }
     Ok(())
 }

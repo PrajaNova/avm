@@ -8,7 +8,7 @@ inputs:
     description: Install the project's tools (`--frozen` when a .avm.lock exists).
     default: "true"
   plugins:
-    description: Plugins to add first, space or comma separated (names, paths or URLs). Bundled plugins need no entry.
+    description: Plugins to add before installing, space or comma separated (marketplace names, paths or URLs). List one per tool in .avm.json, e.g. "node java".
     default: ""
   cache:
     description: Cache ~/.avm/tools and ~/.avm/plugins, keyed by lock/config hash, OS and arch.

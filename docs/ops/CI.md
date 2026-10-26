@@ -4,8 +4,8 @@ Commit `.avm.json` and `.avm.lock` (see [Lockfiles](LOCKFILES.md)). `scripts/ci-
 does the work on any CI: it installs avm, runs `avm plugin add` for each name in
 `AVM_PLUGINS`, then installs tools with `--frozen` when a lock exists (plain
 `avm install` otherwise). CI builds a checkout you chose, so it sets `AVM_TRUST_ALL=1`
-instead of `avm trust`. Bundled plugins (node, java, python, android) need no
-`AVM_PLUGINS`. Linux and macOS only. The command is `avm-bin`; `avm` is a shell function.
+instead of `avm trust`. `avm install` does not fetch plugins itself, so list one per
+tool in `AVM_PLUGINS` (for example `node java`). Linux and macOS only. The command is `avm-bin`; `avm` is a shell function.
 
 ## GitHub Actions
 
@@ -13,7 +13,7 @@ instead of `avm trust`. Bundled plugins (node, java, python, android) need no
 - uses: actions/checkout@v4
 - uses: PrajaNova/avm/action@v1
   with:
-    plugins: ""         # names, paths or URLs for `avm plugin add`
+    plugins: node       # one plugin per tool in .avm.json, e.g. "node java"
     cache: true         # tools + plugins keyed by lock/config hash
     env: ci             # AVM_ENV
 - run: avm-bin run build
@@ -23,7 +23,7 @@ instead of `avm trust`. Bundled plugins (node, java, python, android) need no
 
 ```yaml
 build:
-  variables: { AVM_TRUST_ALL: "1", AVM_ENV: ci }
+  variables: { AVM_TRUST_ALL: "1", AVM_ENV: ci, AVM_PLUGINS: node }
   cache:
     key: { files: [.avm.lock, .avm.json] }
     paths: [.avm-home/tools, .avm-home/plugins]
@@ -44,7 +44,7 @@ steps:
   - run:
       name: Install avm and tools
       command: |
-        curl -fsSL https://raw.githubusercontent.com/PrajaNova/avm/main/scripts/ci-setup.sh | AVM_TRUST_ALL=1 AVM_ENV=ci bash
+        curl -fsSL https://raw.githubusercontent.com/PrajaNova/avm/main/scripts/ci-setup.sh | AVM_TRUST_ALL=1 AVM_ENV=ci AVM_PLUGINS=node bash
         echo 'export AVM_TRUST_ALL=1 AVM_ENV=ci PATH="$HOME/.local/bin:$HOME/.avm/shims:$PATH"; eval "$(avm-bin env)"' >> "$BASH_ENV"
   - save_cache: { key: "avm-{{ arch }}-{{ checksum \".avm.lock\" }}-{{ checksum \".avm.json\" }}", paths: [~/.avm/tools, ~/.avm/plugins] }
   - run: avm-bin run build

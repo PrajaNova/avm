@@ -31,7 +31,7 @@ jobs:
           echo '{"tools":{"node":"20"}}' > .avm.json
       - uses: ./action
         with: { working-directory: fixture, plugins: node }
-      - run: test -f fixture/.avm.lock && avm-bin which node
+      - run: test -f .avm.lock && avm-bin which node
         working-directory: fixture
       - uses: ./action
         with: { working-directory: fixture, plugins: node, cache: "false" }

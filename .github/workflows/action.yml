@@ -21,7 +21,7 @@ jobs:
         with: { working-directory: fixture, install: "false" }
       - run: avm-bin --version && test "$FOO" = bar
 
-  # No lock -> plain install writes one; second run takes the --frozen path.
+  # No lock -> plain install; `avm lock` then makes the second run take the --frozen path.
   lock:
     runs-on: ubuntu-latest
     steps:
@@ -31,7 +31,7 @@ jobs:
           echo '{"tools":{"node":"20"}}' > .avm.json
       - uses: ./action
         with: { working-directory: fixture, plugins: node }
-      - run: test -f .avm.lock && avm-bin which node
+      - run: avm-bin lock && test -f .avm.lock && avm-bin which node
         working-directory: fixture
       - uses: ./action
         with: { working-directory: fixture, plugins: node, cache: "false" }

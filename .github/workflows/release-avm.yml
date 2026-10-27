@@ -65,7 +65,7 @@ jobs:
             archive: avm_linux_amd64.tar.gz
           - os: ubuntu-24.04-arm
             archive: avm_linux_arm64.tar.gz
-          - os: macos-latest
+          - os: self-hosted
             archive: avm_darwin_arm64.tar.gz
           - os: macos-15-intel
             archive: avm_darwin_amd64.tar.gz

@@ -70,7 +70,7 @@ jobs:
           - os: macos-latest
             target_os: darwin
             target_arch: arm64
-          - os: macos-15-intel
+          - os: self-hosted
             target_os: darwin
             target_arch: amd64
     runs-on: ${{ matrix.os }}

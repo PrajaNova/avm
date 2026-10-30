@@ -1,8 +1,8 @@
 use crate::constants::msg::*;
+use crate::global::{cmd_outdated, cmd_upgrade};
 use crate::plugins as runtime;
 use crate::plugins::PluginRegistry;
 use crate::plugins::{cmd_plugin_list, PluginCommands};
-use crate::global::{cmd_outdated, cmd_upgrade};
 use crate::project::{cmd_install, cmd_lock, cmd_prune};
 use crate::run::task::{Cmd, Runnable, Task};
 use anyhow::Result;

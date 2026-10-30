@@ -1,0 +1,130 @@
+name: AVM CI
+
+# Quality gate for the avm CLI (crates/avm-cli and the plugin SDK it shares with every plugin).
+# Runs on pull requests and on main, and only when a file that affects the CLI changes.
+# Jobs: format, lint, test (Linux, macOS, Windows), release build, repo checks, end-to-end suites.
+on:
+  pull_request:
+    paths:
+      - "crates/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "rust-toolchain*"
+      - "install.sh"
+      - "install.ps1"
+      - "bin/**"
+      - "package.json"
+      - "scripts/**"
+      - "CHANGELOG.md"
+      - "registry.json"
+      - ".github/workflows/avm-ci.yml"
+  push:
+    branches: [main]
+    paths:
+      - "crates/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "rust-toolchain*"
+      - "install.sh"
+      - "install.ps1"
+      - "bin/**"
+      - "package.json"
+      - "scripts/**"
+      - "CHANGELOG.md"
+      - "registry.json"
+      - ".github/workflows/avm-ci.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: avm-ci-${{ github.ref }}
+  cancel-in-progress: true # a newer push to the same PR supersedes the older run
+
+jobs:
+  format:
+    name: Format
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+      - run: cargo fmt --all --check
+
+  lint:
+    name: Lint (clippy)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - run: cargo clippy -p avm-cli -p avm-plugin-sdk --all-targets --locked -- -D warnings
+
+  test:
+    name: Test (${{ matrix.name }})
+    runs-on: ${{ fromJSON(matrix.runner) }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: Linux, runner: '"ubuntu-latest"' }
+          - { name: macOS (self-hosted), runner: '["self-hosted", "macOS"]' }
+          - { name: Windows, runner: '"windows-latest"' }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      # The native-plugin tests run the workspace plugins next to avm-bin, so build them all first.
+      - name: Build workspace
+        run: cargo build --workspace --locked
+      - name: Test avm-cli and the SDK
+        run: cargo test -p avm-cli -p avm-plugin-sdk --locked
+
+  build:
+    name: Build (release)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo build --release -p avm-cli --locked
+      - name: Smoke test the release binary
+        run: target/release/avm-bin --version
+
+  checks:
+    name: Repo checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Shared-repository plugin release flow
+        run: bash scripts/check-plugin-releases.sh
+      - name: Changelog
+        run: bash scripts/check-changelog.sh
+
+  # Builds avm from the PR, installs it with the PR's install.sh on a clean Ubuntu container and
+  # runs the core, node, java and android suites (real downloads).
+  e2e-linux:
+    name: E2E (Linux container)
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - run: crates/avm-cli/tests/shell/run.sh
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # GitHub API rate limits on shared runners
+
+  e2e-windows:
+    name: E2E (Windows)
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: install.ps1, exe shims, node/java/android
+        shell: pwsh
+        run: ./crates/avm-cli/tests/shell/windows.ps1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

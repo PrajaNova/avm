@@ -10,8 +10,8 @@ publishes anything; CI (tests) is the only workflow that runs on its own.
    `cargo build` to refresh `Cargo.lock`, and move the CHANGELOG
    `[Unreleased]` entries under `## [<version>] - <date>`. Merge to `main`.
 2. Run the release, from `main`:
-   - GitHub: **Actions → Release AVM CLI → Run workflow**, enter the version, or
-   - CLI: `gh workflow run release-avm.yml -R PrajaNova/avm -f version=0.4.0`
+   - GitHub: **Actions → AVM release → Run workflow**, enter the version, or
+   - CLI: `gh workflow run avm-release.yml -R PrajaNova/avm -f version=0.4.0`
 3. The workflow checks that the version matches `package.json`, that the
    CHANGELOG has it, and that the tag doesn't already exist. It then:
    - builds linux amd64/arm64, macOS arm64/Intel and Windows, and
@@ -28,7 +28,7 @@ publishes anything; CI (tests) is the only workflow that runs on its own.
 Follow a run with `gh run watch -R PrajaNova/avm`.
 
 If only the npm step failed, fix the cause, then retry npm alone for the
-same version: `gh workflow run release-avm.yml -R PrajaNova/avm -f version=0.4.0 -f npm_only=true`
+same version: `gh workflow run avm-release.yml -R PrajaNova/avm -f version=0.4.0 -f npm_only=true`
 (or tick **npm_only** in the Run workflow form). Trusted publishing
 requires `package.json` `repository.url` to match `PrajaNova/avm` exactly,
 case included.
@@ -38,16 +38,16 @@ case included.
 | Needed for | What | Where |
 | --- | --- | --- |
 | Homebrew | `HOMEBREW_TAP_GITHUB_TOKEN`: a token with push access to `prajanova/homebrew-tap` | repo → Settings → Secrets → Actions |
-| npm | **Trusted publishing**, no secret: on npmjs.com, open `@prajanova/avm` → Settings → Trusted Publisher → GitHub Actions, organization `PrajaNova`, repository `avm`, workflow `release-avm.yml`, environment empty. Allowed actions: `npm stage publish` only (the workflow never publishes directly) | npmjs.com |
+| npm | **Trusted publishing**, no secret: on npmjs.com, open `@prajanova/avm` → Settings → Trusted Publisher → GitHub Actions, organization `PrajaNova`, repository `avm`, workflow `avm-release.yml`, environment empty. Allowed actions: `npm stage publish` only (the workflow never publishes directly) | npmjs.com |
 
 ## First-party plugins
 
 1. Bump `version` in `plugins/avm-plugin-<name>/Cargo.toml`, refresh the
    root `Cargo.lock`, and merge to `main`.
 2. Run the matching workflow in `PrajaNova/avm`:
-   **Actions → Release node plugin / Release java plugin / Release python plugin / Release android
-   plugin → Run workflow**, or:
-   `gh workflow run release-node-plugin.yml -R PrajaNova/avm -f version=0.3.2`
+   **Actions → Plugin node release / Plugin java release / Plugin python release / Plugin android
+   release → Run workflow**, or:
+   `gh workflow run plugin-node-release.yml -R PrajaNova/avm -f version=0.3.2`
    (swap `node` for `java`/`python`/`android` in the workflow name as needed).
 3. Nothing else: avm installs the newest `avm-plugin-<name>-v*` release, so the registry
    needs no change for a new plugin version. (Releases of avm before this behaviour still
@@ -86,9 +86,9 @@ tags and stable releases.
 
 ## Marketplace site
 
-**Actions → Deploy web (Vercel) → Run workflow** in `PrajaNova/avm`
+**Actions → Web deploy → Run workflow** in `PrajaNova/avm`
 (tick *production* for the live site, otherwise it publishes a preview URL),
-or run `gh workflow run deploy-web.yml -R PrajaNova/avm -f production=true`.
+or run `gh workflow run web-deploy.yml -R PrajaNova/avm -f production=true`.
 Merging to `main` doesn't deploy. The workflow builds `web/` on the
 runner and uploads it with the Vercel CLI; the Vercel project has no Git
 connection and its Root Directory is left empty. Repo secrets required:

@@ -171,7 +171,7 @@ doesn't distinguish "installed by hand for testing" from "installed via
 3. **Make it discoverable** (optional): add the `avm-plugin` topic to the
    GitHub repo so `avm plugin search <keyword>` lists it. People can always install
    it with `avm plugin install <owner>/<repo>`. To make `avm plugin install <name>`
-   work, add an entry to the `plugins` list in `marketplace/registry.json` in a pull request:
+   work, add an entry to the `plugins` list in `registry.json` in a pull request:
    `{ "name": "<name>", "description": "...", "section_label": "...", "repo": "<owner>/<repo>" }`.
    New plugin versions need no registry change: avm installs the newest `avm-plugin-<name>-v*` release.
 

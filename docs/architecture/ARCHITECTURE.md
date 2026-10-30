@@ -56,7 +56,7 @@ ordinary installs but lack the optional locked-download protocol.
 ## The plugin marketplace
 
 `avm plugin install <name>` is the only install path — nothing works out of
-the box. A bare name is looked up in `marketplace/registry.json` (name to repo
+the box. A bare name is looked up in `registry.json` (name to repo
 and description), then resolved from that repo's GitHub releases:
 
 ```mermaid

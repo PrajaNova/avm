@@ -1,9 +1,9 @@
-//! The plugin registry, `marketplace/registry.json`:
+//! The plugin registry, `registry.json` at the repo root:
 //! `{ "schema_version": 1, "plugins": [{ "name", "description", "repo", ... }] }`.
 //! It only names the repo; the binary always comes from the newest `avm-plugin-<name>-v*`
 //! release of that repo, so a new plugin version never needs a registry change. Entries may
-//! still carry `section_label` (the website) and `release_tag` (the pin older avm releases
-//! install); both are ignored here.
+//! carry `section_label` (the website); unknown fields, such as the `release_tag` pins in the
+//! frozen legacy copy, are ignored here.
 use super::*;
 use std::collections::BTreeMap;
 
@@ -155,7 +155,7 @@ mod tests {
 
     #[test]
     fn the_checked_in_registry_parses() {
-        let body = include_bytes!("../../../../marketplace/registry.json");
+        let body = include_bytes!("../../../../registry.json");
         let registry = parse_registry(body).unwrap();
         for name in ["node", "java", "python", "android"] {
             assert!(registry.contains_key(name), "{name}");

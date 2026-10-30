@@ -185,7 +185,8 @@ mod vars {
         let out = p
             .command(&["env", "--shell", shell])
             .env("AVM_TRUST_ALL", "1")
-            .env("JAVA_HOME", "/ambient/java") // avm unsets provider variables that are set
+            // The shell hook's saved baseline: avm restores (here: unsets) what it recorded.
+            .env("_AVM_ENV_BASELINE", r#"{"JAVA_HOME":null}"#)
             .output()
             .unwrap();
         assert_that(&out)
@@ -209,16 +210,18 @@ mod vars {
 
     /// With nothing configured the export list still clears provider variables.
     ///
-    /// 1. Run `avm env --shell sh` in an empty sandbox where the three provider variables are set.
+    /// 1. Run `avm env --shell sh` in an empty sandbox whose saved baseline lists the three
+    ///    provider variables as originally unset (as the shell hook records them).
     /// 2. It unsets ANDROID_HOME, ANDROID_SDK_ROOT and JAVA_HOME and exports nothing else.
     #[test]
     fn an_empty_project_only_unsets_provider_variables() {
         let p = Sandbox::new("avm-test");
         let out = success(
             p.command(&["env", "--shell", "sh"])
-                .env("ANDROID_HOME", "/ambient/android")
-                .env("ANDROID_SDK_ROOT", "/ambient/android")
-                .env("JAVA_HOME", "/ambient/java")
+                .env(
+                    "_AVM_ENV_BASELINE",
+                    r#"{"ANDROID_HOME":null,"ANDROID_SDK_ROOT":null,"JAVA_HOME":null}"#,
+                )
                 .output()
                 .unwrap(),
         );

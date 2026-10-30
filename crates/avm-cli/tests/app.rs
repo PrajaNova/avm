@@ -214,6 +214,7 @@ mod commands {
     ///
     /// 1. Syntax-check `avm shell-init` output with `bash -n` and `zsh -n`.
     /// 2. Both accept it (zsh is skipped when not installed).
+    #[cfg(unix)] // on Windows `bash` is the WSL launcher stub, not a shell that can check a file
     #[rstest]
     #[case("bash")]
     #[case("zsh")]

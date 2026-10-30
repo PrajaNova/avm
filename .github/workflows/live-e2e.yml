@@ -13,7 +13,7 @@ on:
         default: ""
   schedule:
     - cron: "0 6 * * *" # daily: catches a broken release, registry or upstream download
-  pull_request:
+  push: # not pull_request: those do not run while a PR has merge conflicts with main
     paths:
       - "e2e/**"
       - ".github/workflows/live-e2e.yml"

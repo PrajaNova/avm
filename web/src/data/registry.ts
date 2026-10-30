@@ -1,4 +1,4 @@
-import raw from '../../registry.json';
+import raw from '../../../registry.json';
 
 type RegistryEntry = { repo: string; desc: string; tags: string[] };
 

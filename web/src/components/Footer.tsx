@@ -96,7 +96,7 @@ export const Footer: React.FC = () => {
               avm CLI fetches plugins on-demand directly from raw GitHub file:
             </p>
             <div className="p-2.5 rounded-lg bg-surface border border-line font-mono text-xs text-accent break-all select-all">
-              https://raw.githubusercontent.com/PrajaNova/avm/main/marketplace/registry.json
+              https://raw.githubusercontent.com/PrajaNova/avm/main/registry.json
             </div>
           </div>
 

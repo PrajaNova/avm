@@ -34,7 +34,7 @@ jobs:
           # Code every plugin builds against, plus this pipeline itself.
           shared='^(crates/|Cargo\.(toml|lock)$|rust-toolchain|\.github/workflows/(ci|plugin-ci)\.yml$)'
 
-          has "^marketplace/|^crates/avm-cli/src/cli/args\.rs$|^\.github/workflows/ci\.yml$" && site=true || site=false
+          has "^web/|^registry\.json$|^marketplace/registry\.json$|^crates/avm-cli/src/cli/args\.rs$|^\.github/workflows/ci\.yml$" && site=true || site=false
           # Workspace-wide jobs also exercise the cli e2e plugins (node, java, android);
           # a python-only change is covered by its own plugin job.
           has "$shared|^(scripts/|crates/avm-cli/tests/shell/|bin/|install\.|package\.json$|CHANGELOG\.md$|plugins/avm-plugin-(node|java|android)/)" && workspace=true || workspace=false
@@ -56,10 +56,14 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: marketplace
+        working-directory: web
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Check the registry and its frozen legacy copy list the same plugins
+        working-directory: .
+        run: bash scripts/check-registry.sh
 
       - name: Install pnpm
         uses: pnpm/action-setup@v4
@@ -72,7 +76,7 @@ jobs:
         with:
           node-version: 22
           cache: pnpm
-          cache-dependency-path: marketplace/pnpm-lock.yaml
+          cache-dependency-path: web/pnpm-lock.yaml
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -80,7 +84,7 @@ jobs:
       - name: Check documentation coverage
         run: pnpm run check:docs
 
-      - name: Build marketplace
+      - name: Build the web app
         run: pnpm run build
 
   rust:

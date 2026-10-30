@@ -51,14 +51,14 @@ case included.
    (swap `node` for `java`/`python`/`android` in the workflow name as needed).
 3. Nothing else: avm installs the newest `avm-plugin-<name>-v*` release, so the registry
    needs no change for a new plugin version. (Releases of avm before this behaviour still
-   install the `release_tag` pinned in `marketplace/registry.json`; bump it only if you
-   still need those older clients to pick up the new plugin.)
+   install the `release_tag` pinned in the frozen `marketplace/registry.json`; bump it
+   there only if you still need those older clients to pick up the new plugin.)
 
 The workspace workflow builds linux amd64/arm64, macOS arm64/Intel and
 Windows, with checksums and attestations. Plugin releases have namespaced
 tags and are marked as GitHub prereleases to keep `/releases/latest`
 pointing to the CLI. `avm plugin install <name>` looks the name up in
-`marketplace/registry.json` (name to repo and description), then installs
+`registry.json` (name to repo and description), then installs
 the newest `avm-plugin-<name>-v*` release from that repo (its latest release when
 the repo has no such tags). A new plugin needs one registry entry; a new version
 of an existing plugin needs none, since the registry stores no versions.
@@ -66,9 +66,11 @@ Third-party `owner/repo` installs skip the registry.
 
 ### Registry file
 
-`marketplace/registry.json` is `{ "schema_version": 1, "plugins": [{ "name": "<name>", "description": "...", "section_label": "...", "repo": "<owner>/<repo>", "release_tag": "..." }] }`.
+`registry.json` is `{ "schema_version": 1, "plugins": [{ "name": "<name>", "description": "...", "section_label": "...", "repo": "<owner>/<repo>" }] }`.
 Only `name`, `repo` and `description` matter to current avm (optional `tags` feed `plugin search`);
-`section_label` is for the website and `release_tag` is the pin older avm releases follow.
+`section_label` is for the website. There are no release pins: avm reads the release from GitHub. Older avm
+releases fetch `marketplace/registry.json` instead, a frozen copy that keeps `release_tag` pins
+(`scripts/check-registry.sh` keeps its plugin list in step with this file).
 The CLI fetches the file from `main` (override with `AVM_REGISTRY_URL`, a URL or a file path),
 so merging an entry is all it takes to publish a plugin.
 
@@ -87,11 +89,11 @@ tags and stable releases.
 **Actions → Deploy web (Vercel) → Run workflow** in `PrajaNova/avm`
 (tick *production* for the live site, otherwise it publishes a preview URL),
 or run `gh workflow run deploy-web.yml -R PrajaNova/avm -f production=true`.
-Merging to `main` doesn't deploy. The workflow builds `marketplace/` on the
+Merging to `main` doesn't deploy. The workflow builds `web/` on the
 runner and uploads it with the Vercel CLI; the Vercel project has no Git
 connection and its Root Directory is left empty. Repo secrets required:
 `VERCEL_TOKEN`, `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID`. The site is served at
 `https://getavm.dev/`.
 
-The old `avm-marketplace` repository has been deleted; `marketplace/registry.json`
+The old `avm-marketplace` repository has been deleted; `registry.json`
 in this repo is the only registry.

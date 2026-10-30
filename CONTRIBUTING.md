@@ -19,7 +19,8 @@ cargo build --workspace
 Run tests:
 
 ```bash
-cargo test --workspace
+cargo test --workspace             # or: npm test
+npm run test:cli                   # just the CLI suite; `-- alias::` filters (see crates/avm-cli/tests/README.md)
 bash scripts/check-plugin-releases.sh
 ```
 

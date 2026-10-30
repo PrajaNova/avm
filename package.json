@@ -19,6 +19,10 @@
   "scripts": {
     "build": "cargo build --package avm-cli --bin avm-bin",
     "test": "cargo test --workspace",
+    "test:unit": "cargo test -p avm-cli --lib",
+    "test:cli": "cargo test -p avm-cli --test cli",
+    "test:bench": "cargo test -p avm-cli --release --test cli -- --ignored --nocapture --test-threads=1 bench::",
+    "lint": "cargo clippy --workspace --all-targets",
     "ci": "cargo build --workspace && cargo test --workspace && bash scripts/check-changelog.sh",
     "changelog:check": "bash scripts/check-changelog.sh",
     "release:check": "bash scripts/check-release-version.sh",

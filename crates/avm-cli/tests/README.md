@@ -7,6 +7,20 @@ Two suites drive the real `avm` binary:
 | Rust | this folder (`main.rs` + modules) | `cargo test -p avm-cli --test cli` (offline, fake plugins, throwaway sandboxes) |
 | Shell | `shell/suites/*.sh` | `shell/run.sh` in Docker (real Node/Java/Android downloads) |
 
+## Running
+
+From the repo root (`npm run` or `pnpm`, both work):
+
+| Command | Runs |
+| --- | --- |
+| `npm run test:cli` | the Rust suite in this folder (offline, ~6 s) |
+| `npm run test:cli -- alias::` | only tests whose path contains `alias::` (any module or test name) |
+| `npm run test:unit` | the unit tests inside `src/` |
+| `npm test` | everything: `cargo test --workspace` |
+| `npm run test:bench` | the latency benchmarks (release build, prints a timing table) |
+| `npm run lint` | clippy over all targets, tests included |
+| `npm run e2e` | the Docker shell suite (needs Docker and network) |
+
 ## Rust suite layout (`tests/`)
 
 One test binary (`main.rs`), one module per source feature (`crates/avm-cli/src/<feature>/`):

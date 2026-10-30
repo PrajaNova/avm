@@ -24,6 +24,12 @@ One test binary (`main.rs`), one module per source feature (`crates/avm-cli/src/
 | `tool` | `exec`/`x`/`run --with`, `exec` argument validation, `<tool> list/versions/install/use/set/uninstall` (unix) |
 | `bench` | latency benchmarks (ignored by default, see below) |
 
+Negative cases live next to the feature they exercise, in modules named for what goes wrong:
+`global::usage_errors` (typos, missing and extra arguments, exit code 2), `plugins::invalid_plugin_names`,
+`tool::provider_failures` (unmatched versions, failing/malformed plugins), `tool::plugin_timeouts`,
+`project::lock_input`, `project::unwritable` (read-only files, skipped as root), plus `exec_arguments`,
+`core::dotenv`, `env::vars` and `project::lock` (corrupted locks). Each asserts the specific message.
+
 Not covered because they need the network: `plugin install <name|repo|url>`, `plugin search`,
 `self-update`.
 

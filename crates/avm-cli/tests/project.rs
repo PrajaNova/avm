@@ -823,3 +823,79 @@ mod prune {
         );
     }
 }
+
+/// Bad `plugin lock` input.
+#[cfg(unix)]
+mod lock_input {
+    use super::*;
+    use crate::fixtures::projects::LockProject;
+    use rstest::rstest;
+
+    /// Unsupported platform names are rejected before the lock is touched.
+    ///
+    /// 1. Lock a project cleanly, then run `plugin lock --platform <name>` with a malformed name.
+    /// 2. It fails with "unsupported lock platform" and the lock file is byte-identical.
+    #[rstest]
+    #[case::underscore_arch("linux_x64")]
+    #[case::unknown_os("plan9_amd64")]
+    #[case::uppercase("LINUX_AMD64")]
+    #[case::empty_entry("linux_amd64,")]
+    fn lock_rejects_unsupported_platforms(#[case] platform: &str) {
+        let (project, _) = LockProject::locked();
+        let before = fs::read(project.path("project/.avm.lock")).unwrap();
+        failure(
+            project.run(&["plugin", "lock", "--platform", platform]),
+            "unsupported lock platform",
+        );
+        assert_that(&fs::read(project.path("project/.avm.lock")).unwrap()).is_equal_to(before);
+    }
+}
+
+/// Files avm cannot write: it must fail with the OS error, not crash or half-write.
+#[cfg(unix)]
+mod unwritable {
+    use super::*;
+    use std::os::unix::fs::PermissionsExt;
+
+    fn chmod(path: &std::path::Path, mode: u32) {
+        fs::set_permissions(path, std::fs::Permissions::from_mode(mode)).unwrap();
+    }
+
+    /// `init` in a read-only directory reports the permission error and creates nothing.
+    ///
+    /// 1. Make the project directory read-only (skipped as root, which ignores permissions).
+    /// 2. `avm init` fails with "Permission denied".
+    #[test]
+    fn init_in_a_read_only_directory_fails() {
+        if running_as_root() {
+            return;
+        }
+        let p = Sandbox::new("avm-test");
+        chmod(&p.path("project"), 0o555);
+        let out = p.run(&["init"]);
+        chmod(&p.path("project"), 0o755);
+        assert_that(&out).fails_with("Permission denied");
+        assert_that(&p.path("project/.avm.json")).does_not_exist();
+    }
+
+    /// Editing a read-only config fails and leaves the file exactly as it was.
+    ///
+    /// 1. Create a config with one alias and make the file read-only (skipped as root).
+    /// 2. `avm alias add` fails with "Permission denied" and the file's bytes are unchanged.
+    #[test]
+    fn editing_a_read_only_config_fails_without_changing_it() {
+        if running_as_root() {
+            return;
+        }
+        let p = Sandbox::new("avm-test");
+        let original = r#"{"aliases":{"keep":"echo me"}}"#;
+        p.write("project/.avm.json", original);
+        chmod(&p.path("project/.avm.json"), 0o444);
+        chmod(&p.path("project"), 0o555);
+        let out = p.run(&["alias", "add", "new", "echo new"]);
+        chmod(&p.path("project"), 0o755);
+        chmod(&p.path("project/.avm.json"), 0o644);
+        assert_that(&out).fails_with("Permission denied");
+        assert_that(&p.read("project/.avm.json")).is_equal_to(original.to_string());
+    }
+}

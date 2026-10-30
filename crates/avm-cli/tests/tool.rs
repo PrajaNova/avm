@@ -336,3 +336,97 @@ mod exec_arguments {
         assert_that(&p.path("home/.avm/tools")).does_not_exist();
     }
 }
+
+/// Versions and plugin failures that avm itself detects and explains.
+mod provider_failures {
+    use super::*;
+    use crate::fixtures::plugins::install_plugin;
+    use rstest::rstest;
+
+    /// Versions no plugin offers are rejected with the version named.
+    ///
+    /// 1. Run `avm node use|install <version>` with a version that matches nothing, a path, or
+    ///    illegal characters.
+    /// 2. It fails with "no node version matches '<version>'" and no config is written.
+    #[rstest]
+    #[case::use_unknown("use", "99.9")]
+    #[case::use_path("use", "../x")]
+    #[case::install_unknown("install", "99.9")]
+    #[case::install_spaces("install", "a b")]
+    fn a_version_nothing_matches_is_rejected(#[case] verb: &str, #[case] version: &str) {
+        let p = ExecProject::bare();
+        failure(
+            p.run(&["node", verb, version]),
+            &format!("no node version matches '{version}'"),
+        );
+        assert_that(&p.path("project/.avm.json")).does_not_exist();
+        assert_that(&p.path("home/.avm.json")).does_not_exist();
+    }
+
+    /// A major filter must be `latest` or a number.
+    ///
+    /// 1. Run `avm node abc versions`.
+    /// 2. It fails with "unknown version filter: abc".
+    #[test]
+    fn an_invalid_version_filter_is_rejected() {
+        let p = ExecProject::bare();
+        failure(
+            p.run(&["node", "abc", "versions"]),
+            "unknown version filter: abc",
+        );
+    }
+
+    /// A plugin that exits non-zero is reported with the command it failed on.
+    ///
+    /// 1. Install a node plugin that always exits 1.
+    /// 2. `avm node versions` fails with "failed on `versions --query recent`".
+    /// 3. `avm exec node@18 -- true` fails the same way, naming `major:18`, and runs nothing.
+    #[test]
+    fn a_failing_plugin_is_named_in_the_error() {
+        let p = Sandbox::new("avm-test");
+        install_plugin(&p, "node", "#!/bin/sh\nexit 1\n");
+        let out = p.run(&["node", "versions"]);
+        assert_that(&out)
+            .fails_with("plugin 'node'")
+            .stderr_contains("failed on `versions --query recent`");
+        assert_that(&p.run(&["exec", "node@18", "--", "true"]))
+            .fails_with("failed on `versions --query major:18`");
+    }
+
+    /// A plugin that prints something that is not the protocol's JSON is reported as malformed.
+    ///
+    /// 1. Install a node plugin that prints `not-json`.
+    /// 2. `avm node versions` and `avm exec node@18 -- true` fail with "returned malformed output".
+    #[rstest]
+    #[case::versions(&["node", "versions"], "returned malformed output for `versions --query recent`")]
+    #[case::exec(&["exec", "node@18", "--", "true"], "returned malformed output for `versions --query major:18`")]
+    fn a_plugin_with_malformed_output_is_reported(#[case] args: &[&str], #[case] message: &str) {
+        let p = Sandbox::new("avm-test");
+        install_plugin(&p, "node", "#!/bin/sh\necho not-json\n");
+        failure(p.run(args), message);
+    }
+}
+
+/// A plugin that never answers must not hang avm forever.
+mod plugin_timeouts {
+    use super::*;
+    use crate::fixtures::plugins::install_plugin;
+
+    /// With a short read timeout a silent plugin is abandoned and named in the error.
+    ///
+    /// 1. Install a node plugin that sleeps for 20 s and set `AVM_PLUGIN_READ_TIMEOUT=1` (seconds).
+    /// 2. `avm node versions` fails within 10 s and the error says the plugin timed out.
+    #[test]
+    fn a_hanging_plugin_times_out() {
+        let p = Sandbox::new("avm-test");
+        install_plugin(&p, "node", "#!/bin/sh\nsleep 20\n");
+        let start = std::time::Instant::now();
+        let out = p
+            .command(&["node", "versions"])
+            .env("AVM_PLUGIN_READ_TIMEOUT", "1")
+            .output()
+            .unwrap();
+        assert_that(&out).fails_with("timed out");
+        assert_that(&(start.elapsed() < std::time::Duration::from_secs(10))).is_true();
+    }
+}

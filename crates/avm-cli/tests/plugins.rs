@@ -335,3 +335,61 @@ mod commands {
             .stdout_contains("Nothing to install");
     }
 }
+
+/// Wrong plugin names and sources are rejected with a message, and nothing is installed.
+mod invalid_plugin_names {
+    use super::*;
+    use rstest::rstest;
+
+    /// `plugin install` validates what it is asked to fetch.
+    ///
+    /// 1. Run `avm plugin install <source>` with a name containing a space, an empty name, a
+    ///    path with too many parts, or a repo that cannot be reached (GitHub API pointed at a
+    ///    closed local port, so the test stays offline).
+    /// 2. It fails with the expected message and installs nothing.
+    #[rstest]
+    #[case::space("a b", "invalid managed name")]
+    #[case::empty("", "invalid managed name")]
+    #[case::too_many_parts("owner/repo/extra", "invalid plugin source path")]
+    #[case::unreachable_repo("owner/repo", "failed to query release")]
+    #[case::traversal("../x", "failed to query release")]
+    fn install_rejects_bad_sources(#[case] source: &str, #[case] message: &str) {
+        let p = Sandbox::new("avm-test");
+        let out = p
+            .command(&["plugin", "install", source])
+            .env("AVM_GITHUB_API_URL", "http://127.0.0.1:9")
+            .output()
+            .unwrap();
+        assert_that(&out).fails_with(message);
+        let installed = fs::read_dir(p.path("home/.avm/plugins"))
+            .map(|d| d.count())
+            .unwrap_or(0);
+        assert_that(&installed).is_equal_to(0);
+    }
+
+    /// `uninstall` of a name that is not a plain name never reaches the filesystem.
+    ///
+    /// 1. Run `avm plugin uninstall` with path-like names.
+    /// 2. It fails with "invalid managed name".
+    #[rstest]
+    #[case::parent("../x")]
+    #[case::slash("a/b")]
+    #[case::dot("..")]
+    fn uninstall_rejects_path_like_names(#[case] name: &str) {
+        let p = Sandbox::new("avm-test");
+        failure(
+            p.run(&["plugin", "uninstall", name]),
+            "invalid managed name",
+        );
+    }
+
+    /// An unknown tool name is looked up as an alias, so the error says so.
+    ///
+    /// 1. Run `avm nodee list` with no such plugin or alias.
+    /// 2. It fails with "alias 'nodee' not found".
+    #[test]
+    fn an_unknown_tool_is_reported_as_an_unknown_alias() {
+        let p = Sandbox::new("avm-test");
+        failure(p.run(&["nodee", "list"]), "alias 'nodee' not found");
+    }
+}

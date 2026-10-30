@@ -337,3 +337,58 @@ mod versions {
             .contains("20.2.0");
     }
 }
+
+/// Wrong, mistyped or incomplete command lines: clap rejects them with exit code 2 and a message
+/// that names the problem, before avm touches any config or plugin.
+mod usage_errors {
+    use super::*;
+    use rstest::rstest;
+
+    /// Each invocation fails with usage exit code 2 and the expected message.
+    ///
+    /// 1. Run a command line with a typo, a missing argument or an extra argument.
+    /// 2. It exits 2 and stderr contains the expected text (including clap's "did you mean" tip).
+    #[rstest]
+    #[case::typo_plugin(&["plugin", "instal"], "unrecognized subcommand 'instal'")]
+    #[case::typo_plugin_tip(&["plugin", "instal"], "similar subcommand")]
+    #[case::typo_alias(&["alias", "ad"], "unrecognized subcommand 'ad'")]
+    #[case::typo_env(&["env", "foo"], "unrecognized subcommand 'foo'")]
+    #[case::typo_shims(&["shims", "foo"], "unrecognized subcommand 'foo'")]
+    #[case::alias_add_no_key(&["alias", "add"], "<KEY>")]
+    #[case::alias_remove_no_key(&["alias", "remove"], "<KEY>")]
+    #[case::env_add_nothing(&["env", "add"], "<KEY>")]
+    #[case::env_add_no_value(&["env", "add", "K"], "<VALUE>")]
+    #[case::env_remove_no_key(&["env", "remove"], "<KEY>")]
+    #[case::search_no_keyword(&["plugin", "search"], "<KEYWORD>")]
+    #[case::shims_remove_no_tool(&["shims", "remove"], "<TOOL>")]
+    #[case::trust_two_paths(&["trust", "a", "b"], "unexpected argument 'b'")]
+    #[case::which_no_key(&["which"], "<KEY>")]
+    #[case::resolve_no_key(&["resolve"], "<KEY>")]
+    #[case::lock_platform_no_value(&["plugin", "lock", "--platform"], "a value is required")]
+    #[case::unknown_flag_on_subcommand(&["plugin", "list", "--nope"], "unexpected argument '--nope'")]
+    fn bad_command_lines_exit_2(#[case] args: &[&str], #[case] message: &str) {
+        let p = Sandbox::new("avm-test");
+        assert_that(&p.run(args))
+            .exits_with(2)
+            .stderr_contains(message);
+        assert_that(&p.path("home/.avm.json")).does_not_exist();
+        assert_that(&p.path("project/.avm.json")).does_not_exist();
+    }
+
+    /// Command groups with no subcommand print their usage instead of doing something.
+    ///
+    /// 1. Run `avm plugin`, `avm alias` and `avm shims` alone.
+    /// 2. They fail and show "Usage:" with the required `<COMMAND>`.
+    #[rstest]
+    #[case("plugin")]
+    #[case("alias")]
+    #[case("shims")]
+    fn a_group_without_a_subcommand_shows_usage(#[case] group: &str) {
+        let p = Sandbox::new("avm-test");
+        let out = p.run(&[group]);
+        assert_that(&out).fails();
+        let text = format!("{}{}", stdout_of(&out), stderr_of(&out));
+        assert_that(&text).contains("Usage:");
+        assert_that(&text).contains("<COMMAND>");
+    }
+}

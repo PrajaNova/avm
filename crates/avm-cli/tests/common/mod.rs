@@ -213,3 +213,12 @@ impl OutputAssertions for Spec<'_, Output> {
 pub fn read_json(path: &Path) -> serde_json::Value {
     serde_json::from_slice(&fs::read(path).unwrap()).unwrap()
 }
+
+/// Whether tests run as root, which bypasses file permissions (so permission tests must skip).
+pub fn running_as_root() -> bool {
+    Command::new("id")
+        .arg("-u")
+        .output()
+        .map(|o| String::from_utf8_lossy(&o.stdout).trim() == "0")
+        .unwrap_or(false)
+}

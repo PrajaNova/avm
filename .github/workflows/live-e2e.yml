@@ -24,16 +24,17 @@ permissions:
 jobs:
   live:
     name: ${{ matrix.name }}
-    runs-on: ${{ matrix.os }}
+    runs-on: ${{ fromJSON(matrix.runner) }}
     timeout-minutes: 30
+    # `runner` is JSON so one matrix can mix hosted runners and the self-hosted Mac (labels: self-hosted, macOS).
     strategy:
       fail-fast: false # one platform failing must not hide the others
       matrix:
         include:
-          - { name: "Linux amd64", os: ubuntu-latest, run: "e2e/run.sh" }
-          - { name: "Linux arm64", os: ubuntu-24.04-arm, run: "e2e/run.sh" }
-          - { name: "macOS (self-hosted)", os: self-hosted, run: "e2e/run.sh" }
-          - { name: "Windows", os: windows-latest, run: "pwsh -File e2e/live.ps1" }
+          - { name: "Linux amd64", runner: '"ubuntu-latest"', run: "e2e/run.sh" }
+          - { name: "Linux arm64", runner: '"ubuntu-24.04-arm"', run: "e2e/run.sh" }
+          - { name: "macOS (self-hosted)", runner: '["self-hosted", "macOS"]', run: "e2e/run.sh" }
+          - { name: "Windows", runner: '"windows-latest"', run: "pwsh -File e2e/live.ps1" }
     env:
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # GitHub API rate limits on shared runners
       AVM_VERSION: ${{ inputs.version }}

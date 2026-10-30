@@ -24,7 +24,7 @@ demand with an optional version, and on PRs that touch `e2e/`):
 | --- | --- | --- |
 | Linux amd64 | `ubuntu-latest` | `e2e/run.sh` |
 | Linux arm64 | `ubuntu-24.04-arm` | `e2e/run.sh` |
-| macOS (self-hosted Mac) | `self-hosted` | `e2e/run.sh` |
+| macOS (self-hosted Mac, `SGPMac`) | `[self-hosted, macOS]` | `e2e/run.sh` |
 | Windows | `windows-latest` | `pwsh -File e2e/live.ps1` |
 
 `e2e/run.sh` uses a throwaway HOME so it is safe locally; `live.ps1` edits your PowerShell

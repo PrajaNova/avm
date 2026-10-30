@@ -182,7 +182,12 @@ mod vars {
         let p = Sandbox::new("avm-test");
         success(p.run(&["init"]));
         success(p.run(&["env", "add", "FOO", "bar"]));
-        let out = p.run_trusted(&["env", "--shell", shell]);
+        let out = p
+            .command(&["env", "--shell", shell])
+            .env("AVM_TRUST_ALL", "1")
+            .env("JAVA_HOME", "/ambient/java") // avm unsets provider variables that are set
+            .output()
+            .unwrap();
         assert_that(&out)
             .succeeds()
             .stdout_contains(assign)
@@ -204,12 +209,19 @@ mod vars {
 
     /// With nothing configured the export list still clears provider variables.
     ///
-    /// 1. Run bare `avm env` in an empty sandbox.
+    /// 1. Run `avm env --shell sh` in an empty sandbox where the three provider variables are set.
     /// 2. It unsets ANDROID_HOME, ANDROID_SDK_ROOT and JAVA_HOME and exports nothing else.
     #[test]
     fn an_empty_project_only_unsets_provider_variables() {
         let p = Sandbox::new("avm-test");
-        let out = success(p.run(&["env"]));
+        let out = success(
+            p.command(&["env", "--shell", "sh"])
+                .env("ANDROID_HOME", "/ambient/android")
+                .env("ANDROID_SDK_ROOT", "/ambient/android")
+                .env("JAVA_HOME", "/ambient/java")
+                .output()
+                .unwrap(),
+        );
         for var in ["ANDROID_HOME", "ANDROID_SDK_ROOT", "JAVA_HOME"] {
             assert_that(&out).contains(format!("unset {var}").as_str());
         }

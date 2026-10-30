@@ -162,7 +162,12 @@ fn plugin_release(repo: &str, name: &str) -> Result<GithubRelease> {
 /// The local path behind a `file://` asset URL (offline mirrors, tests); curl is
 /// limited to http(s), so these are copied instead.
 fn mirror_path(url: &str) -> Option<&str> {
-    url.strip_prefix("file://")
+    let path = url.strip_prefix("file://")?;
+    // `file:///D:/dir` leaves `/D:/dir` after the scheme; Windows needs `D:/dir`.
+    match path.as_bytes() {
+        [b'/', drive, b':', ..] if drive.is_ascii_alphabetic() => Some(&path[1..]),
+        _ => Some(path),
+    }
 }
 
 /// GET a GitHub API URL. Sends `GITHUB_TOKEN`/`GH_TOKEN` when set, since
@@ -327,4 +332,16 @@ pub fn install_from_marketplace(source: &PluginSource, plugin_dir: &Path) -> Res
     installed?;
 
     Ok(release.tag_name)
+}
+
+#[cfg(test)]
+mod mirror_tests {
+    use super::mirror_path;
+
+    #[test]
+    fn file_urls_become_local_paths() {
+        assert_eq!(mirror_path("file:///tmp/a.zip"), Some("/tmp/a.zip"));
+        assert_eq!(mirror_path("file:///D:/a/b.zip"), Some("D:/a/b.zip"));
+        assert_eq!(mirror_path("https://example.com/a.zip"), None);
+    }
 }

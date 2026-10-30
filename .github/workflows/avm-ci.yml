@@ -99,6 +99,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+      - name: Build avm-bin (the release-flow script drives it)
+        run: cargo build -p avm-cli --locked
       - name: Shared-repository plugin release flow
         run: bash scripts/check-plugin-releases.sh
       - name: Changelog

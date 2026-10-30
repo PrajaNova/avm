@@ -655,7 +655,7 @@ mod init_and_trust {
             .stdout_contains("env   K=v")
             .stdout_contains("DOT=1")
             .stdout_contains("Trusted ");
-        let list = success(p.run(&["trust", "--list"]));
+        let list = slashes(&success(p.run(&["trust", "--list"])));
         assert_that(&list).contains("project/.avm.json");
         assert_that(&list).contains("project/.env");
     }
@@ -669,7 +669,7 @@ mod init_and_trust {
         let p = Sandbox::new("avm-test");
         p.write("project/sub/.avm.json", r#"{"aliases":{"a":"echo A"}}"#);
         success(p.run(&["trust", "sub"]));
-        let list = success(p.run(&["trust", "--list"]));
+        let list = slashes(&success(p.run(&["trust", "--list"])));
         assert_that(&list).contains("sub/.avm.json");
         assert_that(&list.lines().count()).is_equal_to(1);
     }

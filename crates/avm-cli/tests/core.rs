@@ -205,7 +205,9 @@ fn malformed_configs_are_never_replaced_with_empty_state() {
     }
 }
 
-/// `.env` files: loaded from every parent directory, but only when trusted.
+/// `.env` files: loaded from every parent directory, but only when trusted. The aliases here use
+/// POSIX `$VAR` expansion, so this module is unix-only.
+#[cfg(unix)]
 mod dotenv {
     use super::*;
 

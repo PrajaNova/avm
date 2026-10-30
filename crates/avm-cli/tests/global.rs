@@ -54,15 +54,15 @@ fn upgrade_keeps_inherited_pins_at_their_source() {
 
 /// `plugin outdated` queries every tool's plugin in parallel, not one after another.
 ///
-/// 1. Install two plugins whose `versions` call sleeps 2 s, and pin both tools.
+/// 1. Install two plugins whose `versions` call sleeps 3 s, and pin both tools.
 /// 2. Run `avm plugin outdated`.
-/// 3. Both tools show 2.0.0 and the total time is under 3.5 s (a serial run would take 4 s).
+/// 3. Both tools show 2.0.0 and the total time is under 5.5 s (a serial run takes 6 s or more).
 #[cfg(unix)]
 #[test]
 fn outdated_lists_versions_for_all_tools_concurrently() {
     let p = Sandbox::new("avm-test");
     for tool in ["node", "java"] {
-        let script = "#!/bin/sh\nif [ \"$1\" = versions ]; then sleep 2; echo '{\"versions\":[{\"version\":\"2.0.0\",\"label\":\"2.0.0\",\"is_lts\":false,\"channel\":null,\"is_security\":false}]}'; fi\n";
+        let script = "#!/bin/sh\nif [ \"$1\" = versions ]; then sleep 3; echo '{\"versions\":[{\"version\":\"2.0.0\",\"label\":\"2.0.0\",\"is_lts\":false,\"channel\":null,\"is_security\":false}]}'; fi\n";
         install_plugin(&p, tool, script);
     }
     fs::write(
@@ -82,7 +82,7 @@ fn outdated_lists_versions_for_all_tools_concurrently() {
         "{text}"
     );
     assert!(
-        start.elapsed() < std::time::Duration::from_millis(3500),
+        start.elapsed() < std::time::Duration::from_millis(5500),
         "{:?}",
         start.elapsed()
     );

@@ -1,0 +1,46 @@
+# Live end-to-end: installs the *published* avm (install.sh / install.ps1 -> the GitHub release)
+# on a clean runner per platform, installs a plugin from the live registry and runs the
+# alias / env / node journey in e2e/live.sh (e2e/live.ps1 on Windows). Nothing is built from
+# the checkout, so this tests what users actually get. See e2e/README.md.
+name: Live e2e
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Release to install: a tag like v0.5.0, 'latest' for the stable release, or empty for the newest (prereleases included)"
+        required: false
+        default: ""
+  schedule:
+    - cron: "0 6 * * *" # daily: catches a broken release, registry or upstream download
+  pull_request:
+    paths:
+      - "e2e/**"
+      - ".github/workflows/live-e2e.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  live:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false # one platform failing must not hide the others
+      matrix:
+        include:
+          - { name: "Linux amd64", os: ubuntu-latest, run: "e2e/run.sh" }
+          - { name: "Linux arm64", os: ubuntu-24.04-arm, run: "e2e/run.sh" }
+          - { name: "macOS (Apple Silicon)", os: macos-latest, run: "e2e/run.sh" }
+          - { name: "Windows", os: windows-latest, run: "pwsh -File e2e/live.ps1" }
+    env:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # GitHub API rate limits on shared runners
+      AVM_VERSION: ${{ inputs.version }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run the live journey
+        shell: bash
+        run: ${{ matrix.run }}

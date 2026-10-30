@@ -28,6 +28,7 @@
     "release:check": "bash scripts/check-release-version.sh",
     "playground": "bash scripts/playground.sh",
     "e2e": "bash crates/avm-cli/tests/shell/run.sh",
+    "e2e:live": "bash e2e/run.sh",
     "postinstall": "node ./bin/install.js"
   },
   "files": [

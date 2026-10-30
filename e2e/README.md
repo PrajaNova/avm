@@ -10,7 +10,10 @@ AVM_VERSION=v0.5.0 e2e/run.sh     # one specific release
 npm run e2e:live                  # same as e2e/run.sh
 ```
 
-CI runs it on every platform; there is no Docker image for it.
+CI runs it on every platform; there is no Docker image for it. `install.sh` installs to
+`/usr/local/bin` when that is writable or sudo is passwordless (as on CI runners), which would
+replace your own `avm-bin`, so `run.sh` refuses to run outside CI unless that is not the case or you set
+`AVM_E2E_FORCE=1`. Prefer a disposable machine.
 
 ## Every platform, in GitHub Actions
 

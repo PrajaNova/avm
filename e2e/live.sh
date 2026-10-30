@@ -29,9 +29,10 @@ fi
 echo "installing avm ${AVM_VERSION}"
 export AVM_VERSION
 curl -fsSL https://raw.githubusercontent.com/PrajaNova/avm/main/install.sh | bash
-works "avm-bin is installed" test -x "$HOME/.local/bin/avm-bin"
 has "install.sh added the shell hook" "$(cat ~/.bashrc ~/.zshrc ~/.bash_profile ~/.profile 2>/dev/null)" 'avm-bin shell-init'
-export PATH="$HOME/.local/bin:$PATH"
+# install.sh uses /usr/local/bin when it is writable (CI runners), else ~/.local/bin.
+export PATH="$HOME/.local/bin:/usr/local/bin:$PATH"
+works "avm-bin is installed and on PATH" command -v avm-bin
 eval "$(avm-bin shell-init)"
 has "avm -v prints a version" "$(avm -v)" "avm "
 [ "$AVM_VERSION" != latest ] && has "installed the requested release" "$(avm -v)" "${AVM_VERSION#v}"

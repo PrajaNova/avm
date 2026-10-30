@@ -1,5 +1,5 @@
 SUITE=java
-source /e2e/lib.sh
+source /suites/lib.sh
 avm_shell
 W="$HOME/java"
 P="$W/project"

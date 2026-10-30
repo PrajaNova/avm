@@ -1,7 +1,7 @@
 # Tool-independent behavior: plugin verification, the asdf adapter, missing-
 # version fallback, and package.json scripts.
 SUITE=core
-source /e2e/lib.sh
+source /suites/lib.sh
 avm_shell
 W="$HOME/core"
 mkdir -p "$W" && cd "$W"

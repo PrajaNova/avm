@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Install avm fresh (the real way), then run each requested suite.
 set -uo pipefail
-cd /e2e
+cd /suites
 suites=("$@")
 [ "${#suites[@]}" -eq 0 ] && suites=(core node java android)
 

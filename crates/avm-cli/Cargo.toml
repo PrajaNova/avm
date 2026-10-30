@@ -2,6 +2,7 @@
 name = "avm-cli"
 version = "0.5.1-beta.1"
 edition = "2021"
+autotests = false
 
 [dependencies]
 avm-plugin-sdk = { path = "../avm-plugin-sdk" }
@@ -20,3 +21,12 @@ path = "src/main.rs"
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"
+
+[dev-dependencies]
+rstest = "0.28.0"
+speculoos = "0.13.0"
+
+# One test binary: `tests/main.rs` plus a module per feature (see tests/README.md).
+[[test]]
+name = "cli"
+path = "tests/main.rs"

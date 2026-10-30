@@ -9,7 +9,7 @@ services:
   avm:
     build:
       context: .
-      dockerfile: e2e/Dockerfile
+      dockerfile: crates/avm-cli/tests/shell/Dockerfile
       target: playground
     platform: linux/amd64 # Android's Linux tools ship for x86_64 only
     image: avm-playground

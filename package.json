@@ -23,7 +23,7 @@
     "changelog:check": "bash scripts/check-changelog.sh",
     "release:check": "bash scripts/check-release-version.sh",
     "playground": "bash scripts/playground.sh",
-    "e2e": "bash e2e/run.sh",
+    "e2e": "bash crates/avm-cli/tests/shell/run.sh",
     "postinstall": "node ./bin/install.js"
   },
   "files": [

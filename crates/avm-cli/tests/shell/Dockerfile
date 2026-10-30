@@ -24,13 +24,13 @@ RUN apt-get update \
  && rm -rf /var/lib/apt/lists/*
 # A normal user, like a real install (no root, no sudo).
 RUN useradd -m tester
-COPY --chown=tester e2e/tests/ /e2e/
+COPY --chown=tester crates/avm-cli/tests/shell/suites/ /suites/
 USER tester
 WORKDIR /home/tester
 ENV AVM_E2E_INSTALL=release
 # No update notices or GitHub checks in the suites (core.sh tests them).
 ENV AVM_NO_UPDATE_CHECK=1
-ENTRYPOINT ["bash", "/e2e/run-all.sh"]
+ENTRYPOINT ["bash", "/suites/run-all.sh"]
 
 FROM release AS local
 COPY --from=build --chown=tester /dist /opt/dist

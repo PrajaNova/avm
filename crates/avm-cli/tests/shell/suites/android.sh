@@ -2,7 +2,7 @@
 # emulator and system images (several GB). Override the levels with
 # ANDROID_GLOBAL / ANDROID_LOCAL.
 SUITE=android
-source /e2e/lib.sh
+source /suites/lib.sh
 avm_shell
 W="$HOME/android"
 P="$W/project"

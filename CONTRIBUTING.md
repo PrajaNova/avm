@@ -27,8 +27,8 @@ Run the end-to-end suites in a clean container (Docker required; CI runs
 these on every PR):
 
 ```bash
-e2e/run.sh              # all suites
-e2e/run.sh core node    # some suites
+crates/avm-cli/tests/shell/run.sh              # all suites
+crates/avm-cli/tests/shell/run.sh core node    # some suites
 ```
 
 ## Code layout
@@ -52,7 +52,7 @@ More: [Architecture](docs/architecture/ARCHITECTURE.md) · [Creating a plugin](d
 
 ## End-to-end tests
 
-`e2e/run.sh` builds avm from your checkout and runs the suites in a fresh
+`crates/avm-cli/tests/shell/run.sh` builds avm from your checkout and runs the suites in a fresh
 Ubuntu container (`--rm`), installing avm with this repo's `install.sh`:
 
 | Suite | Covers |
@@ -61,8 +61,8 @@ Ubuntu container (`--rm`), installing avm with this repo's `install.sh`:
 | `core` | plugin verification, asdf plugins, missing-version fallback, `package.json` scripts, `self-update`, the update notice |
 | `node`, `java`, `android` | global + local aliases, env and versions, `-g` installs, tool env, version files; node also `outdated`/`upgrade`/`prune` and `avm trust` |
 
-`e2e/run.sh release [suites]` tests the published release instead, and
-`e2e/run.sh shell` opens the clean container. `e2e/windows.ps1` is the
+`crates/avm-cli/tests/shell/run.sh release [suites]` tests the published release instead, and
+`crates/avm-cli/tests/shell/run.sh shell` opens the clean container. `crates/avm-cli/tests/shell/windows.ps1` is the
 Windows suite (CI's `windows` job). CI runs both on every PR.
 
 Local and Windows suites install first-party plugin binaries built from the

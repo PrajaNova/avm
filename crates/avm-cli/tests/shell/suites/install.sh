@@ -2,7 +2,7 @@
 #   AVM_E2E_INSTALL=local   → this checkout's install.sh and its avm-bin build (PRs)
 #   AVM_E2E_INSTALL=release → the published install.sh and release
 SUITE=install
-source /e2e/lib.sh
+source /suites/lib.sh
 
 if [ "${AVM_E2E_INSTALL:-release}" = "local" ]; then
   log "install.sh refuses a tampered or unverifiable archive"

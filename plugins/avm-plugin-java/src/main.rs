@@ -13,6 +13,7 @@ use std::process::ExitCode;
 struct JavaProvider;
 
 impl JavaProvider {
+    /// Returns the `java` binary for `version` if it is installed.
     fn java_bin(&self, version: &str) -> anyhow::Result<Option<PathBuf>> {
         let candidate = tool_dir("java")?.join(version).join("bin").join(JAVA_BIN);
         Ok(candidate.exists().then_some(candidate))
@@ -73,6 +74,7 @@ impl ToolProvider for JavaProvider {
     }
 }
 
+/// Plugin entry point: runs the Java provider through the plugin protocol.
 fn main() -> ExitCode {
     let manifest = Manifest::new(
         "java",

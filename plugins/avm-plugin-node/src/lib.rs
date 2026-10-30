@@ -1,12 +1,9 @@
-mod aliases;
 mod install;
 mod versions;
 
 use avm_plugin_api::{tool_dir, ToolProvider, ToolVersion, ToolVersionQuery};
 use std::collections::HashMap;
 use std::path::PathBuf;
-
-pub use aliases::aliases_from_package_json;
 
 /// `bin/node` (or `bin\\node.exe`) inside each installed version.
 pub(crate) const NODE_BIN: &str = if cfg!(windows) { "node.exe" } else { "node" };
@@ -15,6 +12,7 @@ pub(crate) const NODE_BIN: &str = if cfg!(windows) { "node.exe" } else { "node" 
 pub struct NodeProvider;
 
 impl NodeProvider {
+    /// Returns `binary` inside the `bin` directory of an installed Node version, or `None` if it does not exist.
     pub fn bin_path_for(&self, version: &str, binary: &str) -> anyhow::Result<Option<PathBuf>> {
         let candidate = tool_dir("node")?.join(version).join("bin").join(binary);
         Ok(candidate.exists().then_some(candidate))

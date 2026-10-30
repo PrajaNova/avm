@@ -23,6 +23,7 @@ pub fn lock(path: &Path) -> anyhow::Result<File> {
     Ok(file)
 }
 
+/// Writes `bytes` to a unique temp file next to `path` and renames it into place, so readers never see a partial file.
 pub fn atomic_write(path: &Path, bytes: &[u8]) -> anyhow::Result<()> {
     static NEXT: AtomicUsize = AtomicUsize::new(0);
     let mut name = path.as_os_str().to_os_string();

@@ -110,9 +110,9 @@ export const PluginDocView: React.FC<PluginDocViewProps> = ({
         </p>
 
         <div className="relative rounded-lg bg-page border border-line p-4 font-mono text-xs sm:text-sm text-accent flex items-center justify-between">
-          <span>avm plugin add {cleanName}</span>
+          <span>avm plugin install {cleanName}</span>
           <button
-            onClick={() => onCopy(`avm plugin add ${cleanName}`)}
+            onClick={() => onCopy(`avm plugin install ${cleanName}`)}
             className="p-1.5 rounded-lg bg-muted hover:bg-muted text-secondary transition-colors"
             title="Copy command"
           >

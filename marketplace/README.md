@@ -2,26 +2,17 @@
 
 The official plugin registry and documentation portal for [avm (Any Version Manager)](https://github.com/PrajaNova/avm).
 
-`avm-cli` fetches [`registry.json`](registry.json) from `marketplace/registry.json` on the AVM repo's `main` branch (no server, no API — just a file over `raw.githubusercontent.com`) to turn a short plugin name into a GitHub repo, then fetches that repo's **latest GitHub Release** (a prebuilt native binary, never source) for the current platform.
+`avm plugin install <name>` resolves a plugin from GitHub Releases (a prebuilt native binary, never source): first-party names from `PrajaNova/avm`'s `avm-plugin-<name>-v*` tags, third-party plugins via `avm plugin install <owner>/<repo>`. `registry.json` here only feeds this site (and CLIs older than the registry removal).
 
 This directory also contains the modern **avm Documentation & Marketplace Web Portal**, deployable to GitHub Pages at `https://getavm.dev/`.
 
 ---
 
-## Adding a plugin to the marketplace
+## Publishing a plugin
 
-Open a PR adding an entry to `registry.json`:
+Add the `avm-plugin` topic to your GitHub repo so `avm plugin search` finds it.
 
-```json
-{
-  "name": "kotlin",
-  "description": "One line describing what it manages",
-  "section_label": "Kotlin",
-  "repo": "yourname/avm-plugin-kotlin"
-}
-```
-
-Requirements for `repo`:
+Requirements for the repo:
 
 - Its GitHub Releases must include an asset named
   `avm-plugin-<name>_<os>_<arch>.tar.gz` for each platform you support —
@@ -43,8 +34,8 @@ Requirements for `repo`:
   [PrajaNova/avm](https://github.com/PrajaNova/avm), or any of the
   `avm-plugin-{node,java,android}` repos, for the reference shape.
 
-`avm plugin add <name>` works the moment your repo has one matching release
-published — no changes needed on the avm side beyond the registry entry.
+`avm plugin install <name>` works the moment your repo has one matching release
+published: `avm plugin install <owner>/<repo>`.
 
 ---
 

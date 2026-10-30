@@ -1,5 +1,5 @@
 //! `avm self-update` and the once-a-day "new version" notice (#28).
-use crate::runtime;
+use crate::plugins as runtime;
 use anyhow::{anyhow, Context, Result};
 use std::fs;
 use std::io::IsTerminal;
@@ -21,6 +21,7 @@ enum InstallMethod {
     Direct,
 }
 
+/// Guess how avm was installed from the executable's path (Homebrew, npm, Cargo, Scoop, else direct).
 fn install_method(exe: &Path) -> InstallMethod {
     let path = exe
         .to_string_lossy()
@@ -52,11 +53,14 @@ fn upgrade_command(method: &InstallMethod) -> Option<&'static str> {
     }
 }
 
+/// The canonicalized path of the running avm-bin.
 fn current_exe() -> Result<PathBuf> {
     let exe = std::env::current_exe().context("failed to locate avm-bin")?;
     Ok(exe.canonicalize().unwrap_or(exe))
 }
 
+/// Update avm in place to `version` (or the latest release); package-manager installs only print their upgrade command.
+/// Downloads a checksum-verified archive and swaps the binary; errors on download, verification, or swap failure.
 pub fn self_update(version: Option<String>) -> Result<()> {
     let exe = current_exe()?;
     let method = install_method(&exe);
@@ -70,7 +74,7 @@ pub fn self_update(version: Option<String>) -> Result<()> {
     let release = runtime::github_release(REPO, tag.as_deref())?;
     let target = release.tag_name.trim_start_matches('v').to_string();
     if target == CURRENT || (tag.is_none() && !is_newer(&target, CURRENT)) {
-        println!("✓ avm {CURRENT} is up to date");
+        done!("avm {CURRENT} is up to date");
         return Ok(());
     }
 
@@ -95,10 +99,11 @@ pub fn self_update(version: Option<String>) -> Result<()> {
     if cfg!(windows) {
         let _ = crate::shims::reshim();
     }
-    println!("✓ Updated avm {CURRENT} → {target}");
+    done!("Updated avm {CURRENT} → {target}");
     Ok(())
 }
 
+/// Make `new` executable and atomically rename it over `exe`.
 #[cfg(unix)]
 fn replace_binary(exe: &Path, new: &Path) -> Result<()> {
     use std::os::unix::fs::PermissionsExt;
@@ -119,6 +124,7 @@ fn replace_binary(exe: &Path, new: &Path) -> Result<()> {
     Ok(())
 }
 
+/// Where the previous binary is parked during a Windows update.
 fn old_binary(exe: &Path) -> PathBuf {
     exe.with_extension("old.exe")
 }
@@ -139,10 +145,12 @@ struct CheckCache {
     latest: Option<String>,
 }
 
+/// Location of the update-check cache (`~/.avm/update-check.json`).
 fn cache_path() -> Result<PathBuf> {
     Ok(crate::shims::avm_home()?.join("update-check.json"))
 }
 
+/// Read the update-check cache; a missing or unreadable one is the default.
 fn read_cache() -> CheckCache {
     cache_path()
         .ok()
@@ -151,6 +159,7 @@ fn read_cache() -> CheckCache {
         .unwrap_or_default()
 }
 
+/// Best-effort write of the update-check cache; failures are ignored.
 fn write_cache(cache: &CheckCache) {
     if let Ok(path) = cache_path() {
         let _ = path.parent().map(fs::create_dir_all);
@@ -158,6 +167,7 @@ fn write_cache(cache: &CheckCache) {
     }
 }
 
+/// Current Unix time in seconds (0 if the clock is before the epoch).
 fn now() -> u64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -240,33 +250,9 @@ pub fn refresh_cache() -> Result<()> {
 
 /// Semver-ish: `0.4.0 > 0.4.0-beta-2 > 0.4.0-beta-1 > 0.3.9`.
 fn is_newer(candidate: &str, current: &str) -> bool {
-    fn split(v: &str) -> (Vec<u64>, Option<&str>) {
-        let v = v.trim_start_matches('v');
-        let (core, pre) = v.split_once('-').map_or((v, None), |(c, p)| (c, Some(p)));
-        (
-            core.split('.').map(|n| n.parse().unwrap_or(0)).collect(),
-            pre,
-        )
-    }
-    // Pre-release tags compared piecewise, numbers numerically: beta-10 > beta-9.
-    fn pre_key(p: &str) -> Vec<(u64, String)> {
-        p.split(['-', '.'])
-            .map(|part| {
-                part.parse()
-                    .map_or((0, part.to_string()), |n| (n, String::new()))
-            })
-            .collect()
-    }
-    let (a, pa) = split(candidate);
-    let (b, pb) = split(current);
-    if a != b {
-        return a > b;
-    }
-    match (pa, pb) {
-        (None, Some(_)) => true,
-        (Some(x), Some(y)) => pre_key(x) > pre_key(y),
-        _ => false,
-    }
+    let parse = |v: &str| semver::Version::parse(v.trim_start_matches('v')).ok();
+    // A tag that is not semver is never announced as an update.
+    matches!((parse(candidate), parse(current)), (Some(a), Some(b)) if a > b)
 }
 
 #[cfg(test)]
@@ -277,7 +263,8 @@ mod tests {
     fn versions() {
         assert!(is_newer("0.4.0", "0.4.0-beta-1"));
         assert!(is_newer("0.4.0-beta-2", "0.4.0-beta-1"));
-        assert!(is_newer("0.4.0-beta-10", "0.4.0-beta-9"));
+        assert!(is_newer("0.5.1-beta.10", "0.5.1-beta.9"));
+        assert!(!is_newer("v1.x.2", "1.0.1"));
         assert!(is_newer("v0.4.1", "0.4.0"));
         assert!(is_newer("1.0.0", "0.99.99"));
         assert!(!is_newer("0.4.0-beta-1", "0.4.0"));

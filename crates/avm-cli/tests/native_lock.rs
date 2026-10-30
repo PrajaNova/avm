@@ -184,7 +184,7 @@ fn native_plugins_lock_and_install_offline_on_this_platform() {
             .output()
             .unwrap()
     };
-    assert!(!run(&["install", "--frozen"]).status.success());
+    assert!(!run(&["-p", "install", "--frozen"]).status.success());
     success(run(&["lock"]));
     let lock_file = root.join("project/.avm.lock");
     let lock_bytes = fs::read(&lock_file).unwrap();
@@ -197,7 +197,7 @@ fn native_plugins_lock_and_install_offline_on_this_platform() {
     drop(disco);
     fs::remove_file(root.join("mirror/index.json")).unwrap();
     fs::remove_file(release.join("SHASUMS256.txt")).unwrap();
-    success(run(&["install", "--frozen"]));
+    success(run(&["-p", "install", "--frozen"]));
     for tool in ["node", "java"] {
         let out = success(run(&["exec-shim", tool, "--", "manifest"]));
         let manifest: Value = serde_json::from_str(&out).unwrap();
@@ -216,11 +216,11 @@ fn native_plugins_lock_and_install_offline_on_this_platform() {
     let mut wrong = lock.clone();
     wrong["tools"]["node"]["plugin"]["binaries"][&platform] = json!("0".repeat(64));
     fs::write(&lock_file, wrong.to_string()).unwrap();
-    assert!(!run(&["install", "--frozen"]).status.success());
+    assert!(!run(&["-p", "install", "--frozen"]).status.success());
     assert!(!root.join("home/.avm/tools/java/openjdk-21.0.1+12").exists());
     fs::write(&lock_file, &lock_bytes).unwrap();
     fs::write(&java_archive, "tampered ZIP or tarball").unwrap();
-    assert!(!run(&["install", "--frozen"]).status.success());
+    assert!(!run(&["-p", "install", "--frozen"]).status.success());
     assert!(!root.join("home/.avm/tools/java/openjdk-21.0.1+12").exists());
     fs::remove_dir_all(root).unwrap();
 }

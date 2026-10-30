@@ -28,7 +28,7 @@ export const SEO_PAGES: PageSeo[] = [
     const guide = FEATURE_GUIDES[id];
     return { path: link, title: `${guide?.title ?? text} | AVM docs`, description: clip(guide?.intro ?? `${text}: AVM documentation for managing Node.js, Java and Android SDK versions per project.`), inSitemap: true };
   }),
-  ...registry.plugins.map((p) => ({ path: `/marketplace/${p.name}`, title: `${p.section_label} version manager plugin for AVM`, description: clip(`${p.description}. Install with avm plugin add ${p.name}.`), inSitemap: true })),
+  ...registry.plugins.map((p) => ({ path: `/marketplace/${p.name}`, title: `${p.section_label} version manager plugin for AVM`, description: clip(`${p.description}. Install with avm plugin install ${p.name}.`), inSitemap: true })),
   ...SEO_GUIDES.map((g) => ({ path: `/guides/${g.slug}`, title: g.title, description: g.description, inSitemap: true })),
   // /docs renders the first docs page, so it points search engines there instead of competing with it.
   { path: '/docs', title: `${docs[0].text} | AVM docs`, description: HOME_DESC, canonical: docs[0].link, inSitemap: false },

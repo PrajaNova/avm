@@ -39,7 +39,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({ onCopy }) => {
             </h1>
             <p className="mt-2 text-secondary text-sm sm:text-base max-w-2xl">
               Plugins are standalone precompiled executables fetched on-demand. 
-              Install with <code className="text-accent font-mono text-xs bg-surface px-1.5 py-0.5 rounded">avm plugin add &lt;name&gt;</code>.
+              Install with <code className="text-accent font-mono text-xs bg-surface px-1.5 py-0.5 rounded">avm plugin install &lt;name&gt;</code>.
             </p>
           </div>
         </div>
@@ -80,9 +80,9 @@ export const Marketplace: React.FC<MarketplaceProps> = ({ onCopy }) => {
                 </dl>
               </div>
               <div className="relative z-10 flex items-center justify-between bg-page border border-line rounded-md pl-3 pr-1 py-1 font-mono text-sm">
-                <span className="text-ink truncate mr-2">avm plugin add {plugin.name}</span>
+                <span className="text-ink truncate mr-2">avm plugin install {plugin.name}</span>
                 <button
-                  onClick={() => onCopy(`avm plugin add ${plugin.name}`)}
+                  onClick={() => onCopy(`avm plugin install ${plugin.name}`)}
                   className="inline-flex items-center justify-center w-10 h-10 rounded text-secondary hover:text-ink hover:bg-muted shrink-0"
                   aria-label={`Copy install command for ${plugin.name}`}
                 >

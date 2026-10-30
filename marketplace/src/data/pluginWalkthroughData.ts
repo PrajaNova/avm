@@ -9,7 +9,7 @@ export const PLUGIN_WALKTHROUGHS: Record<string, { title: string; badge: string;
         id: 'node-install-plugin',
         stepNumber: '01',
         label: 'Add Plugin',
-        command: 'avm plugin add node',
+        command: 'avm plugin install node',
         comment: '# Fetch the precompiled native Node.js provider from the marketplace',
         output: 'Fetching \'node\' from PrajaNova/avm-plugin-node...\n✓ Installed node v0.2.0',
         timing: '0.9s'
@@ -70,7 +70,7 @@ export const PLUGIN_WALKTHROUGHS: Record<string, { title: string; badge: string;
         id: 'java-install-plugin',
         stepNumber: '01',
         label: 'Add Plugin',
-        command: 'avm plugin add java',
+        command: 'avm plugin install java',
         comment: '# Install native OpenJDK provider powered by Eclipse Temurin & Foojay Disco API',
         output: 'Fetching \'java\' from PrajaNova/avm-plugin-java...\n✓ Installed java v0.2.0',
         timing: '0.8s'
@@ -131,7 +131,7 @@ export const PLUGIN_WALKTHROUGHS: Record<string, { title: string; badge: string;
         id: 'python-install-plugin',
         stepNumber: '01',
         label: 'Add Plugin',
-        command: 'avm plugin add python',
+        command: 'avm plugin install python',
         comment: '# Install the native CPython provider (python-build-standalone builds)',
         output: 'Fetching \'python\' from PrajaNova/avm...\n✓ Installed python v0.1.0',
         timing: '0.8s'
@@ -183,7 +183,7 @@ export const PLUGIN_WALKTHROUGHS: Record<string, { title: string; badge: string;
         id: 'android-install-plugin',
         stepNumber: '01',
         label: 'Add Plugin',
-        command: 'avm plugin add android',
+        command: 'avm plugin install android',
         comment: '# Install native Android SDK provider (cmdline-tools, platform-tools, avd manager)',
         output: 'Fetching \'android\' from PrajaNova/avm-plugin-android...\n✓ Installed android v0.2.0',
         timing: '1.0s'

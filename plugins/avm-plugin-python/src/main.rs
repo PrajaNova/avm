@@ -16,6 +16,7 @@ use std::process::ExitCode;
 struct PythonProvider;
 
 impl PythonProvider {
+    /// Returns the `python` binary for `version` if it is installed.
     fn python_bin(&self, version: &str) -> anyhow::Result<Option<PathBuf>> {
         let candidate = tool_dir("python")?
             .join(version)
@@ -71,6 +72,7 @@ impl ToolProvider for PythonProvider {
     }
 }
 
+/// Plugin entry point: runs the Python provider through the plugin protocol.
 fn main() -> ExitCode {
     let manifest = Manifest::new(
         "python",

@@ -136,7 +136,7 @@ avm kotlin use 1.9.20
 That's exactly the layout a real marketplace install produces
 (`~/.avm/plugins/avm-plugin-<name>/bin/avm-plugin`) — `avm`'s discovery
 doesn't distinguish "installed by hand for testing" from "installed via
-`avm plugin add`".
+`avm plugin install`".
 
 ## Publishing
 
@@ -150,12 +150,12 @@ doesn't distinguish "installed by hand for testing" from "installed via
    `avm-plugin-<name>_<os>_<arch>.tar.gz` for `linux_amd64`, `linux_arm64`,
    `darwin_arm64`, and `darwin_amd64` (Intel Macs), and publishes them as
    GitHub Release assets. This
-   is the **required contract** — `avm plugin add` queries your repo's
-   `GET /repos/<owner>/<repo>/releases/latest` and looks for an asset
+   is the **required contract** — `avm plugin install` queries your repo's
+   `GET /repos/<owner>/<repo>/releases/latest` (`avm plugin install <owner>/<repo>`) and looks for an asset
    named exactly `avm-plugin-<name>_<os>_<arch>.tar.gz`, containing exactly
    one file, `avm-plugin-<name>`. It always fetches a compiled release —
    never source — so anyone installing your plugin needs no Rust
-   toolchain, same as `avm plugin add node` today.
+   toolchain, same as `avm plugin install node` today.
 
    For Windows, pass `windows: true` to the reusable workflow. It also builds
    `avm-plugin-<name>_windows_amd64.zip` containing `avm-plugin-<name>.exe`,
@@ -168,16 +168,9 @@ doesn't distinguish "installed by hand for testing" from "installed via
    (`PrajaNova/avm/.github/workflows/plugin-release.yml`) generates it and
    a build provenance attestation automatically; its caller must grant
    `contents: write`, `id-token: write`, and `attestations: write`.
-3. **List it in the marketplace** (optional but recommended): open a PR
-   adding an entry to `registry.json` in
-   [PrajaNova/avm/marketplace](https://github.com/PrajaNova/avm/tree/main/marketplace)
-   — `{"name", "description", "section_label", "repo"}`. Once merged,
-   `avm plugin add <name>` works with just the bare name instead of a full
-   URL, and it shows up in `avm plugin available`.
-4. Without a marketplace entry, people can still install your plugin via
-   `avm plugin add <path-or-url>` — same asset-naming contract applies,
-   avm just resolves the repo from the URL you gave it instead of a
-   registry lookup.
+3. **Make it discoverable** (optional): add the `avm-plugin` topic to the
+   GitHub repo so `avm plugin search <keyword>` lists it. There is no registry to
+   edit; people install it with `avm plugin install <owner>/<repo>`.
 
 ## Verifying what your plugin downloads
 
@@ -221,6 +214,6 @@ should always compute the value from the version string, never read
 today's environment to decide what to report.
 
 The legacy asdf adapter (`bin/list-all`, `bin/install`, ...) still exists
-in `avm-cli/src/runtime.rs` as a fallback tier for community plugins that haven't
+in `avm-cli/src/plugins/` as a fallback tier for community plugins that haven't
 adopted this protocol — it's not going away, just no longer what avm's own
 first-party tools use.

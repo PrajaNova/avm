@@ -4,6 +4,7 @@ use std::collections::HashSet;
 
 const DEFAULT_REPOSITORY_URL: &str = "https://dl.google.com/android/repository/repository2-3.xml";
 
+/// Fetches the Android repository index and returns platform API levels, newest first, filtered by `query`; errors on network or encoding failure.
 pub fn available_versions(query: ToolVersionQuery) -> Result<Vec<ToolVersion>> {
     let url = std::env::var("AVM_ANDROID_REPOSITORY_URL")
         .unwrap_or_else(|_| DEFAULT_REPOSITORY_URL.to_string());

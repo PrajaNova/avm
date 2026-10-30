@@ -1,16 +1,17 @@
 use crate::versions;
 use anyhow::{Context, Result};
 use avm_plugin_api::protocol::LockedAsset;
-use avm_plugin_api::{run_timed, tool_dir};
+use avm_plugin_api::tool_dir;
 use std::fs;
-use std::process::Command;
 
 const TAR_TIMEOUT_MS: u64 = 300_000;
 
+/// Installs a CPython build with no locked asset.
 pub fn install_python(version: &str) -> Result<()> {
     install(version, None)
 }
 
+/// Installs Python `version` under a per-version lock, doing nothing if already installed; uses `locked` when given and errors on download or extract failure.
 pub fn install(version: &str, locked: Option<&LockedAsset>) -> Result<()> {
     avm_plugin_api::download::validate_version(version)?;
     let tools_root = tool_dir("python")?;
@@ -48,17 +49,13 @@ pub fn install(version: &str, locked: Option<&LockedAsset>) -> Result<()> {
     }
 
     // The archive's single root dir is `python/`; strip it.
-    let mut tar = Command::new("tar");
-    tar.arg("-xzf")
-        .arg(&archive)
-        .arg("--strip-components=1")
-        .arg("-C")
-        .arg(&root);
-    run_timed(
-        tar,
+    avm_plugin_api::download::extract_archive(
+        &archive,
+        &root,
+        1,
         TAR_TIMEOUT_MS,
-        "Python archive extraction",
         "AVM_PYTHON_TAR_TIMEOUT",
+        "Python archive extraction",
     )?;
 
     if target.exists() {

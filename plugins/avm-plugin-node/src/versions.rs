@@ -11,6 +11,7 @@ struct IndexEntry {
     security: bool,
 }
 
+/// Fetches the Node.js release index from the mirror and returns versions filtered by `query`; errors on network or parse failure.
 pub fn available_versions(query: ToolVersionQuery) -> Result<Vec<ToolVersion>> {
     let mirror = crate::install::mirror();
     let raw = avm_plugin_api::fetch(&format!("{}/index.json", mirror.trim_end_matches('/')), 20)?;
@@ -20,6 +21,7 @@ pub fn available_versions(query: ToolVersionQuery) -> Result<Vec<ToolVersion>> {
     Ok(query.filter(versions, |v: &ToolVersion| major(&v.version)))
 }
 
+/// Converts an index entry to a `ToolVersion`, stripping the leading `v` and labelling LTS releases.
 fn to_tool_version(entry: IndexEntry) -> ToolVersion {
     let version = entry.version.trim_start_matches('v').to_string();
     let lts = entry.lts.as_str().map(str::to_string);
@@ -39,6 +41,7 @@ fn to_tool_version(entry: IndexEntry) -> ToolVersion {
     }
 }
 
+/// Returns the major component of `version`, or 0 if it does not parse.
 fn major(version: &str) -> u64 {
     version
         .split('.')

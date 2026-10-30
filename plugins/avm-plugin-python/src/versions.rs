@@ -70,6 +70,7 @@ fn index_bytes() -> Result<Vec<u8>> {
     }
 }
 
+/// Parses the JSON-lines build index into versions mapped to their builds; errors on malformed lines and skips entries without a `+tag`.
 fn parse_index(raw: &[u8]) -> Result<Index> {
     let mut index = Index::new();
     for line in raw.split(|b| *b == b'\n').filter(|l| !l.is_empty()) {
@@ -103,16 +104,19 @@ fn parse_index(raw: &[u8]) -> Result<Index> {
     Ok(index)
 }
 
+/// Parses `major.minor.patch` into a triple, or `None` if it is not exactly three numbers.
 fn parse_triple(version: &str) -> Option<Triple> {
     let mut parts = version.split('.').map(|p| p.parse().ok());
     let triple = (parts.next()??, parts.next()??, parts.next()??);
     parts.next().is_none().then_some(triple)
 }
 
+/// Formats a version triple as `major.minor.patch`.
 fn fmt(t: Triple) -> String {
     format!("{}.{}.{}", t.0, t.1, t.2)
 }
 
+/// Lists available Python versions, newest first, filtered by `query`; errors if the index cannot be fetched or parsed.
 pub fn available_versions(query: ToolVersionQuery) -> Result<Vec<ToolVersion>> {
     let versions = parse_index(&index_bytes()?)?
         .into_keys()
@@ -130,6 +134,7 @@ pub fn available_versions(query: ToolVersionQuery) -> Result<Vec<ToolVersion>> {
     Ok(query.filter(versions, |v| parse_triple(&v.version).map_or(0, |t| t.1)))
 }
 
+/// Maps an avm platform id to the python-build-standalone target triple; errors on unsupported platforms.
 fn target_triple(platform: &str) -> Result<&'static str> {
     Ok(match platform {
         "darwin_arm64" => "aarch64-apple-darwin",
@@ -142,6 +147,7 @@ fn target_triple(platform: &str) -> Result<&'static str> {
     })
 }
 
+/// Returns the host platform as `<os>_<arch>` (e.g. `darwin_arm64`); errors on unsupported architectures.
 pub fn host_platform() -> Result<String> {
     let arch = match std::env::consts::ARCH {
         "aarch64" => "arm64",
@@ -151,6 +157,7 @@ pub fn host_platform() -> Result<String> {
     Ok(format!("{}_{arch}", std::env::consts::OS).replace("macos", "darwin"))
 }
 
+/// Resolves download URLs and checksums for `version` on each requested platform; errors on an unknown version or unsupported platform.
 pub fn resolve_downloads(version: &str, platforms: &[String]) -> Result<ResolveResponse> {
     avm_plugin_api::download::validate_version(version)?;
     let index = parse_index(&index_bytes()?)?;

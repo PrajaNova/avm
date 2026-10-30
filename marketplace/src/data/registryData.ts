@@ -8,10 +8,10 @@ export const EXTENDED_PLUGIN_METADATA: Record<string, PluginDetail> = {
       'Automatic package.json script aliases (avm test, avm dev, etc.)',
       'Global packages (npm -g) stay reachable across local version switches',
       'Zero-compile binary fetch for your exact platform architecture',
-      'SHA-256 verified locked installs with avm lock and avm install --frozen'
+      'SHA-256 verified locked installs with avm lock and avm -p install --frozen'
     ],
     keyCommands: [
-      { command: 'avm plugin add node', description: 'Install native Node.js provider binary' },
+      { command: 'avm plugin install node', description: 'Install native Node.js provider binary' },
       { command: 'avm node versions', description: 'List recent available Node.js releases' },
       { command: 'avm node 22 versions', description: 'Filter versions by major line (e.g. Node 22.x)' },
       { command: 'avm node install 22.14.0', description: 'Download and install exact Node version' },
@@ -38,7 +38,7 @@ export const EXTENDED_PLUGIN_METADATA: Record<string, PluginDetail> = {
       'Cross-platform lock metadata and verified offline-metadata installs'
     ],
     keyCommands: [
-      { command: 'avm plugin add java', description: 'Install native OpenJDK provider binary' },
+      { command: 'avm plugin install java', description: 'Install native OpenJDK provider binary' },
       { command: 'avm java versions', description: 'Browse available OpenJDK Temurin builds' },
       { command: 'avm java 17 versions', description: 'List all patch builds for OpenJDK 17' },
       { command: 'avm java install 17', description: 'Install latest OpenJDK 17 and pin locally' },
@@ -64,7 +64,7 @@ export const EXTENDED_PLUGIN_METADATA: Record<string, PluginDetail> = {
       'Cross-platform lock metadata for avm lock'
     ],
     keyCommands: [
-      { command: 'avm plugin add python', description: 'Install native CPython provider binary' },
+      { command: 'avm plugin install python', description: 'Install native CPython provider binary' },
       { command: 'avm python versions', description: 'List recent CPython releases' },
       { command: 'avm python 12 versions', description: 'List every 3.12 patch release' },
       { command: 'avm python install 3.12.3', description: 'Download and install an exact CPython version' },
@@ -89,7 +89,7 @@ export const EXTENDED_PLUGIN_METADATA: Record<string, PluginDetail> = {
       'Android supports unlocked installs only; frozen lockfiles are not supported'
     ],
     keyCommands: [
-      { command: 'avm plugin add android', description: 'Install native Android SDK provider binary' },
+      { command: 'avm plugin install android', description: 'Install native Android SDK provider binary' },
       { command: 'avm android versions', description: 'List stable Android API levels (34, 35, 36, etc.)' },
       { command: 'avm android install 34', description: 'Install Android SDK 34 + system image + tools' },
       { command: 'avm android use 34', description: 'Pin Android API level for current project' },

@@ -11,6 +11,7 @@ use std::process::ExitCode;
 struct AndroidProvider;
 
 impl AndroidProvider {
+    /// Returns the avm `sdkmanager` wrapper for `version` if it is installed.
     fn sdkmanager_wrapper(&self, version: &str) -> Result<Option<PathBuf>> {
         let candidate = tool_dir("android")?
             .join(version)
@@ -61,6 +62,7 @@ impl ToolProvider for AndroidProvider {
     }
 }
 
+/// Plugin entry point: handles `avd` subcommands directly, otherwise runs the standard plugin protocol.
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
     if args.first().map(String::as_str) == Some("avd") {

@@ -17,6 +17,7 @@ pub struct Manifest {
 }
 
 impl Manifest {
+    /// Builds a manifest for the given plugin, pinned to plugin API version 1.
     pub fn new(name: &str, version: &str, description: &str, section_label: &str) -> Self {
         Self {
             name: name.to_string(),
@@ -67,6 +68,7 @@ impl ToolVersionQuery {
         }
     }
 
+    /// Parses a `--query` value (`recent`, `latest` or `major:<N>`); errors on anything else or a non-numeric major.
     pub fn parse_arg(arg: &str) -> anyhow::Result<Self> {
         match arg {
             "recent" => Ok(ToolVersionQuery::Recent),
@@ -118,6 +120,7 @@ pub fn validate_name(name: &str) -> anyhow::Result<()> {
     Ok(())
 }
 
+/// Rejects empty or path-unsafe version specs (traversal or separator characters), ignoring an `lts/` prefix.
 pub fn validate_version_spec(spec: &str) -> anyhow::Result<()> {
     let selector = spec.strip_prefix("lts/").unwrap_or(spec);
     anyhow::ensure!(
@@ -152,6 +155,7 @@ pub fn list_installed(
     Ok(versions)
 }
 
+/// Removes the managed directory for `tool`/`version` if present; a missing directory is not an error.
 pub fn remove_version(tool: &str, version: &str) -> anyhow::Result<()> {
     download::validate_version(version)?;
     let target = tool_dir(tool)?.join(version);
@@ -167,30 +171,24 @@ pub fn wait_deadline(
     child: &mut std::process::Child,
     ms: u64,
 ) -> std::io::Result<Option<std::process::ExitStatus>> {
-    let deadline = std::time::Instant::now()
-        .checked_add(std::time::Duration::from_millis(ms))
+    let timeout = std::time::Duration::from_millis(ms);
+    // `wait_timeout` adds the timeout to the clock, which panics past its range.
+    std::time::Instant::now()
+        .checked_add(timeout)
         .ok_or_else(|| {
             std::io::Error::new(
                 std::io::ErrorKind::InvalidInput,
                 "timeout exceeds the clock's range",
             )
         })?;
-    // Poll in growing steps (1, 2, 4 ... 50 ms) so fast children return in a few ms.
-    let mut step_ms = 1;
-    loop {
-        if let Some(status) = child.try_wait()? {
-            return Ok(Some(status));
-        }
-        if std::time::Instant::now() >= deadline {
-            #[cfg(unix)]
-            process::terminate_descendants(child.id());
-            let _ = child.kill();
-            let _ = child.wait();
-            return Ok(None);
-        }
-        std::thread::sleep(std::time::Duration::from_millis(step_ms));
-        step_ms = (step_ms * 2).min(50);
+    if let Some(status) = wait_timeout::ChildExt::wait_timeout(child, timeout)? {
+        return Ok(Some(status));
     }
+    #[cfg(unix)]
+    process::terminate_descendants(child.id());
+    let _ = child.kill();
+    let _ = child.wait();
+    Ok(None)
 }
 
 /// `$env_var` (seconds) overrides `default_ms`.
@@ -226,20 +224,29 @@ pub fn run_timed(
 
 /// Read `url_or_path` from disk if it exists (tests / offline mirrors), else `curl` it.
 pub fn fetch(url_or_path: &str, max_time_secs: u32) -> anyhow::Result<Vec<u8>> {
+    fetch_with_headers(url_or_path, max_time_secs, &[])
+}
+
+/// `fetch`, sending each `headers` entry (`"Name: value"`) with the request.
+pub fn fetch_with_headers(
+    url_or_path: &str,
+    max_time_secs: u32,
+    headers: &[String],
+) -> anyhow::Result<Vec<u8>> {
     let local = std::path::Path::new(url_or_path);
     if local.exists() {
         return std::fs::read(local)
             .map_err(|e| anyhow::anyhow!("failed to read {}: {e}", local.display()));
     }
-    let output = std::process::Command::new("curl")
-        .args([
-            "-fsSL",
-            "--connect-timeout",
-            "10",
-            "--max-time",
-            &max_time_secs.to_string(),
-            url_or_path,
-        ])
+    let mut curl = std::process::Command::new("curl");
+    curl.args(download::CURL_SAFE_ARGS)
+        .arg("-sS")
+        .args(["--max-time", &max_time_secs.to_string()]);
+    for header in headers {
+        curl.args(["-H", header]);
+    }
+    let output = curl
+        .arg(url_or_path)
         .output()
         .map_err(|e| anyhow::anyhow!("failed to fetch {url_or_path}: {e}"))?;
     if !output.status.success() {
@@ -289,6 +296,7 @@ pub fn verify_sha256(
     Ok(actual)
 }
 
+/// Looks up `name` in a `sha256sum`-style checksums listing and returns its lowercased hash; errors if there is no entry.
 pub fn checksum_for(checksums: &str, name: &str) -> anyhow::Result<String> {
     checksums
         .lines()
@@ -350,18 +358,26 @@ pub mod protocol {
     }
 }
 
+/// What a tool plugin implements: queries about, and changes to, one tool's versions.
 pub trait ToolProvider: Send + Sync {
+    /// The tool name this provider serves (`node`, `java`, ...).
     fn name(&self) -> &str;
+    /// Whether `version` is fully installed under the tool's directory.
     fn is_installed(&self, version: &str) -> bool;
+    /// Installed versions, sorted oldest to newest.
     fn installed_versions(&self) -> anyhow::Result<Vec<String>>;
+    /// Versions that can be installed, filtered by `query`. May hit the network.
     fn available_versions(&self, query: ToolVersionQuery) -> anyhow::Result<Vec<ToolVersion>>;
+    /// The tool's main executable for `version`, or `None` when it has none.
     fn executable_path(&self, version: &str) -> anyhow::Result<Option<PathBuf>>;
     /// Environment variables this tool should export when selected (e.g.
     /// `ANDROID_HOME`, `JAVA_HOME`). Defaults to none; providers override.
     fn env_vars(&self, _version: &str) -> anyhow::Result<HashMap<String, String>> {
         Ok(HashMap::new())
     }
+    /// Download and install `version`, replacing any partial install.
     fn install(&self, version: &str) -> anyhow::Result<()>;
+    /// Remove an installed `version`; a missing version is not an error.
     fn uninstall(&self, version: &str) -> anyhow::Result<()>;
     /// Optional reproducible-download capability; older plugins keep working.
     fn resolve_downloads(
@@ -374,6 +390,7 @@ pub trait ToolProvider: Send + Sync {
             self.name()
         )
     }
+    /// Install `version` from the checksum-pinned `asset` recorded in `.avm.lock`.
     fn install_locked(&self, _version: &str, _asset: &protocol::LockedAsset) -> anyhow::Result<()> {
         anyhow::bail!(
             "{} does not support locked installs; update the plugin",
@@ -391,6 +408,7 @@ pub mod runner {
     use super::*;
     use std::process::ExitCode;
 
+    /// Entry point for plugin executables: dispatches the CLI args to `provider` and maps any error to a failing exit code.
     pub fn run(manifest: Manifest, provider: &dyn ToolProvider) -> ExitCode {
         match dispatch(
             &manifest,
@@ -405,6 +423,7 @@ pub mod runner {
         }
     }
 
+    /// Routes the first argument to the matching protocol command on `provider`; errors on a missing or unknown command.
     fn dispatch(
         manifest: &Manifest,
         provider: &dyn ToolProvider,
@@ -463,12 +482,14 @@ pub mod runner {
         }
     }
 
+    /// Returns the first argument as the version, or errors if it is missing.
     fn require_version(args: &[String]) -> anyhow::Result<&str> {
         args.first()
             .map(String::as_str)
             .ok_or_else(|| anyhow::anyhow!("version argument required"))
     }
 
+    /// Parses optional `--query <value>` args, defaulting to `recent` when none are given; errors on any other shape.
     fn parse_query_flag(args: &[String]) -> anyhow::Result<ToolVersionQuery> {
         match args {
             [flag, value] if flag == "--query" => ToolVersionQuery::parse_arg(value),
@@ -479,6 +500,7 @@ pub mod runner {
         }
     }
 
+    /// Serializes `value` as one line of JSON on stdout.
     fn print_json<T: Serialize>(value: &T) -> anyhow::Result<()> {
         println!("{}", serde_json::to_string(value)?);
         Ok(())

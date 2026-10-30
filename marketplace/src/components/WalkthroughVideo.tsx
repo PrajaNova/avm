@@ -40,7 +40,7 @@ const DEMO_STEPS: WalkthroughStep[] = [
     id: 'plugin',
     stepNumber: '03',
     label: 'Add Plugin',
-    command: 'avm plugin add node',
+    command: 'avm plugin install node',
     comment: '# Fetch precompiled native plugin from marketplace registry',
     output: "Fetching 'node' from PrajaNova/avm-plugin-node...\n✓ Installed node v0.2.0",
     timing: '1.1s',

@@ -1,4 +1,6 @@
-use super::*;
+use crate::cli::shell::Shell;
+use clap::{Args, Parser, Subcommand};
+use std::path::PathBuf;
 
 #[derive(Parser)]
 #[command(
@@ -27,11 +29,11 @@ pub struct Cli {
 pub enum Commands {
     /// Create a local .avm.json config file.
     Init,
-    /// Install every selected tool without changing its pin.
-    Install {
-        /// Require an up-to-date lockfile with downloads for this platform.
-        #[arg(long)]
-        frozen: bool,
+    /// Install tools and plugins, uninstall or search plugins (short form: `avm -p ...`).
+    #[command(short_flag = 'p')]
+    Plugin {
+        #[command(subcommand)]
+        command: PluginCommands,
     },
     /// Resolve selected tools and write a reproducible .avm.lock.
     Lock {
@@ -72,11 +74,6 @@ pub enum Commands {
     /// Run a command with temporary tool versions, without changing pins.
     #[command(alias = "x")]
     Exec(ExecArgs),
-    /// Install, list, update, or remove avm plugins.
-    Plugin {
-        #[command(subcommand)]
-        command: PluginCommands,
-    },
     /// Show how to start a new avm plugin from the template repo.
     Create { name: String },
     /// Print shell setup for avm aliases and shims (sh/bash/zsh, or pwsh).
@@ -93,9 +90,6 @@ pub enum Commands {
     #[command(hide = true)]
     #[command(name = "exec-shim")]
     ExecShim(ExecShimArgs),
-    /// Shortcut for `avm plugin add <source>`.
-    #[command(hide = true)]
-    Pa { source: String },
     /// Shortcut for `avm env add <key> <value>`.
     #[command(hide = true)]
     Ea {
@@ -145,36 +139,26 @@ pub enum Commands {
     /// Internal: background refresh for the update notice.
     #[command(hide = true, name = "__update-check")]
     UpdateCheck,
-    /// Run an installed plugin command, for example `avm node versions` or `avm java versions`.
+    /// Anything else is the alias manager's: an alias, or a plugin command like `avm node versions`.
     #[command(external_subcommand)]
-    PluginCommand(Vec<String>),
+    External(Vec<String>),
 }
 
 #[derive(Subcommand)]
 pub enum PluginCommands {
-    /// Install a plugin by name, path, or URL.
-    Add { source: String },
-    /// List installed plugins.
-    List {
-        #[arg(short, long)]
-        all: bool,
+    /// Install plugins (a first-party name, `owner/repo`, a git URL or a path; re-run to
+    /// update), or with no names every selected tool without changing its pin.
+    #[command(short_flag = 'i')]
+    Install {
+        sources: Vec<String>,
+        /// Require an up-to-date lockfile with downloads for this platform.
+        #[arg(long, conflicts_with = "sources")]
+        frozen: bool,
     },
-    /// Show plugins available to install.
-    #[command(alias = "all", alias = "marketplace")]
-    Available,
-    /// Remove an installed plugin.
-    Remove { name: String },
-    /// Show installed plugins with newer releases.
-    Outdated {
-        #[arg(long)]
-        json: bool,
-    },
-    /// Update one plugin or all plugins.
-    Update {
-        #[arg(short, long)]
-        all: bool,
-        name: Option<String>,
-    },
+    /// Remove installed plugins.
+    Uninstall { names: Vec<String> },
+    /// Search first-party plugins and GitHub repos tagged `avm-plugin`.
+    Search { keyword: String },
 }
 
 #[derive(Subcommand)]

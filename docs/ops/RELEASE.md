@@ -63,18 +63,14 @@ case included.
 The workspace workflow builds linux amd64/arm64, macOS arm64/Intel and
 Windows, with checksums and attestations. Plugin releases have namespaced
 tags and are marked as GitHub prereleases to keep `/releases/latest`
-pointing to the CLI; the registry explicitly selects the plugin tag.
-Update `release_tag` after each plugin release. Third-party entries without
-`release_tag` continue to install their repository's latest stable release.
+pointing to the CLI. `avm plugin install <name>` picks the newest `avm-plugin-<name>-v*`
+tag from this repo's 100 most recent releases; third-party `owner/repo` installs
+take their repository's latest stable release. No registry entry needs updating.
 
-### Moving existing installations
+### Older CLIs
 
-Publish the CLI supporting `release_tag` before switching registry entries.
-Keep existing registry entries on the old plugin repositories until the
-corresponding workspace releases exist. Older CLI versions ignore the new
-field and cannot install plugins from the shared repository: upgrade AVM
-before using the switched entries. Existing installed plugins keep working;
-`avm plugin update` uses the current registry entry.
+CLIs before the registry removal still read `marketplace/registry.json`, so
+keep that file (and its `release_tag`s) updated until they are retired.
 
 The old `avm-plugin-node`/`avm-plugin-java`/`avm-plugin-android` repositories
 have been deleted now that their code and release history live in this

@@ -1,7 +1,8 @@
-use crate::{protocol::LockedAsset, run_timed, sha256_file};
+use crate::{env_timeout_ms, protocol::LockedAsset, run_timed, sha256_file};
 use anyhow::{bail, Context, Result};
 use std::path::Path;
 
+/// Rejects empty, `.`/`..` or otherwise unsafe version strings so they cannot escape the tools directory when used as a path component.
 pub fn validate_version(version: &str) -> Result<()> {
     if version.is_empty()
         || version == "."
@@ -15,6 +16,7 @@ pub fn validate_version(version: &str) -> Result<()> {
     Ok(())
 }
 
+/// Checks a locked asset has a 64-char hex sha256 and an HTTP(S) URL or absolute local mirror path; errors otherwise.
 pub fn validate_asset(asset: &LockedAsset) -> Result<()> {
     if asset.sha256.len() != 64 || !asset.sha256.bytes().all(|c| c.is_ascii_hexdigit()) {
         bail!("invalid sha256 for {}", asset.url);
@@ -28,6 +30,59 @@ pub fn validate_asset(asset: &LockedAsset) -> Result<()> {
     Ok(())
 }
 
+/// curl flags every request shares: fail on HTTP errors, follow redirects, and
+/// allow only http(s) on the first request and on every redirect.
+pub(crate) const CURL_SAFE_ARGS: [&str; 8] = [
+    "-fL",
+    "--proto",
+    "=http,https",
+    "--proto-redir",
+    "=http,https",
+    "--connect-timeout",
+    "10",
+    "--globoff",
+];
+
+/// `curl` `url` into `destination`. `$env_var` (seconds) overrides `default_ms`
+/// for both curl's own limit and the outer kill timer.
+pub fn download(
+    url: &str,
+    destination: &Path,
+    default_ms: u64,
+    env_var: &str,
+    label: &str,
+) -> Result<()> {
+    let secs = env_timeout_ms(env_var, default_ms) / 1000;
+    let mut curl = std::process::Command::new("curl");
+    curl.args(CURL_SAFE_ARGS)
+        .args(["--max-time", &secs.to_string()])
+        .arg(url)
+        .arg("-o")
+        .arg(destination);
+    run_timed(curl, default_ms + 30_000, label, env_var)
+}
+
+/// Unpack a `.tar.gz` / `.zip` into `destination` with the system `tar` (Windows
+/// 10+ ships bsdtar, which reads both), dropping `strip` leading path components.
+pub fn extract_archive(
+    archive: &Path,
+    destination: &Path,
+    strip: u32,
+    default_ms: u64,
+    env_var: &str,
+    label: &str,
+) -> Result<()> {
+    let zip = archive.extension().is_some_and(|e| e == "zip");
+    let mut tar = std::process::Command::new("tar");
+    tar.arg(if zip || cfg!(windows) { "-xf" } else { "-xzf" })
+        .arg(archive);
+    if strip > 0 {
+        tar.arg(format!("--strip-components={strip}"));
+    }
+    tar.arg("-C").arg(destination);
+    run_timed(tar, default_ms, label, env_var)
+}
+
 /// Download the locked bytes, with no unverified escape hatch.
 pub fn download_verified(asset: &LockedAsset, destination: &Path) -> Result<()> {
     validate_asset(asset)?;
@@ -35,22 +90,13 @@ pub fn download_verified(asset: &LockedAsset, destination: &Path) -> Result<()> 
         if Path::new(&asset.url).is_file() {
             std::fs::copy(&asset.url, destination).context("copy locked archive")?;
         } else {
-            let mut curl = std::process::Command::new("curl");
-            curl.args([
-                "-fL",
-                "--proto",
-                "=http,https",
-                "--proto-redir",
-                "=http,https",
-                "--connect-timeout",
-                "10",
-                "--max-time",
-                "300",
+            download(
                 &asset.url,
-                "-o",
-            ])
-            .arg(destination);
-            run_timed(curl, 330_000, "locked archive download", "AVM_CURL_TIMEOUT")?;
+                destination,
+                300_000,
+                "AVM_CURL_TIMEOUT",
+                "locked archive download",
+            )?;
         }
         let actual = sha256_file(destination)?;
         if actual != asset.sha256.to_ascii_lowercase() {
@@ -68,6 +114,7 @@ pub fn download_verified(asset: &LockedAsset, destination: &Path) -> Result<()> 
     result
 }
 
+/// Returns the host platform as `<os>_<arch>` (e.g. `darwin_arm64`); errors on unsupported OS or architecture.
 pub fn host_platform() -> Result<String> {
     let os = match std::env::consts::OS {
         "macos" => "darwin",
@@ -83,6 +130,7 @@ pub fn host_platform() -> Result<String> {
     Ok(format!("{os}_{arch}"))
 }
 
+/// Errors unless `platform` is one of the supported `<os>_<arch>` identifiers.
 pub fn validate_platform(platform: &str) -> Result<()> {
     if !matches!(
         platform,

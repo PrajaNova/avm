@@ -10,7 +10,12 @@ clap = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 crossterm = { workspace = true }
+nodejs-semver = "7"
+semver = "1"
 
 [[bin]]
 name = "avm-bin"
 path = "src/main.rs"
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"

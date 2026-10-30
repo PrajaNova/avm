@@ -48,8 +48,7 @@ fn removal_commands_reject_paths_without_deleting_them() {
     fs::create_dir(&victim).unwrap();
     fs::write(victim.join("keep"), "important").unwrap();
     for name in [victim.to_str().unwrap(), "../victim"] {
-        assert!(!p.run(&["plugin", "remove", name]).status.success());
-        assert!(!p.run(&["plugin", "update", name]).status.success());
+        assert!(!p.run(&["plugin", "uninstall", name]).status.success());
         assert!(!p.run(&["shims", "remove", name]).status.success());
         assert_eq!(
             fs::read_to_string(victim.join("keep")).unwrap(),
@@ -867,10 +866,10 @@ fn pinned_tool_without_plugin_makes_no_network_call() {
     .unwrap();
     let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
     listener.set_nonblocking(true).unwrap();
-    let url = format!("http://{}/registry.json", listener.local_addr().unwrap());
+    let url = format!("http://{}", listener.local_addr().unwrap());
     let start = std::time::Instant::now();
     p.command(&["env"])
-        .env("AVM_MARKETPLACE_URL", url)
+        .env("AVM_GITHUB_API_URL", url)
         .output()
         .unwrap();
     assert!(listener.accept().is_err(), "marketplace was contacted");

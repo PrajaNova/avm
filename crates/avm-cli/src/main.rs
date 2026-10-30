@@ -1,14 +1,4 @@
-mod cli;
-mod config;
-mod lockfile;
-mod resolver;
-mod runtime;
-mod shims;
-mod trust;
-mod ui;
-mod update;
-mod version_files;
-
+/// Binary entry point; delegates to the library's CLI.
 fn main() {
-    cli::main()
+    avm_cli::cli::main()
 }

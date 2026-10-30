@@ -204,7 +204,7 @@ export const DocsPage: React.FC<DocsPageProps> = ({ onCopy }) => {
                   </div>
                   <div>
                     <span className="text-secondary"># 2. Add an official runtime provider (e.g. Node.js)</span>
-                    <div className="text-accent font-bold">$ avm plugin add node</div>
+                    <div className="text-accent font-bold">$ avm plugin install node</div>
                   </div>
                   <div>
                     <span className="text-secondary"># 3. Download and install a runtime version</span>
@@ -220,7 +220,7 @@ export const DocsPage: React.FC<DocsPageProps> = ({ onCopy }) => {
                   </div>
 
                   <button
-                    onClick={() => onCopy('avm init\navm plugin add node\navm node install 22.14.0\navm node use 22.14.0\navm alias add dev "pnpm run dev"')}
+                    onClick={() => onCopy('avm init\navm plugin install node\navm node install 22.14.0\navm node use 22.14.0\navm alias add dev "pnpm run dev"')}
                     className="absolute top-4 right-4 p-2 rounded-lg bg-muted hover:bg-muted text-secondary"
                     title="Copy all"
                   >
@@ -324,24 +324,24 @@ export const DocsPage: React.FC<DocsPageProps> = ({ onCopy }) => {
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 font-mono text-xs">
                 <div className="p-5 rounded-lg bg-surface/60 border border-line space-y-2">
-                  <div className="text-accent font-bold">avm plugin add &lt;name&gt;</div>
-                  <div className="text-secondary font-sans text-xs">Downloads precompiled binary from marketplace registry and registers ToolProvider.</div>
-                  <pre className="p-2.5 rounded bg-page text-secondary mt-2 overflow-x-auto">{"$ avm plugin add node"}</pre>
+                  <div className="text-accent font-bold">avm plugin install &lt;name&gt;</div>
+                  <div className="text-secondary font-sans text-xs">Downloads the precompiled plugin binary from its GitHub release. Also takes owner/repo.</div>
+                  <pre className="p-2.5 rounded bg-page text-secondary mt-2 overflow-x-auto">{"$ avm plugin install node"}</pre>
                 </div>
                 <div className="p-5 rounded-lg bg-surface/60 border border-line space-y-2">
-                  <div className="text-accent font-bold">avm plugin list</div>
-                  <div className="text-secondary font-sans text-xs">Lists installed plugins in ~/.avm/plugins with their versions and manifests.</div>
-                  <pre className="p-2.5 rounded bg-page text-secondary mt-2 overflow-x-auto">{"$ avm plugin list"}</pre>
+                  <div className="text-accent font-bold">avm plugin search &lt;keyword&gt;</div>
+                  <div className="text-secondary font-sans text-xs">Finds first-party plugins and GitHub repos tagged avm-plugin.</div>
+                  <pre className="p-2.5 rounded bg-page text-secondary mt-2 overflow-x-auto">{"$ avm plugin search java"}</pre>
                 </div>
                 <div className="p-5 rounded-lg bg-surface/60 border border-line space-y-2">
-                  <div className="text-accent font-bold">avm plugin update &lt;name&gt;</div>
-                  <div className="text-secondary font-sans text-xs">Checks upstream GitHub releases for the latest plugin binary and updates it.</div>
-                  <pre className="p-2.5 rounded bg-page text-secondary mt-2 overflow-x-auto">{"$ avm plugin update java"}</pre>
+                  <div className="text-accent font-bold">avm plugin install &lt;name&gt;</div>
+                  <div className="text-secondary font-sans text-xs">Run again on an installed plugin to fetch its latest release.</div>
+                  <pre className="p-2.5 rounded bg-page text-secondary mt-2 overflow-x-auto">{"$ avm plugin install java"}</pre>
                 </div>
                 <div className="p-5 rounded-lg bg-surface/60 border border-line space-y-2">
-                  <div className="text-accent font-bold">avm plugin remove &lt;name&gt;</div>
+                  <div className="text-accent font-bold">avm plugin uninstall &lt;name&gt;</div>
                   <div className="text-secondary font-sans text-xs">Removes the installed plugin; managed runtime versions are separate.</div>
-                  <pre className="p-2.5 rounded bg-page text-secondary mt-2 overflow-x-auto">{"$ avm plugin remove ruby"}</pre>
+                  <pre className="p-2.5 rounded bg-page text-secondary mt-2 overflow-x-auto">{"$ avm plugin uninstall ruby"}</pre>
                 </div>
               </div>
             </div>
@@ -385,7 +385,7 @@ export const DocsPage: React.FC<DocsPageProps> = ({ onCopy }) => {
                 <div>
                   <span className="text-accent font-bold text-sm block mb-1">Reproducible Installs for Teams and CI</span>
                   <p className="text-secondary font-sans text-xs mb-2">Install all selected tools without repinning. Lock fuzzy versions to exact releases and commit .avm.lock; frozen installs reject stale config and verify locked archive checksums.</p>
-                  <pre className="p-3 rounded-lg bg-page text-secondary border border-line overflow-x-auto">{'$ avm install\n$ avm lock --platform linux_amd64,darwin_arm64,windows_amd64\n$ avm install --frozen'}</pre>
+                  <pre className="p-3 rounded-lg bg-page text-secondary border border-line overflow-x-auto">{'$ avm -p install\n$ avm lock --platform linux_amd64,darwin_arm64,windows_amd64\n$ avm -p install --frozen'}</pre>
                   <p className="text-secondary font-sans text-xs mt-2">Locking fetches metadata without installing runtimes. Upgrade the Node and Java plugins for lockfile support. Android and legacy asdf plugins currently support ordinary installs only.</p>
                 </div>
               </div>
@@ -490,7 +490,7 @@ $ avm trust --revoke   # stop trusting this directory`}</pre>
               <div className="rounded-lg bg-surface/50 border border-line p-6 sm:p-8 space-y-4 text-sm text-secondary">
                 <h2 className="text-xl font-bold text-ink">Verified downloads</h2>
                 <ul className="space-y-1.5 list-disc pl-5">
-                  <li><strong className="text-ink">Plugins:</strong> <code className="text-accent font-mono text-xs bg-page px-1 py-0.5 rounded">avm plugin add</code> checks the archive against the release's <code className="text-accent font-mono text-xs bg-page px-1 py-0.5 rounded">checksums.txt</code> before extracting. A mismatch aborts with nothing installed.</li>
+                  <li><strong className="text-ink">Plugins:</strong> <code className="text-accent font-mono text-xs bg-page px-1 py-0.5 rounded">avm plugin install</code> checks the archive against the release's <code className="text-accent font-mono text-xs bg-page px-1 py-0.5 rounded">checksums.txt</code> before extracting. A mismatch aborts with nothing installed.</li>
                   <li><strong className="text-ink">Runtimes:</strong> Node.js is checked against <code className="text-accent font-mono text-xs bg-page px-1 py-0.5 rounded">SHASUMS256.txt</code>, Temurin JDKs against foojay's sha256, and the Android cmdline-tools zip against a pinned sha256 (<code className="text-accent font-mono text-xs bg-page px-1 py-0.5 rounded">sdkmanager</code> verifies the rest).</li>
                   <li><strong className="text-ink">avm itself:</strong> <code className="text-accent font-mono text-xs bg-page px-1 py-0.5 rounded">install.sh</code>, <code className="text-accent font-mono text-xs bg-page px-1 py-0.5 rounded">install.ps1</code> and the npm installer verify <code className="text-accent font-mono text-xs bg-page px-1 py-0.5 rounded">avm-bin</code> the same way.</li>
                   <li><strong className="text-ink">Provenance:</strong> every release carries a GitHub build attestation. Check it with <code className="text-accent font-mono text-xs bg-page px-1 py-0.5 rounded">gh attestation verify &lt;archive&gt; --owner PrajaNova</code>.</li>

@@ -5,9 +5,9 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
-// Installing pulls several GB (platform-tools, a platform image, build-tools,
-// an emulator system image) — default timeouts are generous and every one is
-// independently overridable for slow links.
+/// Installing pulls several GB (platform-tools, a platform image, build-tools,
+/// an emulator system image) — default timeouts are generous and every one is
+/// independently overridable for slow links.
 const DOWNLOAD_TIMEOUT_MS: u64 = 180_000;
 const UNZIP_TIMEOUT_MS: u64 = 60_000;
 const SDKMANAGER_TIMEOUT_MS: u64 = 1_800_000;
@@ -17,11 +17,13 @@ const SDKMANAGER_ATTEMPTS: u32 = 3;
 
 pub use avm_plugin_api::home_dir;
 
+/// Returns the SDK root for an installed version; errors if the version string is unsafe.
 pub fn sdk_dir(version: &str) -> Result<PathBuf> {
     avm_plugin_api::download::validate_version(version)?;
     Ok(tool_dir("android")?.join(version).join("sdk"))
 }
 
+/// Installs the Android SDK for `version` under a per-version lock, reusing an existing install; errors on download, verification or sdkmanager failures.
 pub fn install_android(version: &str) -> Result<()> {
     avm_plugin_api::download::validate_version(version)?;
     let _guard =
@@ -101,26 +103,15 @@ fn has_complete_system_image(sdk: &Path) -> bool {
         .any(|abi| abi.join("system.img").exists())
 }
 
+/// Downloads the command-line tools zip to `destination`, verifying its checksum.
 fn download_cmdline_tools(destination: &Path) -> Result<()> {
     let (url, expected) = cmdline_tools_source()?;
-    let max_secs = env_timeout_ms("AVM_ANDROID_CURL_TIMEOUT", DOWNLOAD_TIMEOUT_MS) / 1000;
-    let mut cmd = Command::new("curl");
-    cmd.args([
-        "-fL",
-        "--connect-timeout",
-        "10",
-        "--max-time",
-        &max_secs.to_string(),
+    avm_plugin_api::download::download(
         &url,
-        "-o",
-    ])
-    .arg(destination)
-    .stdout(Stdio::null());
-    run_timed(
-        cmd,
+        destination,
         DOWNLOAD_TIMEOUT_MS,
-        "Android command-line tools download",
         "AVM_ANDROID_CURL_TIMEOUT",
+        "Android command-line tools download",
     )
     .with_context(|| format!("failed to download {url}"))?;
 
@@ -145,6 +136,7 @@ fn download_cmdline_tools(destination: &Path) -> Result<()> {
         })
 }
 
+/// Unzips the command-line tools into `tmp` and moves them to `sdk/cmdline-tools/latest`, replacing any previous copy.
 fn extract_cmdline_tools(zip_path: &Path, tmp: &Path, sdk: &Path) -> Result<()> {
     let extracted = tmp.join("cmdline-tools");
     if extracted.exists() {
@@ -216,6 +208,7 @@ pub fn accept_licenses(sdk: &Path, java_home: Option<&Path>) {
 /// System-image tag for phones; TV/Wear/Automotive AVDs need their own tag.
 pub const DEFAULT_TAG: &str = "google_apis";
 
+/// Builds the sdkmanager package id for a system image of the given API level and tag on the host ABI.
 pub fn sysimg_package(system_image: &str, tag: &str) -> String {
     format!(
         "system-images;android-{system_image};{tag};{}",
@@ -363,6 +356,7 @@ pub fn resolve_system_image_id(listing: &str, api: &str, tag: &str) -> Result<St
         })
 }
 
+/// Runs `sdkmanager --list` under a timeout and returns its stdout; errors on spawn failure, timeout or non-zero exit.
 pub fn list_packages(sdk: &Path, java_home: Option<&Path>) -> Result<String> {
     let mut cmd = sdkmanager(sdk, java_home);
     cmd.arg("--list")
@@ -441,6 +435,7 @@ fn bat(name: &str) -> String {
     }
 }
 
+/// Appends the platform executable suffix (`.exe` on Windows) to `name`.
 fn exe(name: &str) -> String {
     format!("{name}{}", std::env::consts::EXE_SUFFIX)
 }
@@ -454,6 +449,7 @@ pub fn wrapper_name(name: &str) -> String {
     }
 }
 
+/// Writes a `.cmd` wrapper in `bin` that sets the SDK env vars and forwards to `target`.
 #[cfg(windows)]
 fn wrapper(bin: &Path, sdk: &Path, name: &str, target: &Path) -> Result<()> {
     let dest = bin.join(wrapper_name(name));
@@ -466,6 +462,7 @@ fn wrapper(bin: &Path, sdk: &Path, name: &str, target: &Path) -> Result<()> {
         .with_context(|| format!("failed to write wrapper {}", dest.display()))
 }
 
+/// Writes an executable shell wrapper in `bin` that exports the SDK env vars and execs `target`.
 #[cfg(unix)]
 fn wrapper(bin: &Path, sdk: &Path, name: &str, target: &Path) -> Result<()> {
     use std::os::unix::fs::PermissionsExt;
@@ -521,6 +518,7 @@ fn cmdline_tools_source() -> Result<(String, Option<String>)> {
     ))
 }
 
+/// Returns the system-image ABI matching the host CPU (`arm64-v8a` on aarch64, else `x86_64`).
 pub fn sysimg_abi() -> &'static str {
     match std::env::consts::ARCH {
         "aarch64" => "arm64-v8a",
@@ -548,6 +546,7 @@ pub fn require_jdk() -> Result<Option<PathBuf>> {
     })
 }
 
+/// Finds an avm-managed JDK, preferring the one pinned in `~/.avm.json` and falling back to the latest installed.
 fn find_avm_managed_jdk() -> Option<PathBuf> {
     let java_tools = tool_dir("java").ok()?;
     let has_java = |v: &str| java_tools.join(v).join("bin").join(exe("java")).exists();
@@ -557,6 +556,7 @@ fn find_avm_managed_jdk() -> Option<PathBuf> {
     Some(java_tools.join(version))
 }
 
+/// Reads the Java version pinned in `~/.avm.json`, returning `None` if the file or key is missing or malformed.
 fn pinned_java_version() -> Option<String> {
     let raw = fs::read_to_string(home_dir().ok()?.join(".avm.json")).ok()?;
     let parsed: serde_json::Value = serde_json::from_str(&raw).ok()?;

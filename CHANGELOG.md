@@ -9,6 +9,14 @@ The format follows Keep a Changelog style, and releases use semantic versioning.
 ### Added
 - GitHub Action (`PrajaNova/avm/action`) and `scripts/ci-setup.sh` for any CI: install avm and plugins, use `.avm.lock` when present (`--frozen`), cache tools and plugins, and export PATH and env. Documented in `docs/ops/CI.md` and the website's Lockfiles & CI page.
 
+### Fixed
+- PowerShell and cmd warnings (shown for an untrusted `.avm.json`) no longer let a crafted folder name run commands: curly quotes are escaped for PowerShell and cmd metacharacters for cmd.
+- Version ranges such as `>= 18` and `>=20.0.0-rc.1` now match (npm semver rules via `nodejs-semver`).
+- The update check orders pre-releases by semver and ignores tags that are not semver.
+- Node downloads honour `AVM_CURL_TIMEOUT` (they were capped at 120 s); every plugin download and the marketplace installer now share one curl/tar helper that only follows http(s) redirects.
+- Child-process waits wake exactly when the process exits instead of polling.
+- An LTS codename table that falls a year behind now fails a test.
+
 ## [0.5.1-beta.1] - 2026-10-26
 
 ### Fixed

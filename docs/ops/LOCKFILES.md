@@ -1,6 +1,6 @@
 # Reproducible tool installs
 
-`avm install` installs the tools selected by local `.avm.json`, idiomatic
+`avm -p install` installs the tools selected by local `.avm.json`, idiomatic
 version files and global pins, with the existing local-first precedence.
 It does not create pins or change `.avm.json`. Java installs before other tools
 so a selected Android SDK can use the managed JDK.
@@ -10,16 +10,16 @@ selections. Personal global pins are neither locked nor installed by a frozen
 install; changing them does not invalidate the project lock. Unlocked installs
 continue to include global selections.
 
-A non-frozen `avm install` in a project with tools and no lock also writes
+A non-frozen `avm -p install` in a project with tools and no lock also writes
 `.avm.lock` (best effort: if a plugin cannot lock, it prints a warning and the
-install still succeeds; update old plugins with `avm plugin update <tool>`).
-With no project tools, `avm lock` and `avm install --frozen` print
+install still succeeds; update old plugins with `avm plugin install <tool>`).
+With no project tools, `avm lock` and `avm -p install --frozen` print
 `Nothing to lock` / `Nothing to install` and write nothing.
 
 ```bash
 avm lock
 avm lock --platform linux_amd64,darwin_arm64,windows_amd64
-avm install --frozen
+avm -p install --frozen
 ```
 
 `lock` fetches exact release metadata and checksums without downloading or
@@ -54,12 +54,12 @@ Tools, platforms and plugin fingerprints are sorted for stable diffs.
 ```
 
 Commit the lockfile. Aliases, shims, `avm env`, `avm which`
-and ordinary `avm install` use its resolved versions. Changing a selected tool
+and ordinary `avm -p install` use its resolved versions. Changing a selected tool
 or its requested spec makes the lock stale. A stale lock prints one warning and
 commands fall back to the `.avm.json` versions, so shims and the prompt keep
-working; only `avm install --frozen` fails (`run avm lock`). `avm node use`,
+working; only `avm -p install --frozen` fails (`run avm lock`). `avm node use`,
 `avm upgrade` and other local pin changes regenerate an existing lock, and a
-non-frozen `avm install` regenerates a stale one. Explicit `avm lock` reads
+non-frozen `avm -p install` regenerates a stale one. Explicit `avm lock` reads
 unlocked config so it can regenerate a stale or malformed lock. Resolution uses
 the nearest lock in the current directory or an ancestor. Subdirectories must
 still select the same tools (for example through inherited version files), or
@@ -90,8 +90,8 @@ extend it for slow links or custom plugins.
 Node and Java implement the optional `resolve` and `install-locked` protocol.
 Upgrade these plugins before locking. Android installs several packages through
 `sdkmanager`, whose component revisions are not yet represented in the lock;
-Android and legacy asdf plugins therefore support ordinary `avm install` only.
+Android and legacy asdf plugins therefore support ordinary `avm -p install` only.
 Trying to lock them fails clearly and preserves any existing lockfile.
 
-Without a lockfile, ordinary `avm install` works with all installed providers,
+Without a lockfile, ordinary `avm -p install` works with all installed providers,
 resolves fuzzy specs normally and keeps their existing checksum policy.

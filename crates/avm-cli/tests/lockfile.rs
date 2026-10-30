@@ -164,7 +164,7 @@ fn nested_lock_commands_update_the_project_lock() {
     assert_eq!(lock["tools"]["node"]["requested"], "20.2.0");
     assert_eq!(project.lock(), parent_lock);
     success(project.run_in(
-        &["--env", "ci", "install", "--frozen"],
+        &["--env", "ci", "-p", "install", "--frozen"],
         "project/packages/web",
     ));
 }
@@ -182,14 +182,14 @@ fn locks_installs_and_rejects_drift_before_installing() {
         r#"{"tools":{"java":"17","node":"99"}}"#,
     )
     .unwrap();
-    success(project.run(&["install", "--frozen"]));
+    success(project.run(&["-p", "install", "--frozen"]));
     assert!(success(project.run(&["which", "node"])).contains("20.2.0"));
     assert!(!project.0.join("home/.avm/tools/java").exists());
     success(project.run(&["node", "use", "22.0.0", "--global"]));
-    success(project.run(&["install", "--frozen"]));
+    success(project.run(&["-p", "install", "--frozen"]));
     assert!(success(project.run(&["which", "node"])).contains("20.2.0"));
     fs::write(project.0.join("home/.avm.json"), "{}").unwrap();
-    success(project.run(&["install", "--frozen"]));
+    success(project.run(&["-p", "install", "--frozen"]));
     assert_eq!(
         fs::read(project.0.join("project/.avm.lock")).unwrap(),
         local_lock
@@ -209,7 +209,10 @@ fn locks_installs_and_rejects_drift_before_installing() {
     .unwrap();
     let config = fs::read(project.0.join("project/.avm.json")).unwrap();
     let global = fs::read(project.0.join("home/.avm.json")).unwrap();
-    failure(project.run(&["install", "--frozen"]), "requires .avm.lock");
+    failure(
+        project.run(&["-p", "install", "--frozen"]),
+        "requires .avm.lock",
+    );
     success(project.run(&[
         "lock",
         "--platform",
@@ -239,13 +242,13 @@ fn locks_installs_and_rejects_drift_before_installing() {
     fs::write(project.0.join("project/.nvmrc"), "20\n").unwrap();
     fs::write(project.0.join("project/.tool-versions"), "java 21\n").unwrap();
     assert!(success(project.run_in(&["which", "node"], "project/child")).contains("20.2.0"));
-    success(project.run(&["install", "--frozen"]));
+    success(project.run(&["-p", "install", "--frozen"]));
     let installs = fs::read(project.0.join("installs")).unwrap();
     assert_eq!(
         String::from_utf8_lossy(&installs),
         "java:openjdk-21.1.0+1\nnode:20.2.0\n"
     );
-    success(project.run(&["install"]));
+    success(project.run(&["-p", "install"]));
     assert_eq!(fs::read(project.0.join("installs")).unwrap(), installs);
     assert_eq!(
         fs::read(project.0.join("project/.avm.json")).unwrap(),
@@ -263,7 +266,7 @@ fn locks_installs_and_rejects_drift_before_installing() {
     )
     .unwrap();
     failure(
-        project.run(&["install", "--frozen"]),
+        project.run(&["-p", "install", "--frozen"]),
         "plugin checksum differs",
     );
     fs::write(
@@ -271,13 +274,16 @@ fn locks_installs_and_rejects_drift_before_installing() {
         original_plugin.replace("version='1.0.0'", "version='2.0.0'"),
     )
     .unwrap();
-    failure(project.run(&["install", "--frozen"]), "plugin differs");
+    failure(
+        project.run(&["-p", "install", "--frozen"]),
+        "plugin differs",
+    );
     fs::write(&plugin, &original_plugin).unwrap();
 
     let mut unpinned = lock.clone();
     unpinned["tools"]["node"]["plugin"]["binaries"] = json!({});
     project.save_lock(&unpinned);
-    let out = project.run(&["install", "--frozen"]);
+    let out = project.run(&["-p", "install", "--frozen"]);
     let warning = String::from_utf8_lossy(&out.stderr).into_owned();
     success(out);
     assert!(
@@ -294,7 +300,7 @@ fn locks_installs_and_rejects_drift_before_installing() {
         r#"{"tools":{"node":"21"}}"#,
     )
     .unwrap();
-    failure(project.run(&["install", "--frozen"]), "out of date");
+    failure(project.run(&["-p", "install", "--frozen"]), "out of date");
     let env = project.run(&["env"]);
     assert!(String::from_utf8_lossy(&env.stderr).contains("out of date"));
     success(env);
@@ -311,35 +317,47 @@ fn locks_installs_and_rejects_drift_before_installing() {
         .clone();
     bad_hash["tools"]["node"]["assets"][&platform]["sha256"] = json!("not-a-hash");
     project.save_lock(&bad_hash);
-    failure(project.run(&["install", "--frozen"]), "invalid sha256");
+    failure(
+        project.run(&["-p", "install", "--frozen"]),
+        "invalid sha256",
+    );
 
     let mut invalid = lock.clone();
     invalid["tools"]["java"]["requested"] = json!("openjdk-21.1.0+1");
     invalid["tools"]["java"]["resolved"] = json!("openjdk-21.1.0+2");
     project.save_lock(&invalid);
-    failure(project.run(&["install", "--frozen"]), "does not satisfy");
+    failure(
+        project.run(&["-p", "install", "--frozen"]),
+        "does not satisfy",
+    );
     invalid = lock.clone();
     invalid["tools"]["node"]["resolved"] = json!("22.0.0");
     project.save_lock(&invalid);
-    failure(project.run(&["install", "--frozen"]), "does not satisfy");
+    failure(
+        project.run(&["-p", "install", "--frozen"]),
+        "does not satisfy",
+    );
     invalid["tools"]["node"]["resolved"] = json!("../escape");
     project.save_lock(&invalid);
     failure(
-        project.run(&["install", "--frozen"]),
+        project.run(&["-p", "install", "--frozen"]),
         "invalid resolved version",
     );
     invalid = lock.clone();
     invalid["version"] = json!(99);
     project.save_lock(&invalid);
     failure(
-        project.run(&["install", "--frozen"]),
+        project.run(&["-p", "install", "--frozen"]),
         "unsupported .avm.lock",
     );
     project.save_lock(&lock);
 
     fs::remove_dir_all(project.0.join("home/.avm/tools/node")).unwrap();
     fs::write(project.0.join("archive"), "tampered").unwrap();
-    failure(project.run(&["install", "--frozen"]), "checksum mismatch");
+    failure(
+        project.run(&["-p", "install", "--frozen"]),
+        "checksum mismatch",
+    );
     failure(
         project.run(&["node", "install", "20", "--no-pin"]),
         "checksum mismatch",
@@ -370,7 +388,7 @@ fn locks_installs_and_rejects_drift_before_installing() {
         "linux_amd64"
     };
     success(project.run(&["lock", "--platform", other]));
-    failure(project.run(&["install", "--frozen"]), "has no");
+    failure(project.run(&["-p", "install", "--frozen"]), "has no");
 
     let old = fs::read(project.0.join("project/.avm.lock")).unwrap();
     failure(
@@ -379,7 +397,7 @@ fn locks_installs_and_rejects_drift_before_installing() {
     );
     assert_eq!(old, fs::read(project.0.join("project/.avm.lock")).unwrap());
     fs::remove_file(project.0.join("project/.avm.lock")).unwrap();
-    success(project.run(&["install"]));
+    success(project.run(&["-p", "install"]));
     assert!(project.0.join("project/.avm.lock").exists());
     fs::remove_file(project.0.join("project/.avm.lock")).unwrap();
     assert!(fs::read_to_string(project.0.join("installs"))
@@ -406,7 +424,7 @@ fn locks_installs_and_rejects_drift_before_installing() {
         r#"{"tools":{"node":"20","ruby":"latest"}}"#,
     )
     .unwrap();
-    success(project.run(&["install"]));
+    success(project.run(&["-p", "install"]));
     assert!(project
         .0
         .join("home/.avm/tools/ruby/12.0.0/bin/ruby")
@@ -422,7 +440,7 @@ fn write_project(project: &Project, config: &str) {
 #[test]
 fn install_writes_the_lock_when_missing() {
     let project = Project::new();
-    success(project.run(&["install"]));
+    success(project.run(&["-p", "install"]));
     assert_eq!(project.lock()["tools"]["node"]["resolved"], "20.2.0");
 }
 
@@ -430,11 +448,11 @@ fn install_writes_the_lock_when_missing() {
 fn install_in_a_project_without_tools_says_so() {
     let project = Project::new();
     write_project(&project, "{}");
-    let out = success(project.run(&["install"]));
+    let out = success(project.run(&["-p", "install"]));
     assert!(out.contains("No tools in .avm.json"), "{out}");
     assert!(out.contains("java") && out.contains("(global)"), "{out}");
     assert!(!project.0.join("project/.avm.lock").exists());
-    let again = success(project.run(&["install"]));
+    let again = success(project.run(&["-p", "install"]));
     assert!(again.contains("already installed"), "{again}");
 }
 
@@ -452,7 +470,7 @@ fn lock_and_frozen_install_without_tools_are_explicit() {
     write_project(&project, "{}");
     assert!(success(project.run(&["lock"])).contains("Nothing to lock"));
     assert!(!project.0.join("project/.avm.lock").exists());
-    assert!(success(project.run(&["install", "--frozen"])).contains("Nothing to install"));
+    assert!(success(project.run(&["-p", "install", "--frozen"])).contains("Nothing to install"));
 }
 
 #[test]
@@ -464,7 +482,7 @@ fn a_stale_lock_warns_but_does_not_break_commands() {
     assert!(String::from_utf8_lossy(&which.stderr).contains("out of date"));
     success(which);
     success(project.run(&["env"]));
-    failure(project.run(&["install", "--frozen"]), "out of date");
+    failure(project.run(&["-p", "install", "--frozen"]), "out of date");
 }
 
 #[test]
@@ -485,8 +503,8 @@ fn old_plugins_are_told_how_to_update() {
         .join("home/.avm/plugins/avm-plugin-node/bin/avm-plugin");
     let script = fs::read_to_string(&plugin).unwrap();
     fs::write(&plugin, script.replace("cmd == 'resolve'", "cmd == 'old'")).unwrap();
-    failure(project.run(&["lock"]), "avm plugin update node");
-    let out = project.run(&["install"]);
-    assert!(String::from_utf8_lossy(&out.stderr).contains("avm plugin update node"));
+    failure(project.run(&["lock"]), "avm plugin install node");
+    let out = project.run(&["-p", "install"]);
+    assert!(String::from_utf8_lossy(&out.stderr).contains("avm plugin install node"));
     success(out);
 }

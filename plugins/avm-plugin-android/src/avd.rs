@@ -6,6 +6,7 @@ use std::io::Write;
 use std::path::PathBuf;
 use std::process::{Command, ExitCode, Stdio};
 
+/// Dispatches `avm android avd` subcommands (list, create, delete, start, help) and returns the process exit code.
 pub fn run(args: &[String]) -> ExitCode {
     let result = match args.split_first() {
         Some((cmd, _)) if cmd == "list" || cmd == "ls" => cmd_list(),
@@ -34,6 +35,7 @@ pub fn run(args: &[String]) -> ExitCode {
     }
 }
 
+/// Prints usage for the `avd` subcommands.
 fn print_help() {
     println!("Usage: avm android avd [COMMAND]");
     println!();
@@ -59,6 +61,7 @@ struct ActiveSdk {
     java_home: Option<PathBuf>,
 }
 
+/// Locates the SDK of the version selected via `AVM_RESOLVED_VERSION`; errors if none is selected or avdmanager is not installed.
 fn active_sdk() -> Result<ActiveSdk> {
     let version = std::env::var("AVM_RESOLVED_VERSION").map_err(|_| {
         anyhow!("no android version selected — run `avm android use <version>` first")
@@ -77,6 +80,7 @@ fn active_sdk() -> Result<ActiveSdk> {
     })
 }
 
+/// Builds a command for an SDK wrapper binary, setting `JAVA_HOME` when a managed JDK is known.
 fn tool_command(active: &ActiveSdk, binary: &str) -> Command {
     let mut cmd = Command::new(active.bin.join(install::wrapper_name(binary)));
     if let Some(java_home) = &active.java_home {
@@ -85,6 +89,7 @@ fn tool_command(active: &ActiveSdk, binary: &str) -> Command {
     cmd
 }
 
+/// Lists existing AVDs via `avdmanager`; errors if it cannot run or exits non-zero.
 fn cmd_list() -> Result<()> {
     let active = active_sdk()?;
     println!("AVDs (android {}):", active.version);
@@ -99,6 +104,7 @@ fn cmd_list() -> Result<()> {
     Ok(())
 }
 
+/// Deletes the AVD named by the first arg via `avdmanager`; errors if the name is missing or the tool fails.
 fn cmd_delete(args: &[String]) -> Result<()> {
     let name = args
         .first()
@@ -118,6 +124,7 @@ fn cmd_delete(args: &[String]) -> Result<()> {
     Ok(())
 }
 
+/// Starts the named AVD in the emulator, passing remaining args through; errors if the name is missing or the emulator fails.
 fn cmd_start(args: &[String]) -> Result<()> {
     let name = args
         .first()
@@ -228,6 +235,7 @@ fn image_tags(device: Option<&str>) -> &'static [&'static str] {
     }
 }
 
+/// Finds a system image id for `api`, trying each image tag suited to `device` in order; returns the last error if none match.
 fn resolve_image(listing: &str, api: &str, device: Option<&str>) -> Result<(&'static str, String)> {
     let mut last = None;
     for &tag in image_tags(device) {
@@ -310,6 +318,7 @@ fn fix_avd_target_api(name: &str, system_image: &str) {
     }
 }
 
+/// Parses `create` args into optional (name, api, device); errors on unknown flags or missing flag values.
 fn parse_create_args(args: &[String]) -> Result<(Option<String>, Option<String>, Option<String>)> {
     let mut name = None;
     let mut api = None;
@@ -343,6 +352,7 @@ fn parse_create_args(args: &[String]) -> Result<(Option<String>, Option<String>,
     Ok((name, api, device))
 }
 
+/// Interactively picks an API level from the recent available levels; errors if none exist or input is cancelled.
 fn pick_api_level() -> Result<String> {
     let versions = versions::available_versions(ToolVersionQuery::Recent)?;
     if versions.is_empty() {
@@ -353,6 +363,7 @@ fn pick_api_level() -> Result<String> {
     Ok(versions[idx].version.clone())
 }
 
+/// Prints `message` and reads one trimmed line from stdin; errors on EOF (cancelled).
 fn prompt(message: &str) -> Result<String> {
     print!("{message}");
     std::io::stdout().flush()?;
@@ -382,6 +393,7 @@ struct DeviceProfile {
     label: String,
 }
 
+/// Interactively picks a device profile from `avdmanager list device`; returns `None` when the user skips.
 fn pick_device(active: &ActiveSdk) -> Result<Option<String>> {
     let output = tool_command(active, "avdmanager")
         .arg("list")

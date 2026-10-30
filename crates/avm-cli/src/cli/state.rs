@@ -1,4 +1,11 @@
-use super::*;
+use crate::cli::env::extend_env;
+use crate::config;
+use crate::resolver::ResolvedConfig;
+use anyhow::{Context, Result};
+use avm_plugin_api::ResolvedAlias;
+use std::collections::{BTreeMap, HashMap};
+use std::fs;
+use std::path::{Path, PathBuf};
 
 /// Config for env, shims and exec: never touches `package.json`, so a broken
 /// one can't stop `node` or the prompt.
@@ -11,6 +18,8 @@ pub fn load_state_with_aliases() -> Result<ResolvedConfig> {
     load_state_with(true)
 }
 
+/// Loads the resolved config for the cwd, optionally including `package.json` scripts as aliases.
+/// A broken `package.json` is ignored with a warning.
 fn load_state_with(aliases: bool) -> Result<ResolvedConfig> {
     let cwd = std::env::current_dir().context("failed to read current directory")?;
     let plugin_aliases = if aliases {
@@ -23,7 +32,7 @@ fn load_state_with(aliases: bool) -> Result<ResolvedConfig> {
     };
     let cfg = crate::resolver::load(&cwd, &home_dir()?, plugin_aliases)?;
     if !cfg.local_tools.is_empty() {
-        track_config_dir(&cwd); // so `avm prune` keeps this project's versions
+        crate::core::tracked::track(&cwd); // so `avm prune` keeps this project's versions
     }
     Ok(cfg)
 }
@@ -33,6 +42,7 @@ pub static UNTRUSTED_DOTENV: std::sync::OnceLock<Vec<PathBuf>> = std::sync::Once
 pub const ENV_BASELINE: &str = "_AVM_ENV_BASELINE";
 pub static INHERITED_ENV: std::sync::OnceLock<HashMap<String, String>> = std::sync::OnceLock::new();
 
+/// Reads the saved env baseline from `_AVM_ENV_BASELINE`; empty if unset, errors if it is invalid.
 pub fn env_baseline() -> Result<BTreeMap<String, Option<String>>> {
     let baseline: BTreeMap<String, Option<String>> = match std::env::var(ENV_BASELINE) {
         Ok(raw) => serde_json::from_str(&raw).context("invalid AVM environment baseline")?,
@@ -47,6 +57,7 @@ pub fn env_baseline() -> Result<BTreeMap<String, Option<String>>> {
     Ok(baseline)
 }
 
+/// Reverts the process env to the saved baseline and records the resulting inherited env for later child processes.
 pub fn restore_inherited_env() -> Result<()> {
     for (key, value) in env_baseline()? {
         match value {
@@ -69,14 +80,13 @@ pub fn untrusted_files(cfg: &ResolvedConfig) -> Vec<PathBuf> {
         .collect()
 }
 
+/// Message telling the user which config files are ignored for lack of trust and how to trust them.
 pub fn untrusted_notice(files: &[PathBuf]) -> String {
     let names: Vec<String> = files.iter().map(|f| f.display().to_string()).collect();
     format!("avm: {} not trusted, so its aliases and env are ignored. Review each file, then run 'avm trust <file>' to enable it.", names.join(", "))
 }
 
-pub fn home_dir() -> Result<PathBuf> {
-    avm_plugin_api::home_dir()
-}
+pub use avm_plugin_api::home_dir;
 
 /// `package.json` scripts as plugin aliases, run through whichever package
 /// manager the lockfile points at.

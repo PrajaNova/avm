@@ -86,11 +86,11 @@ Env:
     example: 'avm run --with node@18 dev --port 3000'
   },
   {
-    command: 'avm install',
+    command: 'avm -p install',
     args: '[--frozen]',
     category: 'Core',
     description: 'Installs project tools without changing pins, including global selections only when unlocked. Uses exact versions and verified downloads when .avm.lock exists. --frozen validates project selections and requires an asset for this platform.',
-    example: 'avm install --frozen'
+    example: 'avm -p install --frozen'
   },
   {
     command: 'avm lock',
@@ -119,44 +119,27 @@ $env:JAVA_HOME = 'C:\\Users\\dev\\.avm\\tools\\java\\openjdk-17.0.13+11'`
 
   // Plugins
   {
-    command: 'avm plugin add',
-    args: '<name | org/repo | git-url | path>',
+    command: 'avm plugin install',
+    args: '<name | owner/repo | git-url | path>',
     category: 'Plugins',
-    description: "Installs a plugin's compiled release for your platform from the marketplace, after verifying its sha256 against the release's checksums.txt. A mismatch aborts with nothing installed. Also avm pa. Legacy asdf plugins use the compatibility adapter.",
-    example: 'avm plugin add node',
+    description: "Installs a plugin's compiled release for your platform from GitHub releases (a first-party name, or owner/repo), after verifying its sha256 against the release's checksums.txt. A mismatch aborts with nothing installed. Run it again to update. Also `avm -p install`. Legacy asdf plugins use the compatibility adapter.",
+    example: 'avm plugin install node',
     outputExample: `Fetching 'node' from PrajaNova/avm-plugin-node...
 ✓ Installed node v0.2.0`
   },
   {
-    command: 'avm plugin list',
-    args: '[--all]',
+    command: 'avm plugin search',
+    args: '<keyword>',
     category: 'Plugins',
-    description: 'Lists installed plugins and their discovery paths. --all also prints marketplace plugins.',
-    example: 'avm plugin list',
-    outputExample: `Installed plugins:
-  - node    (~/.avm/plugins/avm-plugin-node/bin/avm-plugin)
-  - java    (~/.avm/plugins/avm-plugin-java/bin/avm-plugin)
-  - android (~/.avm/plugins/avm-plugin-android/bin/avm-plugin)`
+    description: 'Lists first-party plugins and GitHub repos tagged with the avm-plugin topic that match the keyword.',
+    example: 'avm plugin search java'
   },
   {
-    command: 'avm plugin available',
-    category: 'Plugins',
-    description: 'Queries the marketplace registry and lists all installable plugins. Also avm plugin all or avm plugin marketplace.',
-    example: 'avm plugin available'
-  },
-  {
-    command: 'avm plugin remove',
+    command: 'avm plugin uninstall',
     args: '<name>',
     category: 'Plugins',
     description: 'Uninstalls an installed plugin binary from ~/.avm/plugins.',
-    example: 'avm plugin remove java'
-  },
-  {
-    command: 'avm plugin update',
-    args: '<name> | --all',
-    category: 'Plugins',
-    description: 'Checks for newer releases of the plugin and updates the binary.',
-    example: 'avm plugin update node'
+    example: 'avm plugin uninstall java'
   },
 
   // Version Management
@@ -291,13 +274,6 @@ $env:JAVA_HOME = 'C:\\Users\\dev\\.avm\\tools\\java\\openjdk-17.0.13+11'`
     "category": "Core",
     "description": "Update direct installations with checksum verification. For package-manager installations, print the matching upgrade command.",
     "example": "avm self-update"
-  },
-  {
-    "command": "avm plugin outdated",
-    "args": "[--json]",
-    "category": "Plugins",
-    "description": "Compare installed marketplace plugin versions against available releases.",
-    "example": "avm plugin outdated --json"
   },
   {
     "command": "avm create",

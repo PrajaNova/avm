@@ -1,0 +1,64 @@
+name: Web CI
+
+# Quality gate for the website (web/). Runs on pull requests and on main, and only when the site,
+# the plugin registry it renders, or the CLI command definitions its docs must cover change.
+on:
+  pull_request:
+    paths:
+      - "web/**"
+      - "registry.json"
+      - "marketplace/registry.json"
+      - "scripts/check-registry.sh"
+      - "crates/avm-cli/src/args.rs"
+      - "crates/avm-cli/src/**/*_manager.rs"
+      - ".github/workflows/web-ci.yml"
+  push:
+    branches: [main]
+    paths:
+      - "web/**"
+      - "registry.json"
+      - "marketplace/registry.json"
+      - "scripts/check-registry.sh"
+      - "crates/avm-cli/src/args.rs"
+      - "crates/avm-cli/src/**/*_manager.rs"
+      - ".github/workflows/web-ci.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: web-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  registry:
+    name: Registry
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: registry.json and its frozen legacy copy list the same plugins
+        run: bash scripts/check-registry.sh
+
+  web:
+    name: Docs check and build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+          run_install: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: web/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - name: Documentation covers every CLI command
+        run: pnpm run check:docs
+      - name: Build
+        run: pnpm run build

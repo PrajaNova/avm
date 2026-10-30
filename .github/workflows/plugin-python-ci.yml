@@ -1,0 +1,41 @@
+name: Plugin python CI
+
+# Quality gate for plugins/avm-plugin-python. Runs on pull requests and on main, and only when the
+# plugin, the SDK it builds against, or the workspace manifests change.
+on:
+  pull_request:
+    paths:
+      - "plugins/avm-plugin-python/**"
+      - "crates/avm-plugin-sdk/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "rust-toolchain*"
+      - ".github/workflows/plugin-python-ci.yml"
+      - ".github/workflows/plugin-ci.yml"
+  push:
+    branches: [main]
+    paths:
+      - "plugins/avm-plugin-python/**"
+      - "crates/avm-plugin-sdk/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "rust-toolchain*"
+      - ".github/workflows/plugin-python-ci.yml"
+      - ".github/workflows/plugin-ci.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: plugin-python-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ci:
+    uses: ./.github/workflows/plugin-ci.yml
+    with:
+      plugin: avm-plugin-python
+      windows: true
+      format: true
+      lint: true

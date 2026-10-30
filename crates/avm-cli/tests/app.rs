@@ -155,7 +155,6 @@ mod commands {
     /// 1. Run `avm shell-init [shell]`.
     /// 2. The script defines the shim directory and the matching `avm` function.
     #[rstest]
-    #[case::default(&["shell-init"], "AVM_SHIM_DIR=", "avm()")]
     #[case::sh(&["shell-init", "sh"], "AVM_SHIM_DIR=", "avm()")]
     #[case::pwsh(&["shell-init", "pwsh"], "$env:AVM_SHIM_DIR", "function global:avm")]
     fn shell_init_emits_setup(
@@ -169,6 +168,24 @@ mod commands {
             .stdout_contains(shim_dir)
             .stdout_contains(function)
             .stdout_contains("shims install");
+    }
+
+    /// With no shell named, `shell-init` targets the platform's own shell.
+    ///
+    /// 1. Run `avm shell-init`.
+    /// 2. POSIX platforms get the sh setup, Windows gets PowerShell.
+    #[test]
+    fn shell_init_defaults_to_the_platform_shell() {
+        let p = Sandbox::new("avm-test");
+        let (shim_dir, function) = if cfg!(windows) {
+            ("$env:AVM_SHIM_DIR", "function global:avm")
+        } else {
+            ("AVM_SHIM_DIR=", "avm()")
+        };
+        assert_that(&p.run(&["shell-init"]))
+            .succeeds()
+            .stdout_contains(shim_dir)
+            .stdout_contains(function);
     }
 
     /// `cmd` has no init hook and says what to do instead.
@@ -202,7 +219,7 @@ mod commands {
     #[case("zsh")]
     fn the_generated_script_is_valid_shell(#[case] shell: &str) {
         let p = Sandbox::new("avm-test");
-        let script = success(p.run(&["shell-init"]));
+        let script = success(p.run(&["shell-init", "sh"]));
         p.write("init.sh", &script);
         let file = p.path("init.sh");
         let out = std::process::Command::new(shell)

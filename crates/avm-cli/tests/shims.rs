@@ -117,9 +117,8 @@ mod commands {
     #[test]
     fn path_prints_the_shim_directory() {
         let p = Sandbox::new("avm-test");
-        let expected = p.path("home/.avm/shims");
-        assert_that(&success(p.run(&["shims", "path"])).trim().to_string())
-            .is_equal_to(expected.display().to_string());
+        let expected = slashes(&p.path("home/.avm/shims").display().to_string());
+        assert_that(&slashes(success(p.run(&["shims", "path"])).trim())).is_equal_to(expected);
     }
 
     /// `install` (and its `reshim` alias) generate a shim per managed tool.
@@ -155,8 +154,9 @@ mod commands {
         assert_that(&p.run(&["shims", "remove", "node"]))
             .succeeds()
             .stdout_contains("Removed shim for node");
-        assert_that(&p.path("home/.avm/shims/node")).does_not_exist();
-        assert_that(&p.path("home/.avm/shims/java")).exists();
+        let ext = std::env::consts::EXE_SUFFIX; // Windows shims are node.exe, java.exe
+        assert_that(&p.path(&format!("home/.avm/shims/node{ext}"))).does_not_exist();
+        assert_that(&p.path(&format!("home/.avm/shims/java{ext}"))).exists();
     }
 
     /// Shim names are validated as plain names.

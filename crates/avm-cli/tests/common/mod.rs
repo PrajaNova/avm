@@ -55,7 +55,11 @@ impl Sandbox {
             .env("AVM_PLUGIN_DIR", self.path("home/.avm/plugins"))
             .env("AVM_NO_UPDATE_CHECK", "1")
             .env("AVM_TRUST_ALL", "0")
-            .env_remove("AVM_ENV");
+            .env_remove("AVM_ENV")
+            // Provider variables from the machine running the tests change what `avm env` prints.
+            .env_remove("JAVA_HOME")
+            .env_remove("ANDROID_HOME")
+            .env_remove("ANDROID_SDK_ROOT");
         command
     }
 
@@ -117,12 +121,18 @@ impl Drop for Sandbox {
     }
 }
 
+/// stdout as text with Windows line endings folded to `\n`.
 pub fn stdout_of(output: &Output) -> String {
-    String::from_utf8_lossy(&output.stdout).into_owned()
+    String::from_utf8_lossy(&output.stdout).replace("\r\n", "\n")
 }
 
 pub fn stderr_of(output: &Output) -> String {
-    String::from_utf8_lossy(&output.stderr).into_owned()
+    String::from_utf8_lossy(&output.stderr).replace("\r\n", "\n")
+}
+
+/// Folds Windows path separators to `/`, so a test can assert `project/.avm.json` on every OS.
+pub fn slashes(text: &str) -> String {
+    text.replace('\\', "/")
 }
 
 /// Asserts success and returns stdout.
@@ -181,21 +191,21 @@ impl OutputAssertions for Spec<'_, Output> {
     }
 
     fn stdout_contains(&mut self, needle: &str) -> &mut Self {
-        if !stdout_of(self.subject).contains(needle) {
+        if !slashes(&stdout_of(self.subject)).contains(needle) {
             fail(self, format!("stdout containing {needle:?}"));
         }
         self
     }
 
     fn stderr_contains(&mut self, needle: &str) -> &mut Self {
-        if !stderr_of(self.subject).contains(needle) {
+        if !slashes(&stderr_of(self.subject)).contains(needle) {
             fail(self, format!("stderr containing {needle:?}"));
         }
         self
     }
 
     fn stderr_lacks(&mut self, needle: &str) -> &mut Self {
-        if stderr_of(self.subject).contains(needle) {
+        if slashes(&stderr_of(self.subject)).contains(needle) {
             fail(self, format!("stderr without {needle:?}"));
         }
         self

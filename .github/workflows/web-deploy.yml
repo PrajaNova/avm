@@ -1,7 +1,7 @@
-name: Deploy web (Vercel)
+name: Web deploy
 
-# Manual only: Actions → Deploy web (Vercel) → Run workflow
-# (or `gh workflow run deploy-web.yml -f production=true`). Merging to main doesn't deploy.
+# Manual only: Actions → Web deploy → Run workflow
+# (or `gh workflow run web-deploy.yml -f production=true`). Merging to main doesn't deploy.
 # Builds on the runner and uploads the prebuilt output; the Vercel project needs no Git connection.
 # Repo secrets: VERCEL_TOKEN, VERCEL_ORG_ID, VERCEL_PROJECT_ID.
 on:

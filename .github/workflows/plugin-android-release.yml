@@ -1,11 +1,11 @@
-name: Release python plugin
-run-name: Release python plugin v${{ inputs.version }}
+name: Plugin android release
+run-name: Plugin android release v${{ inputs.version }}
 
 on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Version matching plugins/avm-plugin-python/Cargo.toml (without v)"
+        description: "Version matching plugins/avm-plugin-android/Cargo.toml (without v)"
         required: true
         type: string
 
@@ -15,14 +15,14 @@ permissions:
   attestations: write
 
 concurrency:
-  group: release-plugin-python
+  group: release-plugin-android
   cancel-in-progress: false
 
 jobs:
   publish:
     uses: ./.github/workflows/plugin-release.yml
     with:
-      plugin: python
+      plugin: android
       version: ${{ inputs.version }}
       windows: true
     secrets: inherit

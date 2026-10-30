@@ -1,10 +1,10 @@
-name: Action
+name: Action CI
 on:
   pull_request:
-    paths: [action/**, .github/workflows/action.yml]
+    paths: [action/**, .github/workflows/action-ci.yml]
   push:
     branches: [main]
-    paths: [action/**, .github/workflows/action.yml]
+    paths: [action/**, .github/workflows/action-ci.yml]
 jobs:
   smoke:
     strategy:

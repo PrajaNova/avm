@@ -1,7 +1,9 @@
 name: Test plugins (reusable)
 
-# Called from each plugin repo's ci.yml. Pass `windows: true` once the
-# plugin supports Windows (same switch as plugin-release.yml).
+# Called from each plugin's own CI (this repo: plugin-<name>-ci.yml; other repos: their ci.yml).
+# Pass `windows: true` once the plugin supports Windows (same switch as plugin-release.yml).
+# `format` and `lint` add a rustfmt check and clippy with -D warnings; both default to off so
+# existing callers are unaffected. Tests and the release build + `manifest` smoke test always run.
 on:
   workflow_call:
     inputs:
@@ -12,8 +14,35 @@ on:
       windows:
         type: boolean
         default: false
+      format:
+        type: boolean
+        default: false
+      lint:
+        type: boolean
+        default: false
 
 jobs:
+  quality:
+    name: Format and lint
+    if: ${{ inputs.format || inputs.lint }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Format
+        if: ${{ inputs.format }}
+        run: cargo fmt --package ${{ inputs.plugin || github.event.repository.name }} --check
+
+      - name: Lint
+        if: ${{ inputs.lint }}
+        run: cargo clippy --package ${{ inputs.plugin || github.event.repository.name }} --all-targets --locked -- -D warnings
+
   build:
     strategy:
       fail-fast: false

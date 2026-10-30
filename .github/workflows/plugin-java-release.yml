@@ -1,11 +1,11 @@
-name: Release node plugin
-run-name: Release node plugin v${{ inputs.version }}
+name: Plugin java release
+run-name: Plugin java release v${{ inputs.version }}
 
 on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Version matching plugins/avm-plugin-node/Cargo.toml (without v)"
+        description: "Version matching plugins/avm-plugin-java/Cargo.toml (without v)"
         required: true
         type: string
 
@@ -15,14 +15,14 @@ permissions:
   attestations: write
 
 concurrency:
-  group: release-plugin-node
+  group: release-plugin-java
   cancel-in-progress: false
 
 jobs:
   publish:
     uses: ./.github/workflows/plugin-release.yml
     with:
-      plugin: node
+      plugin: java
       version: ${{ inputs.version }}
       windows: true
     secrets: inherit

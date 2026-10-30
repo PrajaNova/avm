@@ -1,0 +1,41 @@
+name: Plugin android CI
+
+# Quality gate for plugins/avm-plugin-android. Runs on pull requests and on main, and only when the
+# plugin, the SDK it builds against, or the workspace manifests change.
+on:
+  pull_request:
+    paths:
+      - "plugins/avm-plugin-android/**"
+      - "crates/avm-plugin-sdk/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "rust-toolchain*"
+      - ".github/workflows/plugin-android-ci.yml"
+      - ".github/workflows/plugin-ci.yml"
+  push:
+    branches: [main]
+    paths:
+      - "plugins/avm-plugin-android/**"
+      - "crates/avm-plugin-sdk/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "rust-toolchain*"
+      - ".github/workflows/plugin-android-ci.yml"
+      - ".github/workflows/plugin-ci.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: plugin-android-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ci:
+    uses: ./.github/workflows/plugin-ci.yml
+    with:
+      plugin: avm-plugin-android
+      windows: true
+      format: true
+      lint: true

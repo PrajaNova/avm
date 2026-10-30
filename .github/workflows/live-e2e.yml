@@ -1,22 +1,17 @@
 # Live end-to-end: installs the *published* avm (install.sh / install.ps1 -> the GitHub release)
 # on a clean runner per platform, installs a plugin from the live registry and runs the
 # alias / env / node journey in e2e/live.sh (e2e/live.ps1 on Windows). Nothing is built from
-# the checkout, so this tests what users actually get. See e2e/README.md.
+# the checkout, so this tests what users actually get. Manual only (Actions -> Live e2e -> Run
+# workflow, or `gh workflow run live-e2e.yml`). See e2e/README.md.
 name: Live e2e
 
 on:
-  workflow_dispatch:
+  workflow_dispatch: # manual only: it downloads real releases and tools, so it never runs on its own
     inputs:
       version:
         description: "Release to install: a tag like v0.5.0, 'latest' for the stable release, or empty for the newest (prereleases included)"
         required: false
         default: ""
-  schedule:
-    - cron: "0 6 * * *" # daily: catches a broken release, registry or upstream download
-  push: # not pull_request: those do not run while a PR has merge conflicts with main
-    paths:
-      - "e2e/**"
-      - ".github/workflows/live-e2e.yml"
 
 permissions:
   contents: read

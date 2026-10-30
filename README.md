@@ -24,9 +24,9 @@ eval "$(avm-bin shell-init)"
 ## Quick start
 
 ```bash
-avm plugin add node
+avm plugin install node
 avm node use 22
-avm add dev "npm run dev"
+avm alias add dev "npm run dev"
 avm dev
 ```
 

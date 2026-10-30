@@ -1,5 +1,5 @@
 use anyhow::{anyhow, Context, Result};
-use avm_plugin_api::{ToolVersion, ToolVersionQuery};
+use avm_plugin_sdk::{ToolVersion, ToolVersionQuery};
 use serde::Deserialize;
 
 /// The foojay Disco API (https://api.foojay.io) aggregates JDK builds across
@@ -11,6 +11,7 @@ use serde::Deserialize;
 const DISCO_BASE_URL: &str = "https://api.foojay.io/disco/v3.0";
 const DISTRIBUTION: &str = "temurin";
 
+/// Lists available OpenJDK versions for the host, filtered by `query`; errors if the package index cannot be fetched.
 pub fn available_versions(query: ToolVersionQuery) -> Result<Vec<ToolVersion>> {
     let releases = query.filter(package_index()?, |pkg| pkg.major_version);
     Ok(releases
@@ -32,6 +33,7 @@ fn avm_version(java_version: &str) -> String {
     format!("openjdk-{java_version}")
 }
 
+/// Removes the `openjdk-` prefix from a version if present.
 pub fn strip_avm_prefix(version: &str) -> &str {
     version.strip_prefix("openjdk-").unwrap_or(version)
 }
@@ -80,9 +82,10 @@ struct PackageInfoResponse {
 
 /// The sha256 foojay reports for `package` (Adoptium's published checksum).
 pub fn package_sha256(package: &Package) -> Result<String> {
-    parse_sha256(&avm_plugin_api::fetch(&package.links.pkg_info_uri, 20)?)
+    parse_sha256(&avm_plugin_sdk::fetch(&package.links.pkg_info_uri, 20)?)
 }
 
+/// Extracts the sha256 checksum from a foojay package-info response; errors on invalid JSON or when none is listed.
 fn parse_sha256(raw: &[u8]) -> Result<String> {
     let parsed: PackageInfoResponse =
         serde_json::from_slice(raw).context("failed to parse foojay package info")?;
@@ -99,10 +102,12 @@ struct PackagesResponse {
     result: Vec<Package>,
 }
 
+/// Fetches the package index for the host OS and architecture.
 fn package_index() -> Result<Vec<Package>> {
     package_index_for(host_os_param()?, host_arch_param()?, ARCHIVE_TYPE)
 }
 
+/// Fetches the Disco API package list for the given OS, architecture and archive type (base URL overridable via `AVM_JAVA_DISCO_URL`).
 fn package_index_for(os: &str, arch: &str, archive: &str) -> Result<Vec<Package>> {
     let base = std::env::var("AVM_JAVA_DISCO_URL").unwrap_or_else(|_| DISCO_BASE_URL.to_string());
     let url = format!(
@@ -110,7 +115,7 @@ fn package_index_for(os: &str, arch: &str, archive: &str) -> Result<Vec<Package>
         if os == "linux" { "&lib_c_type=glibc" } else { "" },
     );
 
-    let raw = avm_plugin_api::fetch(&url, 20)?;
+    let raw = avm_plugin_sdk::fetch(&url, 20)?;
     let parsed: PackagesResponse =
         serde_json::from_slice(&raw).context("failed to parse foojay Disco API response")?;
     Ok(parsed.result)
@@ -119,6 +124,7 @@ fn package_index_for(os: &str, arch: &str, archive: &str) -> Result<Vec<Package>
 /// Temurin ships zips for Windows, tarballs elsewhere.
 pub const ARCHIVE_TYPE: &str = if cfg!(windows) { "zip" } else { "tar.gz" };
 
+/// Maps the host OS to the Disco API parameter; errors on unsupported platforms.
 fn host_os_param() -> Result<&'static str> {
     match std::env::consts::OS {
         "macos" => Ok("macos"),
@@ -138,15 +144,16 @@ fn host_arch_param() -> Result<&'static str> {
     }
 }
 
+/// Resolves download URLs and checksums for `version` on each requested platform; errors on an unsafe version or unsupported platform.
 pub fn resolve_downloads(
     version: &str,
     platforms: &[String],
-) -> Result<avm_plugin_api::protocol::ResolveResponse> {
-    use avm_plugin_api::protocol::{LockedAsset, ResolveResponse};
-    avm_plugin_api::download::validate_version(version)?;
+) -> Result<avm_plugin_sdk::protocol::ResolveResponse> {
+    use avm_plugin_sdk::protocol::{LockedAsset, ResolveResponse};
+    avm_plugin_sdk::download::validate_version(version)?;
     let mut assets = std::collections::BTreeMap::new();
     for platform in platforms {
-        avm_plugin_api::download::validate_platform(platform)?;
+        avm_plugin_sdk::download::validate_platform(platform)?;
         let (os, arch) = platform
             .split_once('_')
             .ok_or_else(|| anyhow!("invalid platform"))?;
@@ -164,7 +171,7 @@ pub fn resolve_downloads(
             sha256: package_sha256(&package)?,
             url: package.links.pkg_download_redirect,
         };
-        avm_plugin_api::download::validate_asset(&asset)?;
+        avm_plugin_sdk::download::validate_asset(&asset)?;
         assets.insert(platform.clone(), asset);
     }
     Ok(ResolveResponse {

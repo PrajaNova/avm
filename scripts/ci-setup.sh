@@ -1,9 +1,9 @@
 #!/bin/bash
 # CI entrypoint for any platform: install avm, add plugins, install the project's tools.
 #   AVM_VERSION   release tag to install (default latest)
-#   AVM_PLUGINS   space/comma-separated plugins for `avm plugin add` (marketplace names, paths or URLs)
+#   AVM_PLUGINS   space/comma-separated plugins for `avm plugin install` (first-party names, owner/repo, paths or URLs)
 #   AVM_INSTALL   "false" to skip installing tools
-# Uses the lock when one exists (`avm install --frozen`), else a plain install.
+# Uses the lock when one exists (`avm -p install --frozen`), else a plain install.
 # Afterwards: eval "$(avm-bin env)" and put "$HOME/.local/bin:$HOME/.avm/shims" on PATH.
 set -euo pipefail
 
@@ -19,7 +19,7 @@ export PATH="$HOME/.local/bin:/usr/local/bin:$PATH"
 export AVM_TRUST_ALL=1
 
 for plugin in $(echo "${AVM_PLUGINS:-}" | tr ',' ' '); do
-  avm-bin plugin add "$plugin"
+  avm-bin plugin install "$plugin"
 done
 
 [ "${AVM_INSTALL:-true}" = "true" ] || exit 0
@@ -32,4 +32,4 @@ while :; do
   [ "$dir" = / ] && break
   dir="$(dirname "$dir")"
 done
-avm-bin install ${frozen[@]+"${frozen[@]}"}
+avm-bin -p install ${frozen[@]+"${frozen[@]}"}

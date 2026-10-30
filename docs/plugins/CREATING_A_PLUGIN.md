@@ -26,7 +26,7 @@ The rest of this doc is what to fill in, and how it all fits together.
 ## The `ToolProvider` trait
 
 Everything a plugin does is one Rust trait
-(`avm_plugin_api::ToolProvider`, from the
+(`avm_plugin_sdk::ToolProvider`, from the
 [main avm repo](https://github.com/PrajaNova/avm)):
 
 ```rust
@@ -53,7 +53,7 @@ pub trait ToolProvider: Send + Sync {
 Your `main.rs` wraps an instance of your provider with the shared runner:
 
 ```rust
-use avm_plugin_api::{runner, Manifest};
+use avm_plugin_sdk::{runner, Manifest};
 
 fn main() -> std::process::ExitCode {
     let manifest = Manifest {
@@ -105,7 +105,7 @@ missing checksums must fail instead of returning unverified assets.
 
 The host passes the original locked URL (or local archive path) and SHA-256
 in `install-locked`'s asset JSON. Plugins must verify it before extraction. Use
-`avm_plugin_api::download::download_verified` to download or copy and verify it before
+`avm_plugin_sdk::download::download_verified` to download or copy and verify it before
 extraction; this path never honors `AVM_ALLOW_UNVERIFIED`. Keep the existing
 installer's staging, error handling and final layout. Older plugins retain
 ordinary installs through default methods that reject lockfile operations.
@@ -136,7 +136,7 @@ avm kotlin use 1.9.20
 That's exactly the layout a real marketplace install produces
 (`~/.avm/plugins/avm-plugin-<name>/bin/avm-plugin`) — `avm`'s discovery
 doesn't distinguish "installed by hand for testing" from "installed via
-`avm plugin add`".
+`avm plugin install`".
 
 ## Publishing
 
@@ -150,12 +150,12 @@ doesn't distinguish "installed by hand for testing" from "installed via
    `avm-plugin-<name>_<os>_<arch>.tar.gz` for `linux_amd64`, `linux_arm64`,
    `darwin_arm64`, and `darwin_amd64` (Intel Macs), and publishes them as
    GitHub Release assets. This
-   is the **required contract** — `avm plugin add` queries your repo's
-   `GET /repos/<owner>/<repo>/releases/latest` and looks for an asset
+   is the **required contract** — `avm plugin install` queries your repo's
+   `GET /repos/<owner>/<repo>/releases/latest` (`avm plugin install <owner>/<repo>`) and looks for an asset
    named exactly `avm-plugin-<name>_<os>_<arch>.tar.gz`, containing exactly
    one file, `avm-plugin-<name>`. It always fetches a compiled release —
    never source — so anyone installing your plugin needs no Rust
-   toolchain, same as `avm plugin add node` today.
+   toolchain, same as `avm plugin install node` today.
 
    For Windows, pass `windows: true` to the reusable workflow. It also builds
    `avm-plugin-<name>_windows_amd64.zip` containing `avm-plugin-<name>.exe`,
@@ -168,21 +168,17 @@ doesn't distinguish "installed by hand for testing" from "installed via
    (`PrajaNova/avm/.github/workflows/plugin-release.yml`) generates it and
    a build provenance attestation automatically; its caller must grant
    `contents: write`, `id-token: write`, and `attestations: write`.
-3. **List it in the marketplace** (optional but recommended): open a PR
-   adding an entry to `registry.json` in
-   [PrajaNova/avm/marketplace](https://github.com/PrajaNova/avm/tree/main/marketplace)
-   — `{"name", "description", "section_label", "repo"}`. Once merged,
-   `avm plugin add <name>` works with just the bare name instead of a full
-   URL, and it shows up in `avm plugin available`.
-4. Without a marketplace entry, people can still install your plugin via
-   `avm plugin add <path-or-url>` — same asset-naming contract applies,
-   avm just resolves the repo from the URL you gave it instead of a
-   registry lookup.
+3. **Make it discoverable** (optional): add the `avm-plugin` topic to the
+   GitHub repo so `avm plugin search <keyword>` lists it. People can always install
+   it with `avm plugin install <owner>/<repo>`. To make `avm plugin install <name>`
+   work, add an entry to the `plugins` list in `registry.json` in a pull request:
+   `{ "name": "<name>", "description": "...", "section_label": "...", "repo": "<owner>/<repo>" }`.
+   New plugin versions need no registry change: avm installs the newest `avm-plugin-<name>-v*` release.
 
 ## Verifying what your plugin downloads
 
 If `install` downloads a runtime, verify it before extracting — use
-`avm_plugin_api::verify_sha256(path, checksums_text, file_name)` against the
+`avm_plugin_sdk::verify_sha256(path, checksums_text, file_name)` against the
 upstream's checksum file (or a one-line `"<sha256>  <name>"` when the
 upstream reports a single hash). Fail closed, and honor
 `AVM_ALLOW_UNVERIFIED=1` as the only escape hatch. The first-party plugins
@@ -221,6 +217,6 @@ should always compute the value from the version string, never read
 today's environment to decide what to report.
 
 The legacy asdf adapter (`bin/list-all`, `bin/install`, ...) still exists
-in `avm-cli/src/runtime.rs` as a fallback tier for community plugins that haven't
+in `avm-cli/src/plugins/` as a fallback tier for community plugins that haven't
 adopted this protocol — it's not going away, just no longer what avm's own
 first-party tools use.

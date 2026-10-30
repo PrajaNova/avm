@@ -1,6 +1,6 @@
 use anyhow::{anyhow, Context, Result};
-use avm_plugin_api::protocol::{LockedAsset, ResolveResponse};
-use avm_plugin_api::{tool_dir, ToolVersion, ToolVersionQuery};
+use avm_plugin_sdk::protocol::{LockedAsset, ResolveResponse};
+use avm_plugin_sdk::{tool_dir, ToolVersion, ToolVersionQuery};
 use serde::Deserialize;
 use std::collections::BTreeMap;
 use std::time::{Duration, SystemTime};
@@ -45,7 +45,7 @@ struct Build {
 /// `CACHE_TTL` to show up; delete `~/.avm/tools/python/.index.ndjson` to force it.
 fn index_bytes() -> Result<Vec<u8>> {
     if let Ok(src) = std::env::var("AVM_PYTHON_INDEX") {
-        return avm_plugin_api::fetch(&src, 120);
+        return avm_plugin_sdk::fetch(&src, 120);
     }
     let cache = tool_dir("python")?.join(".index.ndjson");
     let age = std::fs::metadata(&cache)
@@ -57,12 +57,12 @@ fn index_bytes() -> Result<Vec<u8>> {
             return Ok(bytes);
         }
     }
-    match avm_plugin_api::fetch(DEFAULT_INDEX, 120) {
+    match avm_plugin_sdk::fetch(DEFAULT_INDEX, 120) {
         Ok(bytes) => {
             if let Some(dir) = cache.parent() {
                 let _ = std::fs::create_dir_all(dir);
             }
-            let _ = avm_plugin_api::storage::atomic_write(&cache, &bytes);
+            let _ = avm_plugin_sdk::storage::atomic_write(&cache, &bytes);
             Ok(bytes)
         }
         // Offline: a stale index still beats no index.
@@ -70,6 +70,7 @@ fn index_bytes() -> Result<Vec<u8>> {
     }
 }
 
+/// Parses the JSON-lines build index into versions mapped to their builds; errors on malformed lines and skips entries without a `+tag`.
 fn parse_index(raw: &[u8]) -> Result<Index> {
     let mut index = Index::new();
     for line in raw.split(|b| *b == b'\n').filter(|l| !l.is_empty()) {
@@ -103,16 +104,19 @@ fn parse_index(raw: &[u8]) -> Result<Index> {
     Ok(index)
 }
 
+/// Parses `major.minor.patch` into a triple, or `None` if it is not exactly three numbers.
 fn parse_triple(version: &str) -> Option<Triple> {
     let mut parts = version.split('.').map(|p| p.parse().ok());
     let triple = (parts.next()??, parts.next()??, parts.next()??);
     parts.next().is_none().then_some(triple)
 }
 
+/// Formats a version triple as `major.minor.patch`.
 fn fmt(t: Triple) -> String {
     format!("{}.{}.{}", t.0, t.1, t.2)
 }
 
+/// Lists available Python versions, newest first, filtered by `query`; errors if the index cannot be fetched or parsed.
 pub fn available_versions(query: ToolVersionQuery) -> Result<Vec<ToolVersion>> {
     let versions = parse_index(&index_bytes()?)?
         .into_keys()
@@ -130,6 +134,7 @@ pub fn available_versions(query: ToolVersionQuery) -> Result<Vec<ToolVersion>> {
     Ok(query.filter(versions, |v| parse_triple(&v.version).map_or(0, |t| t.1)))
 }
 
+/// Maps an avm platform id to the python-build-standalone target triple; errors on unsupported platforms.
 fn target_triple(platform: &str) -> Result<&'static str> {
     Ok(match platform {
         "darwin_arm64" => "aarch64-apple-darwin",
@@ -142,6 +147,7 @@ fn target_triple(platform: &str) -> Result<&'static str> {
     })
 }
 
+/// Returns the host platform as `<os>_<arch>` (e.g. `darwin_arm64`); errors on unsupported architectures.
 pub fn host_platform() -> Result<String> {
     let arch = match std::env::consts::ARCH {
         "aarch64" => "arm64",
@@ -151,19 +157,20 @@ pub fn host_platform() -> Result<String> {
     Ok(format!("{}_{arch}", std::env::consts::OS).replace("macos", "darwin"))
 }
 
+/// Resolves download URLs and checksums for `version` on each requested platform; errors on an unknown version or unsupported platform.
 pub fn resolve_downloads(version: &str, platforms: &[String]) -> Result<ResolveResponse> {
-    avm_plugin_api::download::validate_version(version)?;
+    avm_plugin_sdk::download::validate_version(version)?;
     let index = parse_index(&index_bytes()?)?;
     let builds = parse_triple(version)
         .and_then(|t| index.get(&t))
         .ok_or_else(|| anyhow!("unknown Python version '{version}' (run `avm python versions`)"))?;
     let mut assets = BTreeMap::new();
     for platform in platforms {
-        avm_plugin_api::download::validate_platform(platform)?;
+        avm_plugin_sdk::download::validate_platform(platform)?;
         let build = builds
             .get(target_triple(platform)?)
             .ok_or_else(|| anyhow!("no Python {version} build for {platform}"))?;
-        avm_plugin_api::download::validate_asset(&build.asset)?;
+        avm_plugin_sdk::download::validate_asset(&build.asset)?;
         assets.insert(platform.clone(), build.asset.clone());
     }
     Ok(ResolveResponse {

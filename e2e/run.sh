@@ -1,23 +1,25 @@
 #!/usr/bin/env bash
-# avm end-to-end tests in a throwaway container (--rm): every run starts from
-# a clean Ubuntu and installs avm fresh.
+# Live end-to-end test on this machine (macOS or Linux): installs the published avm into a
+# throwaway HOME and runs the journey in live.sh. CI runs it on clean runners per platform
+# (.github/workflows/live-e2e.yml). Needs network.
 #
-#   e2e/run.sh                   # build avm from this checkout; all suites
-#   e2e/run.sh node java         # just some suites (core | node | java | android)
-#   e2e/run.sh release [suites]  # test the published release instead
-#   e2e/run.sh shell             # a shell in the clean container
+#   e2e/run.sh                      # newest published release (prereleases included)
+#   AVM_VERSION=latest e2e/run.sh   # the stable release
+#   AVM_VERSION=v0.5.0 e2e/run.sh   # one specific release
 set -euo pipefail
 root="$(cd "$(dirname "$0")/.." && pwd)"
 
-target=local
-if [ "${1:-}" = "release" ]; then target=release; shift; fi
-
-DOCKER_BUILDKIT=1 docker build --platform linux/amd64 -q --target "$target" \
-  -t "avm-e2e:$target" -f "$root/e2e/Dockerfile" "$root" >/dev/null
-
-tty=(); [ -t 1 ] && tty=(-t)
-if [ "${1:-}" = "shell" ]; then
-  exec docker run --rm -it --platform linux/amd64 -e AVM_VERSION --entrypoint bash "avm-e2e:$target"
+# install.sh installs system-wide when /usr/local/bin is writable or sudo is passwordless, which
+# would replace your own avm-bin. CI runners are disposable; elsewhere require an explicit opt-in.
+if [ -z "${CI:-}" ] && [ "${AVM_E2E_FORCE:-}" != 1 ] && { [ -w /usr/local/bin ] || sudo -n true 2>/dev/null; }; then
+  echo "refusing to run: install.sh would write /usr/local/bin/avm-bin on this machine." >&2
+  echo "Run it in CI (live-e2e.yml), on a disposable machine, or set AVM_E2E_FORCE=1." >&2
+  exit 1
 fi
-exec docker run --rm ${tty[@]+"${tty[@]}"} --platform linux/amd64 -e AVM_VERSION -e GITHUB_TOKEN \
-  -e ANDROID_GLOBAL -e ANDROID_LOCAL "avm-e2e:$target" "$@"
+
+# The scenario edits shell rc files, so never run it on the real HOME. Resolve symlinks
+# (macOS temp dirs live under /var -> /private/var) so HOME and the cwd compare equal.
+home="$(cd "$(mktemp -d)" && pwd -P)"
+trap 'rm -rf "$home"' EXIT
+echo "== $(uname -sm) (HOME=$home) =="
+HOME="$home" AVM_NO_UPDATE_CHECK=1 bash "$root/e2e/live.sh"

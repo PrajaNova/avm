@@ -7,8 +7,8 @@ Install [avm](https://github.com/PrajaNova/avm), install your project's tools, a
 - uses: PrajaNova/avm/action@v1
   with:
     version: latest          # avm release tag
-    install: true            # `avm install --frozen` if .avm.lock exists, else `avm install`
-    plugins: node            # one `avm plugin add` per tool in .avm.json, e.g. "node java"
+    install: true            # `avm -p install --frozen` if .avm.lock exists, else `avm -p install`
+    plugins: node            # one `avm plugin install` per tool in .avm.json, e.g. "node java"
     cache: true              # ~/.avm/tools + plugins, keyed by .avm.lock/.avm.json hash + OS + arch
     working-directory: .
     env: ci                  # sets AVM_ENV

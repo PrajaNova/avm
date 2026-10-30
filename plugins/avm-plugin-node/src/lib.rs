@@ -1,12 +1,9 @@
-mod aliases;
 mod install;
 mod versions;
 
-use avm_plugin_api::{tool_dir, ToolProvider, ToolVersion, ToolVersionQuery};
+use avm_plugin_sdk::{tool_dir, ToolProvider, ToolVersion, ToolVersionQuery};
 use std::collections::HashMap;
 use std::path::PathBuf;
-
-pub use aliases::aliases_from_package_json;
 
 /// `bin/node` (or `bin\\node.exe`) inside each installed version.
 pub(crate) const NODE_BIN: &str = if cfg!(windows) { "node.exe" } else { "node" };
@@ -15,6 +12,7 @@ pub(crate) const NODE_BIN: &str = if cfg!(windows) { "node.exe" } else { "node" 
 pub struct NodeProvider;
 
 impl NodeProvider {
+    /// Returns `binary` inside the `bin` directory of an installed Node version, or `None` if it does not exist.
     pub fn bin_path_for(&self, version: &str, binary: &str) -> anyhow::Result<Option<PathBuf>> {
         let candidate = tool_dir("node")?.join(version).join("bin").join(binary);
         Ok(candidate.exists().then_some(candidate))
@@ -34,7 +32,7 @@ impl ToolProvider for NodeProvider {
     }
 
     fn installed_versions(&self) -> anyhow::Result<Vec<String>> {
-        avm_plugin_api::list_installed("node", |v| self.is_installed(v))
+        avm_plugin_sdk::list_installed("node", |v| self.is_installed(v))
     }
 
     fn available_versions(&self, query: ToolVersionQuery) -> anyhow::Result<Vec<ToolVersion>> {
@@ -65,19 +63,19 @@ impl ToolProvider for NodeProvider {
         &self,
         version: &str,
         platforms: &[String],
-    ) -> anyhow::Result<avm_plugin_api::protocol::ResolveResponse> {
+    ) -> anyhow::Result<avm_plugin_sdk::protocol::ResolveResponse> {
         install::resolve_downloads(version, platforms)
     }
 
     fn install_locked(
         &self,
         version: &str,
-        asset: &avm_plugin_api::protocol::LockedAsset,
+        asset: &avm_plugin_sdk::protocol::LockedAsset,
     ) -> anyhow::Result<()> {
         install::install(version, Some(asset))
     }
 
     fn uninstall(&self, version: &str) -> anyhow::Result<()> {
-        avm_plugin_api::remove_version("node", version)
+        avm_plugin_sdk::remove_version("node", version)
     }
 }

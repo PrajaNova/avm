@@ -54,7 +54,7 @@ includes the base config, personal config, selected profile files, and `.env`.
 Use `avm --env production trust` to include a production profile, or pass the
 file path directly. Editing any file requires trusting its new content.
 
-`avm which build`, `avm which node`, and `avm list` show the exact origin of each
+`avm which build`, `avm which node`, and `avm alias list` / `avm env list` / `avm plugin list` show the exact origin of each
 winning value. Alias suggestions include trusted aliases from every layer.
 
 ## Shell setup and cache

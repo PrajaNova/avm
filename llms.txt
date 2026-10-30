@@ -15,16 +15,16 @@ env manager by PrajaNova. npm: @prajanova/avm · GitHub: PrajaNova/avm
   to the system binary with a warning.
 
 ## Commands
-- `avm init` · `avm add [-g] <alias> <command>` · `avm remove [-g] <alias>`
-- `avm run <alias> [args...]` · `avm resolve <alias> [args...]` · `avm which <key>` · `avm list`
+- `avm init` · `avm alias add [-g] <alias> <command>` · `avm alias remove [-g] <alias>` (short: `avm -al ...`)
+- `avm run <alias> [args...]` · `avm resolve <alias> [args...]` · `avm which <key>` · `avm alias list` · `avm env list` · `avm plugin list`
 - `avm exec [--no-install] <tool@version>... -- <command> [args...]` (alias `x`) · `avm run <alias> --with <tool@version> [-- args...]`: temporary versions, no pin or lockfile changes.
-- `avm install [--frozen]` installs selected tools without repinning. `avm lock [--platform linux_amd64,darwin_arm64,windows_amd64]` writes `.avm.lock`; stale locks fail instead of drifting. Locking requires an updated native Node/Java plugin; Android/asdf currently support unlocked installs only.
+- `avm install [--frozen]` installs selected tools without repinning. `avm plugin lock [--platform linux_amd64,darwin_arm64,windows_amd64]` writes `.avm.lock`; stale locks fail instead of drifting. Locking requires an updated native Node/Java plugin; Android/asdf currently support unlocked installs only.
 - `avm env [--shell sh|pwsh|cmd]` · `avm env add|remove|list`
 - `avm trust [path] [--revoke|--list]`
 - `avm <tool> use|install|uninstall|list|versions` (e.g. `avm node use 20`)
 - `avm plugin add|list|available|remove|update`
 - `avm shims install|remove|path|activate`
-- `avm outdated [--json]` · `avm upgrade [tool] [--bump] [--dry-run]` · `avm prune [--older-than 90d] [--dry-run]` · `avm plugin outdated`
+- `avm plugin outdated [--json]` · `avm plugin upgrade [tool] [--bump] [--dry-run]` · `avm plugin prune [--older-than 90d] [--dry-run]` · `avm plugin outdated`
 - `avm self-update [--version X]` (Homebrew/npm/cargo/Scoop: use their upgrade command); `AVM_NO_UPDATE_CHECK=1` silences the notice
 - `eval "$(avm shell-init)"` (bash/zsh) or `Invoke-Expression ((avm-bin shell-init pwsh) -join "`n")` (PowerShell)
 

@@ -17,7 +17,7 @@ avm python install latest
   feed (~20 MB), cached in `~/.avm/tools/python/.index.ndjson` for 6 hours.
 - Installs use the `install_only_stripped` archive (or `install_only` for older
   releases) for your platform (macOS, Linux glibc, Windows; x64 and arm64) and
-  are checked against the SHA-256 in the index. Supports `avm lock`.
+  are checked against the SHA-256 in the index. Supports `avm plugin lock`.
 - Set `AVM_PYTHON_INDEX` to a URL or file path of an index in the same format
   to use a mirror (skips the cache).
 

@@ -2,15 +2,31 @@
 name = "avm-cli"
 version = "0.5.1-beta.1"
 edition = "2021"
+autotests = false
 
 [dependencies]
-avm-plugin-api = { path = "../avm-plugin-api" }
+avm-plugin-sdk = { path = "../avm-plugin-sdk" }
 anyhow = { workspace = true }
+fs-err = { workspace = true }
 clap = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 crossterm = { workspace = true }
+nodejs-semver = "7"
+semver = "1"
 
 [[bin]]
 name = "avm-bin"
 path = "src/main.rs"
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
+[dev-dependencies]
+rstest = "0.28.0"
+speculoos = "0.13.0"
+
+# One test binary: `tests/main.rs` plus a module per feature (see tests/README.md).
+[[test]]
+name = "cli"
+path = "tests/main.rs"

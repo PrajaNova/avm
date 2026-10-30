@@ -1,10 +1,10 @@
 # Using avm in CI
 
 Commit `.avm.json` and `.avm.lock` (see [Lockfiles](LOCKFILES.md)). `scripts/ci-setup.sh`
-does the work on any CI: it installs avm, runs `avm plugin add` for each name in
+does the work on any CI: it installs avm, runs `avm plugin install` for each name in
 `AVM_PLUGINS`, then installs tools with `--frozen` when a lock exists (plain
-`avm install` otherwise). CI builds a checkout you chose, so it sets `AVM_TRUST_ALL=1`
-instead of `avm trust`. `avm install` does not fetch plugins itself, so list one per
+`avm -p install` otherwise). CI builds a checkout you chose, so it sets `AVM_TRUST_ALL=1`
+instead of `avm trust`. `avm -p install` does not fetch plugins itself, so list one per
 tool in `AVM_PLUGINS` (for example `node java`). Linux and macOS only. The command is `avm-bin`; `avm` is a shell function.
 
 ## GitHub Actions

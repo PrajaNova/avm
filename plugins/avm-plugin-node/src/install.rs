@@ -1,25 +1,26 @@
 use anyhow::{anyhow, Context, Result};
-use avm_plugin_api::{fetch, run_timed, tool_dir, verify_sha256};
-use std::fs;
+use avm_plugin_sdk::{fetch, tool_dir, verify_sha256};
+use fs_err as fs;
 use std::path::Path;
-use std::process::Command;
 
 const TAR_TIMEOUT_MS: u64 = 300_000;
 const CURL_OUTER_TIMEOUT_MS: u64 = 180_000;
 
+/// Installs a Node.js release with no locked asset.
 pub fn install_node(version: &str) -> Result<()> {
     install(version, None)
 }
 
+/// Installs Node.js `version` (leading `v` ignored), using `locked` when given or the mirror otherwise; verifies the archive and errors on download or extract failure.
 pub fn install(
     version: &str,
-    locked: Option<&avm_plugin_api::protocol::LockedAsset>,
+    locked: Option<&avm_plugin_sdk::protocol::LockedAsset>,
 ) -> Result<()> {
     let version = version.trim_start_matches('v');
-    avm_plugin_api::download::validate_version(version)?;
+    avm_plugin_sdk::download::validate_version(version)?;
     let platform = platform_name()?;
     let tools_root = tool_dir("node")?;
-    let _guard = avm_plugin_api::storage::lock(&tools_root.join(format!(".install-{version}")))?;
+    let _guard = avm_plugin_sdk::storage::lock(&tools_root.join(format!(".install-{version}")))?;
     let target = tools_root.join(version);
     if target.join("bin").join(crate::NODE_BIN).exists() {
         return Ok(());
@@ -38,7 +39,7 @@ pub fn install(
     }
     fs::create_dir_all(&tmp_root).context("failed to create node install temp dir")?;
     let download = if let Some(asset) = locked {
-        avm_plugin_api::download::download_verified(asset, &archive_path)
+        avm_plugin_sdk::download::download_verified(asset, &archive_path)
     } else {
         fetch_archive(version, &archive_name, &archive_path)
             .and_then(|_| verify_archive(&mirror(), version, &archive_name, &archive_path))
@@ -48,17 +49,13 @@ pub fn install(
         return Err(e);
     }
 
-    let mut tar = Command::new("tar");
-    // Windows 10+ ships bsdtar, which also reads zip.
-    tar.arg(if cfg!(windows) { "-xf" } else { "-xzf" })
-        .arg(&archive_path)
-        .arg("-C")
-        .arg(&tmp_root);
-    run_timed(
-        tar,
+    avm_plugin_sdk::download::extract_archive(
+        &archive_path,
+        &tmp_root,
+        0,
         TAR_TIMEOUT_MS,
-        "node archive extraction",
         "AVM_TAR_TIMEOUT",
+        "node archive extraction",
     )?;
 
     if target.exists() {
@@ -86,6 +83,7 @@ pub fn install(
     Ok(())
 }
 
+/// Returns the Node.js dist mirror, overridable via `AVM_NODE_DIST_URL`.
 pub(crate) fn mirror() -> String {
     std::env::var("AVM_NODE_DIST_URL").unwrap_or_else(|_| "https://nodejs.org/dist".to_string())
 }
@@ -113,6 +111,7 @@ fn verify_archive(mirror: &str, version: &str, archive_name: &str, archive: &Pat
         .context("refusing to install Node.js")
 }
 
+/// Copies the archive from a local mirror directory if it exists there, otherwise downloads it to `destination`.
 fn fetch_archive(version: &str, archive_name: &str, destination: &Path) -> Result<()> {
     let mirror = mirror();
     let local = Path::new(&mirror)
@@ -125,26 +124,17 @@ fn fetch_archive(version: &str, archive_name: &str, destination: &Path) -> Resul
     }
 
     let url = format!("{}/v{version}/{archive_name}", mirror.trim_end_matches('/'));
-    let mut curl = Command::new("curl");
-    curl.args([
-        "-fL",
-        "--connect-timeout",
-        "10",
-        "--max-time",
-        "120",
+    avm_plugin_sdk::download::download(
         &url,
-        "-o",
-    ])
-    .arg(destination);
-    run_timed(
-        curl,
+        destination,
         CURL_OUTER_TIMEOUT_MS,
-        "node download",
         "AVM_CURL_TIMEOUT",
+        "node download",
     )
     .with_context(|| format!("failed to download Node.js from {url}"))
 }
 
+/// Maps the host OS and architecture to Node's release platform name; errors on unsupported combinations.
 fn platform_name() -> Result<&'static str> {
     match (std::env::consts::OS, std::env::consts::ARCH) {
         ("macos", "aarch64") => Ok("darwin-arm64"),
@@ -157,18 +147,19 @@ fn platform_name() -> Result<&'static str> {
     }
 }
 
+/// Resolves download URLs and checksums for `version` on each requested platform; errors on an unsafe version or unsupported platform.
 pub fn resolve_downloads(
     version: &str,
     platforms: &[String],
-) -> Result<avm_plugin_api::protocol::ResolveResponse> {
-    use avm_plugin_api::protocol::{LockedAsset, ResolveResponse};
+) -> Result<avm_plugin_sdk::protocol::ResolveResponse> {
+    use avm_plugin_sdk::protocol::{LockedAsset, ResolveResponse};
     let version = version.trim_start_matches('v');
-    avm_plugin_api::download::validate_version(version)?;
+    avm_plugin_sdk::download::validate_version(version)?;
     let base = format!("{}/v{version}", mirror().trim_end_matches('/'));
     let sums = String::from_utf8(fetch(&format!("{base}/SHASUMS256.txt"), 20)?)?;
     let mut assets = std::collections::BTreeMap::new();
     for platform in platforms {
-        avm_plugin_api::download::validate_platform(platform)?;
+        avm_plugin_sdk::download::validate_platform(platform)?;
         let (os, arch) = platform
             .split_once('_')
             .ok_or_else(|| anyhow!("invalid platform"))?;
@@ -178,9 +169,9 @@ pub fn resolve_downloads(
         let name = format!("node-v{version}-{os}-{arch}.{ext}");
         let asset = LockedAsset {
             url: format!("{base}/{name}"),
-            sha256: avm_plugin_api::checksum_for(&sums, &name)?,
+            sha256: avm_plugin_sdk::checksum_for(&sums, &name)?,
         };
-        avm_plugin_api::download::validate_asset(&asset)?;
+        avm_plugin_sdk::download::validate_asset(&asset)?;
         assets.insert(platform.clone(), asset);
     }
     Ok(ResolveResponse {

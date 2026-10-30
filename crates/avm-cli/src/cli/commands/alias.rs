@@ -177,22 +177,14 @@ pub fn cmd_run(args: RunArgs) -> Result<()> {
     };
     // ponytail: Windows runs aliases through `cmd /C` with sh-style quoting of
     // extra args; a cmd-aware quoter if args with spaces or quotes misbehave.
-    let (shell, flag) = if cfg!(windows) {
-        ("cmd", "/C")
-    } else {
-        ("sh", "-c")
-    };
+    let (shell, flag) = crate::platform::ALIAS_SHELL;
     let mut command = match alias.argv {
         Some(argv) => {
-            #[cfg(windows)]
-            let program = shims::which_in_path(
+            let program = crate::platform::resolve_program(
                 &argv[0],
-                std::ffi::OsStr::new(env.get("PATH").map(String::as_str).unwrap_or("")),
+                env.get("PATH").map(String::as_str).unwrap_or(""),
                 true,
-            )
-            .ok_or_else(|| anyhow!("package manager '{}' not found in PATH", argv[0]))?;
-            #[cfg(not(windows))]
-            let program = &argv[0];
+            )?;
             let mut command = Command::new(program);
             command.args(&argv[1..]).args(&args.args);
             command

@@ -2,14 +2,11 @@ use anyhow::{Context, Result};
 use std::fs;
 use std::path::{Path, PathBuf};
 
-#[cfg(unix)]
-mod unix;
-#[cfg(windows)]
-mod windows;
-#[cfg(unix)]
-use unix::{is_executable, write_shim};
-#[cfg(windows)]
-use windows::{is_executable, write_shim};
+#[cfg_attr(windows, path = "windows.rs")]
+#[cfg_attr(not(windows), path = "unix.rs")]
+mod imp;
+pub use imp::{command_names, invoked_as_shim};
+use imp::{is_executable, shim_name, write_shim};
 
 /// Core shims per managed tool: every binary here always gets a shim and
 /// dispatches through its tool's pinned version.
@@ -74,13 +71,7 @@ pub fn reshim() -> Result<()> {
                 if !is_executable(&entry.path()) {
                     continue;
                 }
-                // Windows: `tsc.cmd` → shim `tsc`.
-                let file_name = if cfg!(windows) {
-                    entry.path().file_stem().map(|s| s.to_os_string())
-                } else {
-                    Some(entry.file_name())
-                };
-                if let Some(name) = file_name.as_deref().and_then(|n| n.to_str()) {
+                if let Some(name) = shim_name(&entry).as_deref().and_then(|n| n.to_str()) {
                     // Reject anything that isn't a plain command name.
                     if name.starts_with('.') || name.contains('/') || name.contains('\\') {
                         continue;
@@ -91,29 +82,6 @@ pub fn reshim() -> Result<()> {
         }
     }
     first_err.map_or(Ok(()), Err)
-}
-
-/// Candidate file names for a bare command: itself on Unix; `node.exe`,
-/// `node.cmd`, ... per `PATHEXT` on Windows.
-pub fn command_names(bin: &str) -> Vec<String> {
-    if cfg!(windows) && Path::new(bin).extension().is_none() {
-        path_exts()
-            .iter()
-            .map(|ext| format!("{bin}{}", ext.to_ascii_lowercase()))
-            .collect()
-    } else {
-        vec![bin.to_string()]
-    }
-}
-
-/// Executable extensions from `PATHEXT`, defaulting to `.COM;.EXE;.BAT;.CMD`.
-fn path_exts() -> Vec<String> {
-    std::env::var("PATHEXT")
-        .unwrap_or_else(|_| ".COM;.EXE;.BAT;.CMD".to_string())
-        .split(';')
-        .filter(|e| !e.is_empty())
-        .map(str::to_string)
-        .collect()
 }
 
 /// First executable `bin` on PATH, optionally skipping avm's own shims.
@@ -190,14 +158,4 @@ fn remove_stale_shims(shims_dir: &Path) {
             let _ = fs::remove_file(entry.path());
         }
     }
-}
-
-/// When avm-bin runs as a Windows shim (`node.exe`), the tool it stands for.
-pub fn invoked_as_shim() -> Option<String> {
-    if !cfg!(windows) {
-        return None;
-    }
-    let exe = std::env::current_exe().ok()?;
-    let stem = exe.file_stem()?.to_str()?.to_string();
-    (!stem.eq_ignore_ascii_case("avm-bin") && !stem.eq_ignore_ascii_case("avm")).then_some(stem)
 }

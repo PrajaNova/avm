@@ -4,6 +4,7 @@ mod say;
 pub mod cli;
 pub mod constants;
 pub mod core;
+pub mod platform;
 pub mod plugins;
 pub mod update;
 

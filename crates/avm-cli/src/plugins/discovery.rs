@@ -210,33 +210,8 @@ pub(super) fn validate_plugin_source_permissions(path: &Path) -> Result<()> {
         return Err(anyhow!("plugin source must be a directory"));
     }
 
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::MetadataExt;
-        use std::os::unix::fs::PermissionsExt;
-        if meta.uid() == 0 && current_euid() != 0 {
-            return Err(anyhow!("plugin sources owned by root are not allowed"));
-        }
-        let mode = meta.permissions().mode();
-        if mode & 0o002 != 0 {
-            return Err(anyhow!("plugin source must not be world-writable"));
-        }
-    }
-
+    crate::platform::check_plugin_source_perms(&meta)?;
     Ok(())
-}
-
-/// The process's effective user id.
-#[cfg(unix)]
-pub(super) fn current_euid() -> u32 {
-    // SAFETY:
-    // Operation: `libc::geteuid()`.
-    // Contract (POSIX `geteuid`): takes no arguments and always succeeds; it has
-    // no memory-safety preconditions and does not touch Rust-managed memory.
-    // The `libc` crate declares the return type as the platform's `uid_t`, so
-    // there is no hand-written ABI declaration to get wrong.
-    // Postcondition: none for Rust state; the returned id is a plain integer.
-    unsafe { libc::geteuid() }
 }
 
 /// Derive the plugin directory name from a git URL's last path segment, minus any `.git` suffix, query or fragment.

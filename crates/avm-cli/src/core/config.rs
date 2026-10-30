@@ -85,13 +85,11 @@ fn parse_config(raw: &[u8]) -> Result<ConfigLoadResult> {
                     .and_then(|v| v.as_bool()),
             };
             validate_env(&cfg.env)?;
-            if cfg!(windows) {
-                cfg.env = cfg
-                    .env
-                    .into_iter()
-                    .map(|(key, value)| (key.to_ascii_uppercase(), value))
-                    .collect();
-            }
+            cfg.env = cfg
+                .env
+                .into_iter()
+                .map(|(key, value)| (crate::platform::normalize_env_key(key), value))
+                .collect();
             Ok(cfg)
         }
         serde_json::Value::Null => Ok(ConfigLoadResult::default()),

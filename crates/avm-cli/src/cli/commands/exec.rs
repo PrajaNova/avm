@@ -16,29 +16,14 @@ pub fn cmd_exec(args: ExecArgs) -> Result<()> {
         .command
         .split_first()
         .ok_or_else(|| anyhow!("command required after --"))?;
-    #[cfg(windows)]
-    let program = if Path::new(program).components().count() == 1 {
-        shims::which_in_path(
-            program,
-            std::ffi::OsStr::new(env.get("PATH").map(String::as_str).unwrap_or("")),
-            false,
-        )
-        .ok_or_else(|| anyhow!("command '{program}' not found in PATH"))?
-    } else {
-        PathBuf::from(program)
-    };
+    let program = crate::platform::resolve_program(
+        program,
+        env.get("PATH").map(String::as_str).unwrap_or(""),
+        false,
+    )?;
     let mut command = Command::new(program);
     command.args(arguments).envs(env);
-    #[cfg(unix)]
-    {
-        use std::os::unix::process::CommandExt;
-        Err(command.exec()).context("failed to execute command")
-    }
-    #[cfg(not(unix))]
-    {
-        let status = command.status().context("failed to execute command")?;
-        std::process::exit(status.code().unwrap_or(1));
-    }
+    crate::platform::run_replacing_process(command)
 }
 
 /// Splits a `tool@version` argument into its parts and validates both.

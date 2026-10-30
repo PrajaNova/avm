@@ -21,12 +21,7 @@ pub fn extend_env(
     values: impl IntoIterator<Item = (String, String)>,
 ) {
     for (key, value) in values {
-        let key = if cfg!(windows) {
-            key.to_ascii_uppercase()
-        } else {
-            key
-        };
-        env.insert(key, value);
+        env.insert(crate::platform::normalize_env_key(key), value);
     }
 }
 

@@ -45,3 +45,18 @@ exec "$(command -v avm-bin)" exec-shim {tool} -- "$@"
     fs::rename(&staged, &path).with_context(|| format!("install shim for {tool}"))?;
     Ok(())
 }
+
+/// The shim name for a tool's `bin/` entry: the file name as is.
+pub(super) fn shim_name(entry: &fs::DirEntry) -> Option<std::ffi::OsString> {
+    Some(entry.file_name())
+}
+
+/// Candidate file names for a bare command: itself.
+pub fn command_names(bin: &str) -> Vec<String> {
+    vec![bin.to_string()]
+}
+
+/// Unix shims are `sh` scripts, so avm-bin is never started under a tool's name.
+pub fn invoked_as_shim() -> Option<String> {
+    None
+}

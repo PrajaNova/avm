@@ -330,11 +330,7 @@ pub fn install_from_marketplace(source: &PluginSource, plugin_dir: &Path) -> Res
         // by macOS Gatekeeper tracking — exit 137). Same dir, so no cross-device rename.
         let staged = bin_dir.join(format!(".{PLUGIN_BIN}.new"));
         fs::copy(&extracted_bin, &staged).context("failed to move plugin binary into place")?;
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            fs::set_permissions(&staged, fs::Permissions::from_mode(0o755))?;
-        }
+        crate::platform::make_executable(&staged)?;
         fs::rename(&staged, &dest)
             .inspect_err(|_| {
                 let _ = fs::remove_file(&staged);

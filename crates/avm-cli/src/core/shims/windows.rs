@@ -1,5 +1,5 @@
 //! Windows shims: `<tool>.exe` hard-linked (or copied) from avm-bin.
-use super::{invoked_as_shim, path_exts, which};
+use super::which;
 use anyhow::{Context, Result};
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -42,4 +42,38 @@ fn avm_exe() -> Result<PathBuf> {
         return Ok(exe);
     }
     which("avm-bin", true).context("avm-bin not found on PATH")
+}
+
+/// The shim name for a tool's `bin/` entry: `tsc.cmd` → `tsc`.
+pub(super) fn shim_name(entry: &fs::DirEntry) -> Option<std::ffi::OsString> {
+    entry.path().file_stem().map(|s| s.to_os_string())
+}
+
+/// Executable extensions from `PATHEXT`, defaulting to `.COM;.EXE;.BAT;.CMD`.
+fn path_exts() -> Vec<String> {
+    std::env::var("PATHEXT")
+        .unwrap_or_else(|_| ".COM;.EXE;.BAT;.CMD".to_string())
+        .split(';')
+        .filter(|e| !e.is_empty())
+        .map(str::to_string)
+        .collect()
+}
+
+/// Candidate file names for a bare command: `node.exe`, `node.cmd`, ... per
+/// `PATHEXT` unless it already has an extension.
+pub fn command_names(bin: &str) -> Vec<String> {
+    if Path::new(bin).extension().is_some() {
+        return vec![bin.to_string()];
+    }
+    path_exts()
+        .iter()
+        .map(|ext| format!("{bin}{}", ext.to_ascii_lowercase()))
+        .collect()
+}
+
+/// When avm-bin runs as a Windows shim (`node.exe`), the tool it stands for.
+pub fn invoked_as_shim() -> Option<String> {
+    let exe = std::env::current_exe().ok()?;
+    let stem = exe.file_stem()?.to_str()?.to_string();
+    (!stem.eq_ignore_ascii_case("avm-bin") && !stem.eq_ignore_ascii_case("avm")).then_some(stem)
 }

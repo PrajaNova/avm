@@ -10,11 +10,7 @@ pub enum Shell {
 
 impl Default for Shell {
     fn default() -> Self {
-        if cfg!(windows) {
-            Shell::Pwsh
-        } else {
-            Shell::Sh
-        }
+        crate::platform::DEFAULT_SHELL
     }
 }
 

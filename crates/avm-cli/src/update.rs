@@ -68,7 +68,7 @@ pub fn self_update(version: Option<String>) -> Result<()> {
         println!("avm was installed with {method:?}, so update it the same way:\n  {cmd}");
         return Ok(());
     }
-    remove_old_binary(&exe);
+    crate::platform::remove_old_binary(&exe);
 
     let tag = version.map(|v| format!("v{}", v.trim_start_matches('v')));
     let release = runtime::github_release(REPO, tag.as_deref())?;
@@ -79,15 +79,14 @@ pub fn self_update(version: Option<String>) -> Result<()> {
     }
 
     let (os, arch) = runtime::marketplace_platform()?;
-    let ext = if cfg!(windows) { "zip" } else { "tar.gz" };
-    let asset = format!("avm_{os}_{arch}.{ext}");
+    let asset = format!("avm_{os}_{arch}.{}", crate::platform::ARCHIVE_EXT);
     let dir = exe
         .parent()
         .ok_or_else(|| anyhow!("{} has no parent directory", exe.display()))?;
     // Extract next to the binary so the swap is a same-filesystem rename.
     let staging = dir.join(format!(".avm-update-{}", std::process::id()));
     let result = runtime::fetch_verified_archive(REPO, &release, &asset, &staging).and_then(|_| {
-        replace_binary(
+        crate::platform::replace_binary(
             &exe,
             &staging.join(format!("avm-bin{}", std::env::consts::EXE_SUFFIX)),
         )
@@ -95,45 +94,9 @@ pub fn self_update(version: Option<String>) -> Result<()> {
     let _ = fs::remove_dir_all(&staging);
     result.with_context(|| format!("couldn't update {}", exe.display()))?;
 
-    // Windows shims are hard links to the old binary; relink them.
-    if cfg!(windows) {
-        let _ = crate::shims::reshim();
-    }
+    crate::platform::after_update();
     done!("Updated avm {CURRENT} → {target}");
     Ok(())
-}
-
-/// Make `new` executable and atomically rename it over `exe`.
-#[cfg(unix)]
-fn replace_binary(exe: &Path, new: &Path) -> Result<()> {
-    use std::os::unix::fs::PermissionsExt;
-    fs::set_permissions(new, fs::Permissions::from_mode(0o755))?;
-    fs::rename(new, exe).context("failed to swap in the new binary") // atomic
-}
-
-/// A running exe can't be overwritten on Windows, but it can be renamed.
-#[cfg(windows)]
-fn replace_binary(exe: &Path, new: &Path) -> Result<()> {
-    let old = old_binary(exe);
-    let _ = fs::remove_file(&old);
-    fs::rename(exe, &old).context("failed to move the running avm-bin aside")?;
-    if let Err(err) = fs::rename(new, exe) {
-        let _ = fs::rename(&old, exe);
-        return Err(err).context("failed to swap in the new binary");
-    }
-    Ok(())
-}
-
-/// Where the previous binary is parked during a Windows update.
-fn old_binary(exe: &Path) -> PathBuf {
-    exe.with_extension("old.exe")
-}
-
-/// Windows leaves the previous binary aside until the next run.
-fn remove_old_binary(exe: &Path) {
-    if cfg!(windows) {
-        let _ = fs::remove_file(old_binary(exe));
-    }
 }
 
 #[derive(Default, serde::Serialize, serde::Deserialize)]
@@ -224,17 +187,7 @@ fn spawn_detached_check() {
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::null());
-    #[cfg(unix)]
-    {
-        use std::os::unix::process::CommandExt;
-        cmd.process_group(0);
-    }
-    #[cfg(windows)]
-    {
-        use std::os::windows::process::CommandExt;
-        const DETACHED_PROCESS: u32 = 0x0000_0008;
-        cmd.creation_flags(DETACHED_PROCESS);
-    }
+    crate::platform::detach(&mut cmd);
     let _ = cmd.spawn();
 }
 

@@ -5,14 +5,7 @@ pub const ASDF_ENV_TIMEOUT_MS: u64 = 2_000;
 pub const ASDF_INSTALL_TIMEOUT_MS: u64 = 120_000;
 pub const GIT_CLONE_TIMEOUT_MS: u64 = 120_000;
 pub const PROTOCOL_PREFIX: &str = "avm-plugin-";
-/// A protocol plugin's executable inside its dir: `bin/avm-plugin(.exe)`.
-pub const PLUGIN_BIN: &str = if cfg!(windows) {
-    "avm-plugin.exe"
-} else {
-    "avm-plugin"
-};
-/// Marketplace plugin archives: zip on Windows, tar.gz elsewhere.
-pub const PLUGIN_ARCHIVE_EXT: &str = if cfg!(windows) { "zip" } else { "tar.gz" };
+pub use crate::platform::{ARCHIVE_EXT as PLUGIN_ARCHIVE_EXT, PLUGIN_BIN};
 pub const ASDF_PREFIX: &str = "asdf-";
 
 pub const MARKETPLACE_TIMEOUT_SECS: u32 = 20;

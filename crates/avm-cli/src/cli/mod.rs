@@ -3,7 +3,7 @@ mod bootstrap;
 mod commands;
 mod env;
 mod run;
-mod shell;
+pub(crate) mod shell;
 mod state;
 mod ui;
 pub use run::main;

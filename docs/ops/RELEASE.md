@@ -49,22 +49,16 @@ case included.
    plugin → Run workflow**, or:
    `gh workflow run release-node-plugin.yml -R PrajaNova/avm -f version=0.3.2`
    (swap `node` for `java`/`python`/`android` in the workflow name as needed).
-3. After the release succeeds, update that plugin's marketplace entry:
-
-   ```json
-   {
-     "name": "node",
-     "description": "Node.js",
-     "repo": "PrajaNova/avm",
-     "release_tag": "avm-plugin-node-v0.3.2"
-   }
-   ```
+3. Nothing else: avm installs the newest `avm-plugin-<name>-v*` release, so the registry
+   needs no change for a new plugin version. (Releases of avm before this behaviour still
+   install the `release_tag` pinned in `marketplace/registry.json`; bump it only if you
+   still need those older clients to pick up the new plugin.)
 
 The workspace workflow builds linux amd64/arm64, macOS arm64/Intel and
 Windows, with checksums and attestations. Plugin releases have namespaced
 tags and are marked as GitHub prereleases to keep `/releases/latest`
 pointing to the CLI. `avm plugin install <name>` looks the name up in
-`marketplace/registry.json` (name to repo, description and tags), then installs
+`marketplace/registry.json` (name to repo and description), then installs
 the newest `avm-plugin-<name>-v*` release from that repo (its latest release when
 the repo has no such tags). A new plugin needs one registry entry; a new version
 of an existing plugin needs none, since the registry stores no versions.
@@ -72,10 +66,11 @@ Third-party `owner/repo` installs skip the registry.
 
 ### Registry file
 
-`marketplace/registry.json` is `{ "<name>": { "repo": "https://github.com/<owner>/<repo>", "desc": "...", "tags": [...] } }`.
-The CLI fetches it from `main` (override with `AVM_REGISTRY_URL`, a URL or a file path),
-so merging an entry is all it takes to publish a plugin. Releases of the CLI from before
-this format read a different shape and cannot install by name until updated.
+`marketplace/registry.json` is `{ "schema_version": 1, "plugins": [{ "name": "<name>", "description": "...", "section_label": "...", "repo": "<owner>/<repo>", "release_tag": "..." }] }`.
+Only `name`, `repo` and `description` matter to current avm (optional `tags` feed `plugin search`);
+`section_label` is for the website and `release_tag` is the pin older avm releases follow.
+The CLI fetches the file from `main` (override with `AVM_REGISTRY_URL`, a URL or a file path),
+so merging an entry is all it takes to publish a plugin.
 
 The old `avm-plugin-node`/`avm-plugin-java`/`avm-plugin-android` repositories
 have been deleted now that their code and release history live in this

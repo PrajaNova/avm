@@ -20,7 +20,7 @@ tar -czf "$WORK/$archive" -C "$WORK/build" avm-plugin-fake
 (cd "$WORK" && shasum -a 256 "$archive") > "$WORK/checksums.txt"
 assets="[{\"name\":\"$archive\",\"browser_download_url\":\"file://$WORK/$archive\"},{\"name\":\"checksums.txt\",\"browser_download_url\":\"file://$WORK/checksums.txt\"}]"
 # Names resolve through the registry, then that repo's `avm-plugin-<name>-v*` release.
-printf '{"fake":{"repo":"https://github.com/PrajaNova/avm","desc":"fake plugin","tags":[]}}\n' > "$WORK/registry.json"
+printf '{"schema_version":1,"plugins":[{"name":"fake","repo":"https://github.com/PrajaNova/avm","description":"fake plugin"}]}\n' > "$WORK/registry.json"
 export AVM_REGISTRY_URL="$WORK/registry.json"
 printf '[{"tag_name":"avm-plugin-fake-v1.0.0","assets":%s}]\n' "$assets" > "$WORK/api/repos/PrajaNova/avm/releases?per_page=100"
 "$BIN" plugin install fake

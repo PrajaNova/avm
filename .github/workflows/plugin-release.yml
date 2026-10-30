@@ -1,7 +1,8 @@
 name: Publish plugin (reusable)
 
 # First-party releases use namespaced tags and are marked as prereleases so
-# /releases/latest remains the CLI release. The registry pins each plugin tag.
+# /releases/latest remains the CLI release. avm installs the newest avm-plugin-<name>-v* release, so a
+# new plugin version needs no registry change.
 on:
   workflow_call:
     inputs:

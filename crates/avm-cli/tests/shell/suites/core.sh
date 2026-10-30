@@ -32,7 +32,7 @@ expect_contains "meta.json records verified" "$(cat "$HOME/.avm/plugins/avm-plug
 avm plugin uninstall fake >/dev/null 2>&1
 
 log "core: install by name through the registry"
-echo '{"fake":{"repo":"https://github.com/o/fake","desc":"a fake plugin","tags":["demo"]}}' > "$rel/registry.json"
+echo '{"schema_version":1,"plugins":[{"name":"fake","repo":"https://github.com/o/fake","description":"a fake plugin demo"}]}' > "$rel/registry.json"
 assets="{\"name\":\"avm-plugin-fake_linux_amd64.tar.gz\",\"browser_download_url\":\"file://$rel/avm-plugin-fake_linux_amd64.tar.gz\"},{\"name\":\"checksums.txt\",\"browser_download_url\":\"file://$rel/checksums.txt\"}"
 # `latest` is a decoy with no assets; only the tagged release in the listing can install.
 echo '{"tag_name":"v0","assets":[]}' > "$rel/api/repos/o/fake/releases/latest"

@@ -1,15 +1,30 @@
-//! The plugin registry: a JSON map of plugin name to where its releases live,
-//! `{ "<name>": { "repo": "<github url>", "desc": "...", "tags": [...] } }`.
-//! It only names the repo; the binary always comes from that repo's release.
+//! The plugin registry, `marketplace/registry.json`:
+//! `{ "schema_version": 1, "plugins": [{ "name", "description", "repo", ... }] }`.
+//! It only names the repo; the binary always comes from the newest `avm-plugin-<name>-v*`
+//! release of that repo, so a new plugin version never needs a registry change. Entries may
+//! still carry `section_label` (the website) and `release_tag` (the pin older avm releases
+//! install); both are ignored here.
 use super::*;
 use std::collections::BTreeMap;
 
-/// One registry entry: the repo whose releases carry the plugin, a description and search tags.
+/// The only registry layout this avm understands; a newer one asks the user to update avm.
+const SCHEMA_VERSION: u32 = 1;
+
+/// The file as published: a schema version and the list of plugins.
+#[derive(Debug, serde::Deserialize)]
+struct RegistryFile {
+    schema_version: u32,
+    plugins: Vec<RegistryEntry>,
+}
+
+/// One registry entry: the plugin name, the repo whose releases carry it, a description and
+/// optional search tags.
 #[derive(Debug, serde::Deserialize)]
 pub struct RegistryEntry {
+    pub name: String,
     pub repo: String,
     #[serde(default)]
-    pub desc: String,
+    pub description: String,
     #[serde(default)]
     pub tags: Vec<String>,
 }
@@ -30,12 +45,24 @@ pub(super) fn load_registry() -> Result<Registry> {
     parse_registry(&body).with_context(|| format!("invalid plugin registry at {url}"))
 }
 
-/// Parses registry JSON, rejecting entries whose name or repo link is unusable.
+/// Parses registry JSON, rejecting an unsupported schema, duplicate names and entries whose
+/// name or repo link is unusable.
 fn parse_registry(body: &[u8]) -> Result<Registry> {
-    let registry: Registry = serde_json::from_slice(body).context("malformed JSON")?;
-    for (name, entry) in &registry {
-        avm_plugin_sdk::validate_name(name)?;
-        repo_slug(&entry.repo).with_context(|| format!("plugin '{name}'"))?;
+    let file: RegistryFile = serde_json::from_slice(body).context("malformed JSON")?;
+    if file.schema_version != SCHEMA_VERSION {
+        return Err(anyhow!(
+            "unsupported registry schema_version {} (this avm reads {SCHEMA_VERSION}); update avm",
+            file.schema_version
+        ));
+    }
+    let mut registry = Registry::new();
+    for entry in file.plugins {
+        avm_plugin_sdk::validate_name(&entry.name)?;
+        repo_slug(&entry.repo).with_context(|| format!("plugin '{}'", entry.name))?;
+        let name = entry.name.clone();
+        if registry.insert(name.clone(), entry).is_some() {
+            return Err(anyhow!("plugin '{name}' is listed twice"));
+        }
     }
     Ok(registry)
 }
@@ -82,9 +109,9 @@ fn matching(registry: &Registry, keyword: &str) -> Vec<(String, String)> {
     registry
         .iter()
         .filter(|(name, e)| {
-            hit(name) || hit(&e.desc) || e.tags.iter().any(|t| t.to_lowercase() == key)
+            hit(name) || hit(&e.description) || e.tags.iter().any(|t| t.to_lowercase() == key)
         })
-        .map(|(name, e)| (name.clone(), e.desc.clone()))
+        .map(|(name, e)| (name.clone(), e.description.clone()))
         .collect()
 }
 
@@ -93,27 +120,45 @@ mod tests {
     use super::*;
 
     const SAMPLE: &str = r#"{
-        "node": {"repo": "https://github.com/PrajaNova/avm", "desc": "Node.js", "tags": ["npm"]},
-        "java": {"repo": "PrajaNova/avm", "desc": "OpenJDK"}
+        "schema_version": 1,
+        "plugins": [
+            {"name": "node", "description": "Node.js", "section_label": "Node",
+             "repo": "PrajaNova/avm", "release_tag": "avm-plugin-node-v0.3.4", "tags": ["npm"]},
+            {"name": "java", "description": "OpenJDK", "repo": "https://github.com/PrajaNova/avm"}
+        ]
     }"#;
 
     #[test]
-    fn parses_entries_and_defaults_missing_fields() {
+    fn parses_entries_ignoring_pins_and_defaulting_missing_fields() {
         let registry = parse_registry(SAMPLE.as_bytes()).unwrap();
         assert_eq!(registry["node"].tags, ["npm"]);
         assert!(registry["java"].tags.is_empty());
+        assert_eq!(registry["java"].description, "OpenJDK");
     }
 
     #[test]
-    fn rejects_bad_names_repos_and_json() {
+    fn rejects_bad_names_repos_schema_duplicates_and_json() {
         for bad in [
-            r#"{"../x": {"repo": "o/r"}}"#,
-            r#"{"x": {"repo": "not a repo"}}"#,
-            r#"{"x": {"repo": "https://github.com/o"}}"#,
-            r#"{"x": {}}"#,
+            r#"{"schema_version":1,"plugins":[{"name":"../x","repo":"o/r"}]}"#,
+            r#"{"schema_version":1,"plugins":[{"name":"x","repo":"not a repo"}]}"#,
+            r#"{"schema_version":1,"plugins":[{"name":"x","repo":"https://github.com/o"}]}"#,
+            r#"{"schema_version":1,"plugins":[{"name":"x"}]}"#,
+            r#"{"schema_version":2,"plugins":[]}"#,
+            r#"{"plugins":[]}"#,
+            r#"{"schema_version":1,"plugins":[{"name":"x","repo":"o/r"},{"name":"x","repo":"o/r"}]}"#,
+            r#"{"node":{"repo":"o/r"}}"#,
             "[]",
         ] {
             assert!(parse_registry(bad.as_bytes()).is_err(), "{bad}");
+        }
+    }
+
+    #[test]
+    fn the_checked_in_registry_parses() {
+        let body = include_bytes!("../../../../marketplace/registry.json");
+        let registry = parse_registry(body).unwrap();
+        for name in ["node", "java", "python", "android"] {
+            assert!(registry.contains_key(name), "{name}");
         }
     }
 

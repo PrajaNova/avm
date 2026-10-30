@@ -12,7 +12,7 @@ pub const MARKETPLACE_TIMEOUT_SECS: u32 = 20;
 pub const MARKETPLACE_INSTALL_TIMEOUT_MS: u64 = 300_000;
 pub const DEFAULT_PLUGIN_PATH_ENV: &str =
     "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin";
-/// Plugin registry: name to repo, description and tags. `AVM_REGISTRY_URL` overrides it.
+/// Plugin registry: a list of plugins with their repo and description. `AVM_REGISTRY_URL` overrides it.
 pub const REGISTRY_URL: &str =
     "https://raw.githubusercontent.com/PrajaNova/avm/main/marketplace/registry.json";
 /// A repo that ships several plugins tags each release `avm-plugin-<name>-v<version>`.

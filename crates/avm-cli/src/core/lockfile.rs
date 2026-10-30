@@ -75,7 +75,7 @@ pub fn load(dir: &Path) -> Result<Option<Lockfile>> {
         serde_json::from_slice(&raw).with_context(|| format!("invalid {}", path.display()))?;
     if lock.version != 1 {
         bail!(
-            "unsupported .avm.lock version {}; update avm or regenerate with `avm lock`",
+            "unsupported .avm.lock version {}; update avm or regenerate with `avm plugin lock`",
             lock.version
         );
     }
@@ -90,7 +90,7 @@ pub fn load(dir: &Path) -> Result<Option<Lockfile>> {
                 != Some(&entry.resolved)
         {
             bail!(
-                "locked {tool} {} does not satisfy '{}'; run `avm lock`",
+                "locked {tool} {} does not satisfy '{}'; run `avm plugin lock`",
                 entry.resolved,
                 entry.requested
             );
@@ -98,7 +98,7 @@ pub fn load(dir: &Path) -> Result<Option<Lockfile>> {
         if let Some((_, build)) = entry.requested.split_once('+') {
             if entry.resolved.split_once('+').map(|(_, b)| b) != Some(build) {
                 bail!(
-                    "locked {tool} {} does not satisfy '{}'; run `avm lock`",
+                    "locked {tool} {} does not satisfy '{}'; run `avm plugin lock`",
                     entry.resolved,
                     entry.requested
                 );
@@ -106,7 +106,7 @@ pub fn load(dir: &Path) -> Result<Option<Lockfile>> {
         }
         if entry.plugin.name != *tool || entry.plugin.version.is_empty() || entry.assets.is_empty()
         {
-            bail!("invalid lock entry for {tool}; run `avm lock`");
+            bail!("invalid lock entry for {tool}; run `avm plugin lock`");
         }
         for (platform, hash) in &entry.plugin.binaries {
             validate_platform(platform)?;
@@ -145,7 +145,7 @@ impl Lockfile {
                     .is_none_or(|entry| entry.requested != *spec)
             })
         {
-            bail!(".avm.lock is out of date with the selected tools; run `avm lock`");
+            bail!(".avm.lock is out of date with the selected tools; run `avm plugin lock`");
         }
         Ok(())
     }

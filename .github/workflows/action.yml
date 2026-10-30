@@ -22,7 +22,7 @@ jobs:
       - run: avm-bin --version && test "$FOO" = bar
 
   # No lock: plain `avm install`. The --frozen path can't run here until the released node
-  # plugin supports `avm lock` (v0.3.3 does not).
+  # plugin supports `avm plugin lock` (v0.3.3 does not).
   install:
     runs-on: ubuntu-latest
     steps:

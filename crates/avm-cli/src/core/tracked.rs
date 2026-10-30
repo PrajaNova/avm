@@ -1,4 +1,4 @@
-//! Project directories whose config pins tools, so `avm prune` keeps their versions.
+//! Project directories whose config pins tools, so `avm plugin prune` keeps their versions.
 use super::store;
 use crate::shims;
 use anyhow::Result;

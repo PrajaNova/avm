@@ -42,7 +42,7 @@ to the child PATH. They never save pins or lockfiles. `exec` replaces the proces
 on Unix; other platforms wait and return the command's exit code.
 
 `avm -p install` installs all effective tool selections without changing pins.
-`avm lock` resolves project selections, excluding personal global pins, and
+`avm plugin lock` resolves project selections, excluding personal global pins, and
 updates the nearest existing lock or creates one next to the nearest project
 config. Resolution uses the nearest current or ancestor lock;
 changed selections invalidate the lock rather than silently changing versions.

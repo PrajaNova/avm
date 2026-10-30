@@ -31,6 +31,42 @@ pub enum PluginCommands {
     List,
     /// Search first-party plugins and GitHub repos tagged `avm-plugin`.
     Search { keyword: String },
+    /// Show pinned tools with newer versions (in range and overall).
+    Outdated {
+        #[arg(long)]
+        json: bool,
+    },
+    /// Install the newest version within each pin's range and update .avm.json pins.
+    Upgrade {
+        /// Only these tools (default: every pinned tool).
+        tools: Vec<String>,
+        /// Move to the latest release even across a major version.
+        #[arg(long)]
+        bump: bool,
+        #[arg(long)]
+        dry_run: bool,
+        #[arg(short = 'y', long)]
+        yes: bool,
+    },
+    /// Resolve selected tools and write a reproducible .avm.lock.
+    Lock {
+        /// Platforms to lock (default: this host), comma-separated.
+        #[arg(long, value_delimiter = ',')]
+        platform: Vec<String>,
+    },
+    /// Remove installed versions no project or global pin uses.
+    Prune {
+        /// Only versions not used in this long, e.g. 90d.
+        #[arg(long)]
+        older_than: Option<String>,
+        /// Also consider versions avm has never seen used (e.g. installed before avm recorded use).
+        #[arg(long)]
+        include_unrecorded: bool,
+        #[arg(long)]
+        dry_run: bool,
+        #[arg(short = 'y', long)]
+        yes: bool,
+    },
 }
 
 impl Manager for PluginManager {

@@ -21,7 +21,7 @@ export const HomePage = ({ onCopy }: { onCopy: (text: string) => void }) => (
           <div className="terminal-surface p-6 border-t border-line font-mono text-sm leading-8">
             <div className="flex items-center gap-2 text-secondary text-xs mb-3"><Terminal className="w-4 h-4" /> A consistent starting point</div>
             <div><span className="text-accent select-none">$ </span>avm -p install</div>
-            <div><span className="text-accent select-none">$ </span>avm lock</div>
+            <div><span className="text-accent select-none">$ </span>avm plugin lock</div>
             <div><span className="text-accent select-none">$ </span>avm run dev</div>
           </div>
         </div>

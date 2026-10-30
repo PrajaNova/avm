@@ -2,8 +2,9 @@ use crate::constants::msg::*;
 use crate::plugins as runtime;
 use crate::plugins::PluginRegistry;
 use crate::plugins::{cmd_plugin_list, PluginCommands};
-use crate::project::cmd_install;
-use crate::run::task::{Cmd, Runnable};
+use crate::global::{cmd_outdated, cmd_upgrade};
+use crate::project::{cmd_install, cmd_lock, cmd_prune};
+use crate::run::task::{Cmd, Runnable, Task};
 use anyhow::Result;
 
 pub struct PluginInstall {
@@ -55,6 +56,20 @@ impl PluginCommands {
             Self::Uninstall { names } => Box::new(PluginUninstall { names }),
             Self::List => Box::new(PluginList),
             Self::Search { keyword } => Box::new(PluginSearch { keyword }),
+            Self::Outdated { json } => Task::cmd(move || cmd_outdated(json)),
+            Self::Upgrade {
+                tools,
+                bump,
+                dry_run,
+                yes,
+            } => Task::cmd(move || cmd_upgrade(tools, bump, dry_run, yes)),
+            Self::Lock { platform } => Task::cmd(move || cmd_lock(platform)),
+            Self::Prune {
+                older_than,
+                include_unrecorded,
+                dry_run,
+                yes,
+            } => Task::cmd(move || cmd_prune(older_than, include_unrecorded, dry_run, yes)),
         }
     }
 }

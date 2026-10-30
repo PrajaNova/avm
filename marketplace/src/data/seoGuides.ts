@@ -41,7 +41,7 @@ export const SEO_GUIDES: SeoGuide[] = [
       { title: 'It follows the directory', paragraphs: ['AVM searches upward from the current directory, nearest file first. Entering another project with a different pin switches Node.js for that project; leaving it falls back to your global default in ~/.avm.json. Plain commands such as node and npm are intercepted through shims, so the right version runs without extra steps.'] },
       { title: 'Use files you already have', paragraphs: ['If the repository has .nvmrc, .node-version, .tool-versions or an engines.node range in package.json, AVM reads them without any migration. Add .avm.json only when you want to override or add tools such as Java.'] },
       { title: 'Try another version without changing the pin', paragraphs: ['avm exec runs one command with a temporary version. Project and global pins and lockfiles stay unchanged; a missing runtime is installed automatically unless you pass --no-install.'], code: 'avm exec node@18 -- npm test\navm x node@22 java@21 -- ./gradlew build' },
-      { title: 'Make it reproducible for the team', paragraphs: ['Lock fuzzy versions such as 22 to exact releases and commit .avm.lock. New teammates run avm -p install, and CI runs avm -p install --frozen, which rejects stale configuration and verifies the locked archive checksums.'], code: 'avm lock\ngit add .avm.json .avm.lock\n# new machine or CI\navm -p install --frozen' },
+      { title: 'Make it reproducible for the team', paragraphs: ['Lock fuzzy versions such as 22 to exact releases and commit .avm.lock. New teammates run avm -p install, and CI runs avm -p install --frozen, which rejects stale configuration and verifies the locked archive checksums.'], code: 'avm plugin lock\ngit add .avm.json .avm.lock\n# new machine or CI\navm -p install --frozen' },
     ],
   },
   {
@@ -59,7 +59,7 @@ export const SEO_GUIDES: SeoGuide[] = [
       { title: 'Pin a JDK per project', paragraphs: ['avm java use writes the version to .avm.json for the current repository; add --global for a machine default. AVM also reads .java-version and .sdkmanrc, so existing projects work unchanged.'], code: 'avm java use 21\navm java use 17 --global' },
       { title: 'JAVA_HOME without editing profiles', paragraphs: ['The plugin provides JAVA_HOME for the selected version when commands run through AVM, so you do not export it in your shell profile. Check the result with avm which java.'] },
       { title: 'Build with another JDK once', paragraphs: ['Run a single command against a different JDK without touching your pins.'], code: 'avm x java@17 -- ./gradlew build' },
-      { title: 'Lock the JDK for CI', paragraphs: ['Java supports lockfiles. avm lock records exact releases and archive checksums for each platform, and avm -p install --frozen verifies them.'], code: 'avm lock --platform linux_amd64,darwin_arm64,windows_amd64\navm -p install --frozen' },
+      { title: 'Lock the JDK for CI', paragraphs: ['Java supports lockfiles. avm plugin lock records exact releases and archive checksums for each platform, and avm -p install --frozen verifies them.'], code: 'avm plugin lock --platform linux_amd64,darwin_arm64,windows_amd64\navm -p install --frozen' },
     ],
   },
 ];

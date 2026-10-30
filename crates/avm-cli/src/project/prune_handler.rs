@@ -1,4 +1,4 @@
-//! `avm prune`, plus the `.last_used` marker shims write.
+//! `avm plugin prune`, plus the `.last_used` marker shims write.
 use crate::common::state::home_dir;
 use crate::core::tracked;
 use crate::global::confirm;
@@ -116,7 +116,7 @@ fn global_packages(tool: &str, version_dir: &Path) -> Vec<String> {
     pkgs.into_iter().collect()
 }
 
-/// `avm prune`: removes installed tool versions that no global pin or tracked project still wants.
+/// `avm plugin prune`: removes installed tool versions that no global pin or tracked project still wants.
 /// `older_than` (days) spares versions used more recently, `include_unrecorded` also removes versions with no
 /// usage record, `dry_run` only reports and `yes` skips the confirmation.
 pub fn cmd_prune(
@@ -275,7 +275,7 @@ pub fn cmd_prune(
     let _guard = avm_plugin_sdk::storage::lock(&tracked)?;
     if tracked::dirs()? != tracked_snapshot {
         return Err(anyhow!(
-            "a project was tracked while pruning; nothing was removed, re-run `avm prune`"
+            "a project was tracked while pruning; nothing was removed, re-run `avm plugin prune`"
         ));
     }
     for (tool, version, path, _) in doomed {

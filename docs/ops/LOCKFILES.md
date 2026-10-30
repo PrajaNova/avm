@@ -13,12 +13,12 @@ continue to include global selections.
 A non-frozen `avm -p install` in a project with tools and no lock also writes
 `.avm.lock` (best effort: if a plugin cannot lock, it prints a warning and the
 install still succeeds; update old plugins with `avm plugin install <tool>`).
-With no project tools, `avm lock` and `avm -p install --frozen` print
+With no project tools, `avm plugin lock` and `avm -p install --frozen` print
 `Nothing to lock` / `Nothing to install` and write nothing.
 
 ```bash
-avm lock
-avm lock --platform linux_amd64,darwin_arm64,windows_amd64
+avm plugin lock
+avm plugin lock --platform linux_amd64,darwin_arm64,windows_amd64
 avm -p install --frozen
 ```
 
@@ -57,9 +57,9 @@ Commit the lockfile. Aliases, shims, `avm env`, `avm which`
 and ordinary `avm -p install` use its resolved versions. Changing a selected tool
 or its requested spec makes the lock stale. A stale lock prints one warning and
 commands fall back to the `.avm.json` versions, so shims and the prompt keep
-working; only `avm -p install --frozen` fails (`run avm lock`). `avm node use`,
-`avm upgrade` and other local pin changes regenerate an existing lock, and a
-non-frozen `avm -p install` regenerates a stale one. Explicit `avm lock` reads
+working; only `avm -p install --frozen` fails (`run avm plugin lock`). `avm node use`,
+`avm plugin upgrade` and other local pin changes regenerate an existing lock, and a
+non-frozen `avm -p install` regenerates a stale one. Explicit `avm plugin lock` reads
 unlocked config so it can regenerate a stale or malformed lock. Resolution uses
 the nearest lock in the current directory or an ancestor. Subdirectories must
 still select the same tools (for example through inherited version files), or
@@ -71,7 +71,7 @@ Environment and alias edits do not invalidate the lock.
 asset for this platform. Installed native plugins must match the locked name
 and version. The host also checks the executable hash on platforms for which
 one was recorded. Cross-platform assets can be resolved remotely; executable
-hashes are recorded only for the host running `avm lock`, so other hosts check
+hashes are recorded only for the host running `avm plugin lock`, so other hosts check
 the plugin version until they record their own fingerprint. Installs warn
 explicitly when this platform's plugin binary has no pinned hash.
 

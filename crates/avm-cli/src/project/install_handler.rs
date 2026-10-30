@@ -32,7 +32,7 @@ fn plugin_pin(process: &runtime::PluginProcess, platform: &str) -> Result<Plugin
     })
 }
 
-/// `avm lock`: resolves the project's tools and writes `.avm.lock` for the host plus any extra `platforms`.
+/// `avm plugin lock`: resolves the project's tools and writes `.avm.lock` for the host plus any extra `platforms`.
 /// Prints a hint instead when no tools are configured.
 pub fn cmd_lock(platforms: Vec<String>) -> Result<()> {
     let cwd = std::env::current_dir()?;
@@ -149,7 +149,7 @@ pub fn cmd_install(frozen: bool) -> Result<()> {
     let mut lock = lockfile::load(&cwd)?;
     if frozen && lock.is_none() {
         return Err(anyhow!(
-            "--frozen requires .avm.lock; run `avm lock` and commit it first"
+            "--frozen requires .avm.lock; run `avm plugin lock` and commit it first"
         ));
     }
     if let Some(current) = &lock {
@@ -249,7 +249,7 @@ pub fn refresh_lock() {
         write_lock(&root, &cfg, platforms)
     };
     if let Err(err) = refresh() {
-        eprintln!("avm: could not refresh .avm.lock ({err:#}); run `avm lock`");
+        eprintln!("avm: could not refresh .avm.lock ({err:#}); run `avm plugin lock`");
     }
 }
 
@@ -262,7 +262,7 @@ fn locked_asset(tool: &str, entry: &LockedTool, platform: &str) -> Result<Locked
     let installed = plugin_pin(&process, platform)?;
     if installed.name != entry.plugin.name || installed.version != entry.plugin.version {
         return Err(anyhow!(
-            "{tool} plugin differs from .avm.lock; install plugin {} or regenerate with `avm lock`",
+            "{tool} plugin differs from .avm.lock; install plugin {} or regenerate with `avm plugin lock`",
             entry.plugin.version
         ));
     }
@@ -272,14 +272,14 @@ fn locked_asset(tool: &str, entry: &LockedTool, platform: &str) -> Result<Locked
             .get(platform)
             .is_none_or(|actual| !actual.eq_ignore_ascii_case(expected))
         {
-            return Err(anyhow!("{tool} plugin checksum differs from .avm.lock; restore the locked plugin or run `avm lock`"));
+            return Err(anyhow!("{tool} plugin checksum differs from .avm.lock; restore the locked plugin or run `avm plugin lock`"));
         }
     } else {
         warn!("{tool} plugin binary not pinned for {platform}; only plugin name and version are checked");
     }
     entry.assets.get(platform).cloned().ok_or_else(|| {
         anyhow!(
-            ".avm.lock has no {tool} download for {platform}; run `avm lock --platform {platform}`"
+            ".avm.lock has no {tool} download for {platform}; run `avm plugin lock --platform {platform}`"
         )
     })
 }

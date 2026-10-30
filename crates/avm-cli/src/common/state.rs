@@ -32,7 +32,7 @@ fn load_state_with(aliases: bool) -> Result<ResolvedConfig> {
     };
     let cfg = crate::resolver::load(&cwd, &home_dir()?, plugin_aliases)?;
     if !cfg.local_tools.is_empty() {
-        crate::core::tracked::track(&cwd); // so `avm prune` keeps this project's versions
+        crate::core::tracked::track(&cwd); // so `avm plugin prune` keeps this project's versions
     }
     Ok(cfg)
 }

@@ -1,9 +1,9 @@
 //! Global manager, the wildcard: lookups across every layer (`which`, `resolve`,
-//! `run`, `outdated`, `upgrade`) and `avm <name> ...` for anything no other
+//! `run`) and `avm <name> ...` for anything no other
 //! manager claims. That is an alias first, then an installed plugin's command.
 use crate::args::{Cli, Commands};
 use crate::common::manager::Manager;
-use crate::global::{cmd_outdated, cmd_resolve, cmd_run, cmd_upgrade, cmd_which};
+use crate::global::{cmd_resolve, cmd_run, cmd_which};
 use crate::run::task::{Cmd, Task};
 use anyhow::{anyhow, Result};
 use clap::{Args, Parser, Subcommand};
@@ -16,23 +16,6 @@ pub enum GlobalManager {
     Resolve(ResolveArgs),
     /// Run an alias with optional arguments.
     Run(RunArgs),
-    /// Show pinned tools with newer versions (in range and overall).
-    Outdated {
-        #[arg(long)]
-        json: bool,
-    },
-    /// Install the newest version within each pin's range and update .avm.json pins.
-    Upgrade {
-        /// Only these tools (default: every pinned tool).
-        tools: Vec<String>,
-        /// Move to the latest release even across a major version.
-        #[arg(long)]
-        bump: bool,
-        #[arg(long)]
-        dry_run: bool,
-        #[arg(short = 'y', long)]
-        yes: bool,
-    },
 }
 
 // `disable_help_flag`: these forward trailing args verbatim to whatever the
@@ -71,13 +54,6 @@ impl Manager for GlobalManager {
             Self::Which { key } => Task::cmd(move || cmd_which(&key)),
             Self::Resolve(args) => Task::quiet(move || cmd_resolve(args)),
             Self::Run(args) => Task::quiet(move || cmd_run(args)),
-            Self::Outdated { json } => Task::cmd(move || cmd_outdated(json)),
-            Self::Upgrade {
-                tools,
-                bump,
-                dry_run,
-                yes,
-            } => Task::cmd(move || cmd_upgrade(tools, bump, dry_run, yes)),
         }
     }
 }

@@ -385,7 +385,7 @@ export const DocsPage: React.FC<DocsPageProps> = ({ onCopy }) => {
                 <div>
                   <span className="text-accent font-bold text-sm block mb-1">Reproducible Installs for Teams and CI</span>
                   <p className="text-secondary font-sans text-xs mb-2">Install all selected tools without repinning. Lock fuzzy versions to exact releases and commit .avm.lock; frozen installs reject stale config and verify locked archive checksums.</p>
-                  <pre className="p-3 rounded-lg bg-page text-secondary border border-line overflow-x-auto">{'$ avm -p install\n$ avm lock --platform linux_amd64,darwin_arm64,windows_amd64\n$ avm -p install --frozen'}</pre>
+                  <pre className="p-3 rounded-lg bg-page text-secondary border border-line overflow-x-auto">{'$ avm -p install\n$ avm plugin lock --platform linux_amd64,darwin_arm64,windows_amd64\n$ avm -p install --frozen'}</pre>
                   <p className="text-secondary font-sans text-xs mt-2">Locking fetches metadata without installing runtimes. Upgrade the Node and Java plugins for lockfile support. Android and legacy asdf plugins currently support ordinary installs only.</p>
                 </div>
               </div>

@@ -64,7 +64,7 @@ impl PluginProcess {
     /// `env-vars` is read on every prompt and shim call, and is a fixed answer for a
     /// given plugin binary and version, so it's cached under `~/.avm/cache`. The key
     /// includes the plugin executable's mtime and size, so updating the plugin
-    /// invalidates it. `avm prune` removes old entries.
+    /// invalidates it. `avm plugin prune` removes old entries.
     fn env_cache_path(&self, version: &str) -> Option<PathBuf> {
         avm_plugin_sdk::download::validate_version(version).ok()?;
         let meta = fs::metadata(&self.executable).ok()?;

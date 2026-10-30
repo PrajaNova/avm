@@ -8,7 +8,7 @@ export const EXTENDED_PLUGIN_METADATA: Record<string, PluginDetail> = {
       'Automatic package.json script aliases (avm test, avm dev, etc.)',
       'Global packages (npm -g) stay reachable across local version switches',
       'Zero-compile binary fetch for your exact platform architecture',
-      'SHA-256 verified locked installs with avm lock and avm -p install --frozen'
+      'SHA-256 verified locked installs with avm plugin lock and avm -p install --frozen'
     ],
     keyCommands: [
       { command: 'avm plugin install node', description: 'Install native Node.js provider binary' },
@@ -61,7 +61,7 @@ export const EXTENDED_PLUGIN_METADATA: Record<string, PluginDetail> = {
       'Full version history from Astral\'s versions feed, cached locally',
       'SHA-256 verified installs, no compiler or system headers needed',
       'Reads .python-version and .tool-versions',
-      'Cross-platform lock metadata for avm lock'
+      'Cross-platform lock metadata for avm plugin lock'
     ],
     keyCommands: [
       { command: 'avm plugin install python', description: 'Install native CPython provider binary' },

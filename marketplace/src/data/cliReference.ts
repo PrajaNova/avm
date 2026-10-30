@@ -63,11 +63,11 @@ export const CLI_COMMANDS: CliCommand[] = [
     example: 'avm -p install --frozen'
   },
   {
-    command: 'avm lock',
+    command: 'avm plugin lock',
     args: '[--platform linux_amd64,darwin_arm64,windows_amd64]',
     category: 'Core',
     description: 'Locks project selections, excluding personal global pins, with exact versions, plugin identities and per-platform SHA-256 checksums. Requires updated native Node or Java plugins; Android and asdf support unlocked installs only.',
-    example: 'avm lock --platform linux_amd64,darwin_arm64'
+    example: 'avm plugin lock --platform linux_amd64,darwin_arm64'
   },
   {
     command: 'avm env',
@@ -226,25 +226,25 @@ node  22.14.0  local  ./.avm.json  20.11.1  22.14.0*`
     "example": "avm env list"
   },
   {
-    "command": "avm outdated",
+    "command": "avm plugin outdated",
     "args": "[--json]",
     "category": "Versions",
     "description": "Show current runtime selections, newest releases within the selected range and overall, and pin sources.",
-    "example": "avm outdated --json"
+    "example": "avm plugin outdated --json"
   },
   {
-    "command": "avm upgrade",
+    "command": "avm plugin upgrade",
     "args": "[tools...] [--bump] [--dry-run] [-y]",
     "category": "Versions",
     "description": "Install newer versions within each pin range and update editable base pins. --bump allows major changes and asks for confirmation; -y confirms. Inherited/profile/version-file pins are kept at their source. Regenerate locks after pin changes.",
-    "example": "avm upgrade node --dry-run"
+    "example": "avm plugin upgrade node --dry-run"
   },
   {
-    "command": "avm prune",
+    "command": "avm plugin prune",
     "args": "[--older-than 90d] [--include-unrecorded] [--dry-run] [-y]",
     "category": "Versions",
     "description": "Remove versions unused by global pins or tracked projects. Preview first. --include-unrecorded considers versions without usage records; -y confirms deletion.",
-    "example": "avm prune --older-than 90d --dry-run"
+    "example": "avm plugin prune --older-than 90d --dry-run"
   },
   {
     "command": "avm self-update",

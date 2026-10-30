@@ -1,4 +1,4 @@
-//! `avm outdated` and `avm upgrade`.
+//! `avm plugin outdated` and `avm plugin upgrade`.
 use crate::common::config_utils::alias_source_label;
 use crate::common::state::load_state;
 use crate::common::ui;
@@ -127,7 +127,7 @@ fn print_table(header: &[&str], rows: &[Vec<String>]) {
     }
 }
 
-/// `avm outdated`: shows requested, current and latest versions per tool, as JSON when `json` is set.
+/// `avm plugin outdated`: shows requested, current and latest versions per tool, as JSON when `json` is set.
 pub fn cmd_outdated(json: bool) -> Result<()> {
     let cfg = load_state()?;
     let rows = statuses(&cfg, &[])?;
@@ -194,7 +194,7 @@ pub fn confirm(question: &str, yes: bool) -> Result<bool> {
     Ok(matches!(answer.trim(), "y" | "Y" | "yes"))
 }
 
-/// `avm upgrade`: moves pinned tools to the newest in-range version, or the newest overall with `bump`.
+/// `avm plugin upgrade`: moves pinned tools to the newest in-range version, or the newest overall with `bump`.
 /// `dry_run` only prints the plan; `yes` skips the confirmation.
 pub fn cmd_upgrade(tools: Vec<String>, bump: bool, dry_run: bool, yes: bool) -> Result<()> {
     let cfg = load_state()?;

@@ -225,7 +225,7 @@ mod tests {
     fn wrappers_list_every_builtin_from_clap() {
         for script in [shell_init_script(), pwsh_init_script()] {
             assert!(!script.contains("__AVM_BUILTINS"));
-            for name in ["alias", "help", "run", "ls", "prune"] {
+            for name in ["alias", "help", "run", "ls", "plugin"] {
                 assert!(script.contains(name), "{name}");
             }
         }

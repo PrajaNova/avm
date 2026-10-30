@@ -40,7 +40,7 @@ e2e/run.sh core node    # some suites
   - `src/shims.rs`: shims and PATH lookup
   - `src/runtime.rs`: plugin discovery, the protocol host, the verified marketplace installer, and the asdf adapter
   - `src/update.rs`: `self-update` and the update notice
-- `crates/avm-plugin-api` is the one crate a plugin depends on: the `ToolProvider` trait, the wire protocol, the runner, and the sha256 helpers.
+- `crates/avm-plugin-sdk` is the one crate a plugin depends on: the `ToolProvider` trait, the wire protocol, the runner, and the sha256 helpers.
 - `plugins/avm-plugin-{node,java,android}` are members of this Cargo workspace. They use the local plugin API and remain separate executables, installed at runtime like third-party plugins.
 - `marketplace/` contains the React frontend and `registry.json`. From that directory, run `pnpm install --frozen-lockfile`, `pnpm dev`, or `pnpm build`. CI builds it on every PR.
 
@@ -96,7 +96,7 @@ cargo clippy --workspace --all-targets
 - Keep command wiring in `crates/avm-cli/src/cli`.
 - Keep config and resolver logic in `crates/avm-cli/src/{config,resolver}.rs`.
 - Keep shim behavior in `crates/avm-cli/src/shims.rs`.
-- Keep provider contracts in `crates/avm-plugin-api`.
+- Keep provider contracts in `crates/avm-plugin-sdk`.
 - Keep external plugin execution in `crates/avm-cli/src/runtime.rs`.
 - Avoid panics in runtime paths.
 - Preserve `.avm.json` compatibility.

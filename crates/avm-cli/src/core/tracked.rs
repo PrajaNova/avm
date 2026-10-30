@@ -1,5 +1,6 @@
 //! Project directories whose config pins tools, so `avm prune` keeps their versions.
-use super::{shims, store};
+use super::store;
+use crate::shims;
 use anyhow::Result;
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
@@ -27,7 +28,7 @@ pub fn track(dir: &Path) {
         if dirs().is_ok_and(|known| known.contains(&key)) {
             return Ok(());
         }
-        let _guard = avm_plugin_api::storage::lock(&path()?)?;
+        let _guard = avm_plugin_sdk::storage::lock(&path()?)?;
         let mut known = dirs()?;
         if known.insert(key) {
             replace(&known)?;

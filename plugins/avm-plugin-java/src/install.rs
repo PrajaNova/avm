@@ -1,7 +1,7 @@
 use crate::versions::{find_package, package_sha256, strip_avm_prefix};
 use anyhow::{Context, Result};
-use avm_plugin_api::tool_dir;
-use std::fs;
+use avm_plugin_sdk::tool_dir;
+use fs_err as fs;
 
 const CURL_TIMEOUT_MS: u64 = 300_000;
 const TAR_TIMEOUT_MS: u64 = 120_000;
@@ -14,11 +14,11 @@ pub fn install_java(version: &str) -> Result<()> {
 /// Installs a JDK under a per-version lock, using `locked` when given or the resolved package otherwise; verifies the checksum and errors on download or extract failure.
 pub fn install(
     version: &str,
-    locked: Option<&avm_plugin_api::protocol::LockedAsset>,
+    locked: Option<&avm_plugin_sdk::protocol::LockedAsset>,
 ) -> Result<()> {
-    avm_plugin_api::download::validate_version(version)?;
+    avm_plugin_sdk::download::validate_version(version)?;
     let tools_root = tool_dir("java")?;
-    let _guard = avm_plugin_api::storage::lock(&tools_root.join(format!(".install-{version}")))?;
+    let _guard = avm_plugin_sdk::storage::lock(&tools_root.join(format!(".install-{version}")))?;
     let target = tools_root.join(version);
     if target.join("bin").join(crate::JAVA_BIN).exists() {
         return Ok(());
@@ -35,12 +35,12 @@ pub fn install(
 
     let archive = tmp.join(format!("jdk.{}", crate::versions::ARCHIVE_TYPE));
     let download = if let Some(asset) = locked {
-        avm_plugin_api::download::download_verified(asset, &archive)
+        avm_plugin_sdk::download::download_verified(asset, &archive)
     } else {
         (|| {
             let package = find_package(strip_avm_prefix(version))?;
             let url = &package.links.pkg_download_redirect;
-            avm_plugin_api::download::download(
+            avm_plugin_sdk::download::download(
                 url,
                 &archive,
                 CURL_TIMEOUT_MS,
@@ -57,7 +57,7 @@ pub fn install(
     }
 
     // Temurin tarballs have exactly one root dir (e.g. `jdk-21.0.12+7`) — strip it.
-    avm_plugin_api::download::extract_archive(
+    avm_plugin_sdk::download::extract_archive(
         &archive,
         &jdk,
         1,
@@ -95,7 +95,7 @@ fn verify_archive(package: &crate::versions::Package, archive: &std::path::Path)
         }
     };
     let name = format!("jdk.{}", crate::versions::ARCHIVE_TYPE);
-    avm_plugin_api::verify_sha256(archive, &format!("{expected}  {name}"), &name)
+    avm_plugin_sdk::verify_sha256(archive, &format!("{expected}  {name}"), &name)
         .map(|_| ())
         .context("refusing to install OpenJDK")
 }

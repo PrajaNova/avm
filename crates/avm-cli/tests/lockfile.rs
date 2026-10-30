@@ -71,7 +71,7 @@ else:
 "#.replace("TOOL", tool);
             let path = bin.join("avm-plugin");
             fs::write(&path, script).unwrap();
-            fs::set_permissions(path, fs::Permissions::from_mode(0o755)).unwrap();
+            fs::set_permissions(path, std::fs::Permissions::from_mode(0o755)).unwrap();
         }
         Self(root)
     }
@@ -138,7 +138,7 @@ fn nested_lock_commands_update_the_project_lock() {
     assert!(!project.0.join("project/packages/web/.avm.lock").exists());
     fs::set_permissions(
         project.0.join("project/.avm.lock"),
-        fs::Permissions::from_mode(0o640),
+        std::fs::Permissions::from_mode(0o640),
     )
     .unwrap();
     fs::write(project.0.join("remote"), "20.3.0").unwrap();
@@ -289,7 +289,7 @@ fn locks_installs_and_rejects_drift_before_installing() {
     assert!(
         warning.contains(&format!(
             "node plugin binary not pinned for {}",
-            avm_plugin_api::download::host_platform().unwrap()
+            avm_plugin_sdk::download::host_platform().unwrap()
         )),
         "{warning}"
     );
@@ -417,7 +417,7 @@ fn locks_installs_and_rejects_drift_before_installing() {
     .unwrap();
     fs::write(legacy.join("install"), "#!/bin/sh\nmkdir -p \"$ASDF_INSTALL_PATH/bin\"\nprintf '#!/bin/sh\\necho ruby\\n' > \"$ASDF_INSTALL_PATH/bin/ruby\"\nchmod +x \"$ASDF_INSTALL_PATH/bin/ruby\"\n").unwrap();
     for name in ["list-all", "install"] {
-        fs::set_permissions(legacy.join(name), fs::Permissions::from_mode(0o755)).unwrap();
+        fs::set_permissions(legacy.join(name), std::fs::Permissions::from_mode(0o755)).unwrap();
     }
     fs::write(
         project.0.join("project/.avm.json"),

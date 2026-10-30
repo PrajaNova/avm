@@ -85,7 +85,7 @@ fn concurrent_config_edits_preserve_every_alias() {
     let mut children = Vec::new();
     for n in 0..24 {
         children.push(
-            p.command(&["add", "-g", &format!("alias{n}"), "echo ok"])
+            p.command(&["alias", "add", "-g", &format!("alias{n}"), "echo ok"])
                 .stdout(std::process::Stdio::null())
                 .spawn()
                 .unwrap(),
@@ -107,7 +107,7 @@ fn concurrent_project_tracking_and_trust_preserve_every_project() {
         let dir = p.0.join(format!("project{n}"));
         fs::create_dir(&dir).unwrap();
         fs::write(dir.join(".avm.json"), r#"{"tools":{"node":"20"}}"#).unwrap();
-        for args in [vec!["trust", dir.to_str().unwrap()], vec!["list"]] {
+        for args in [vec!["trust", dir.to_str().unwrap()], vec!["plugin", "list"]] {
             children.push(
                 p.command(&args)
                     .current_dir(&dir)
@@ -138,7 +138,10 @@ fn malformed_configs_are_never_replaced_with_empty_state() {
     let file = p.0.join("home/.avm.json");
     let raw = br#"{"aliases":{"valuable":"echo saved"}, broken"#;
     fs::write(&file, raw).unwrap();
-    for args in [vec!["add", "-g", "new", "echo new"], vec!["prune", "--yes"]] {
+    for args in [
+        vec!["alias", "add", "-g", "new", "echo new"],
+        vec!["prune", "--yes"],
+    ] {
         let out = p.run(&args);
         assert!(!out.status.success());
         assert!(String::from_utf8_lossy(&out.stderr).contains("repair the file"));
@@ -152,12 +155,12 @@ fn json_pins_resolve_installed_versions_in_both_scopes() {
     fs::create_dir_all(p.0.join("home/.avm/tools/node/20.2.0/bin")).unwrap();
     fs::create_dir_all(p.0.join("home/.avm/tools/node/18.3.0/bin")).unwrap();
     fs::write(p.0.join("home/.avm.json"), r#"{"tools":{"node":"18"}}"#).unwrap();
-    let global = p.run(&["list"]);
+    let global = p.run(&["plugin", "list"]);
     assert!(global.status.success());
     let text = String::from_utf8_lossy(&global.stdout);
     assert!(text.contains("node") && text.contains("18.3.0") && text.contains("global"));
     fs::write(p.0.join("project/.avm.json"), r#"{"tools":{"node":"20"}}"#).unwrap();
-    let local = p.run(&["list"]);
+    let local = p.run(&["plugin", "list"]);
     assert!(local.status.success());
     let text = String::from_utf8_lossy(&local.stdout);
     assert!(text.contains("node") && text.contains("20.2.0") && text.contains("local"));
@@ -174,7 +177,7 @@ fn package_script_names_and_arguments_are_literal_data() {
     let bin = p.0.join("bin");
     fs::create_dir(&bin).unwrap();
     fs::write(bin.join("npm"), "#!/bin/sh\nprintf '%s\\n' \"$@\"\n").unwrap();
-    fs::set_permissions(bin.join("npm"), fs::Permissions::from_mode(0o755)).unwrap();
+    fs::set_permissions(bin.join("npm"), std::fs::Permissions::from_mode(0o755)).unwrap();
     let marker = p.0.join("injected");
     for name in [
         format!("hello; touch {}; #", marker.display()),
@@ -230,7 +233,7 @@ export PATH={}:$PATH
 eval "$(avm-bin shell-init)"
 [ "$AVM_TEST_EXISTING" = project ] && [ "$AVM_TEST_NEW" = temporary ] || exit 10
 cd ..
-avm list >/dev/null
+avm plugin list >/dev/null
 [ "$AVM_TEST_EXISTING" = "original ' value" ] && [ "${{AVM_TEST_NEW+x}}" != x ] || exit 11
 cd project
 _avm_apply_env
@@ -241,7 +244,7 @@ cd ..
 command avm-bin run check || exit 14
 printf restored
 "#,
-        avm_plugin_api::sh_quote(&bin.to_string_lossy())
+        avm_plugin_sdk::sh_quote(&bin.to_string_lossy())
     );
     for shell in ["bash", "zsh"] {
         fs::write(
@@ -313,7 +316,7 @@ fn managed_package_binaries_can_have_dotted_names() {
         ),
     ] {
         fs::write(&file, script).unwrap();
-        fs::set_permissions(file, fs::Permissions::from_mode(0o755)).unwrap();
+        fs::set_permissions(file, std::fs::Permissions::from_mode(0o755)).unwrap();
     }
     fs::write(
         p.0.join("project/.avm.json"),
@@ -380,7 +383,12 @@ fn hierarchical_profiles_merge_and_report_origins() {
                 .unwrap(),
         )
     };
-    let list = run(&["list"]);
+    let list = [
+        run(&["alias", "list"]),
+        run(&["env", "list"]),
+        run(&["plugin", "list"]),
+    ]
+    .join("\n");
     for text in [
         "build → echo staging",
         "parent → echo inherited",
@@ -423,7 +431,7 @@ fn hierarchical_profiles_merge_and_report_origins() {
     assert!(run(&["--env", "", "env", "--shell", "sh"]).contains("MODE=child"));
     // A root marker containing no maps is still a structured config.
     fs::write(nested.join(".avm.json"), r#"{"root":true}"#).unwrap();
-    let list = run(&["--env", "", "list"]);
+    let list = run(&["--env", "", "alias", "list"]);
     assert!(!list.contains("parent →"));
     assert!(list.contains("global →"));
     fs::write(repo.join(".avm.json"), "malformed above root").unwrap();
@@ -472,7 +480,7 @@ fn trust_and_cache_invalidation_apply_to_each_layer() {
         .write(true)
         .open(&profile)
         .unwrap()
-        .set_times(fs::FileTimes::new().set_modified(old_mtime))
+        .set_times(std::fs::FileTimes::new().set_modified(old_mtime))
         .unwrap();
     assert!(run(&["which", "build"]).contains("echo parent"));
     run(&["trust"]);
@@ -507,7 +515,7 @@ fn init_gitignores_personal_config_and_preserves_root_on_edit() {
         "target\n.avm.local.json\n"
     );
     fs::write(p.0.join("project/.avm.json"), r#"{"root":true}"#).unwrap();
-    stdout(p.run(&["add", "build", "echo build"]));
+    stdout(p.run(&["alias", "add", "build", "echo build"]));
     let cfg: serde_json::Value =
         serde_json::from_slice(&fs::read(p.0.join("project/.avm.json")).unwrap()).unwrap();
     assert_eq!(cfg["root"], true);
@@ -607,7 +615,7 @@ case "$(avm --env=ci which build)" in *"echo ci"*) ;; *) exit 11 ;; esac
 [ "$(avm --env ci run build)" = ci ] || exit 12
 [ "$(avm run build)" = base ] || exit 13
 "#,
-        avm_plugin_api::sh_quote(&bin.to_string_lossy())
+        avm_plugin_sdk::sh_quote(&bin.to_string_lossy())
     );
     for shell in ["bash", "zsh"] {
         let mut settings = p.command(&[]);
@@ -638,7 +646,7 @@ fn upgrade_keeps_inherited_pins_at_their_source() {
     fs::create_dir_all(&plugin).unwrap();
     let executable = plugin.join("avm-plugin");
     fs::write(&executable, "#!/bin/sh\necho '{\"versions\":[{\"version\":\"22.1.0\",\"label\":\"22\",\"is_lts\":true,\"is_security\":false},{\"version\":\"20.2.0\",\"label\":\"20\",\"is_lts\":true,\"is_security\":false}]}'\n").unwrap();
-    fs::set_permissions(&executable, fs::Permissions::from_mode(0o755)).unwrap();
+    fs::set_permissions(&executable, std::fs::Permissions::from_mode(0o755)).unwrap();
     fs::write(
         p.0.join("project/.avm.json"),
         r#"{"root":true,"tools":{"node":"20.1.0"}}"#,
@@ -705,7 +713,7 @@ fn broken_package_json_never_blocks_env_or_shims() {
     )
     .contains("package.json"));
     // Alias commands warn and carry on instead of failing.
-    let out = p.run(&["list"]);
+    let out = p.run(&["plugin", "list"]);
     assert!(out.status.success());
     assert!(String::from_utf8_lossy(&out.stderr).contains("ignoring package.json"));
 }
@@ -736,7 +744,11 @@ fn fake_env_plugins(p: &Project, tools: &[&str]) -> PathBuf {
         fs::create_dir_all(&bin).unwrap();
         let script = format!("#!/bin/sh\nif [ \"$1\" = env-vars ]; then echo x >> '{}'; echo '{{\"env\":{{\"{}_HOME\":\"/opt/{tool}\"}}}}'; fi\n", counter.display(), tool.to_uppercase());
         fs::write(bin.join("avm-plugin"), script).unwrap();
-        fs::set_permissions(bin.join("avm-plugin"), fs::Permissions::from_mode(0o755)).unwrap();
+        fs::set_permissions(
+            bin.join("avm-plugin"),
+            std::fs::Permissions::from_mode(0o755),
+        )
+        .unwrap();
     }
     let pins: serde_json::Map<_, _> = tools
         .iter()
@@ -816,17 +828,17 @@ fn list_shows_scope_active_and_numerically_sorted_installs() {
         "#!/bin/sh\ncase \"$1\" in\nmanifest) echo '{\"name\":\"node\",\"version\":\"1.0.0\",\"api_version\":1}';;\ninstalled-versions) echo '{\"versions\":[\"10.2.0\",\"18.3.0\",\"9.1.0\"]}';;\n*) exit 1;;\nesac\n",
     )
     .unwrap();
-    fs::set_permissions(&plugin, fs::Permissions::from_mode(0o755)).unwrap();
+    fs::set_permissions(&plugin, std::fs::Permissions::from_mode(0o755)).unwrap();
     for v in ["9.1.0", "10.2.0", "18.3.0"] {
         fs::create_dir_all(p.0.join("home/.avm/tools/node").join(v).join("bin")).unwrap();
     }
     fs::write(p.0.join("home/.avm.json"), r#"{"tools":{"node":"10"}}"#).unwrap();
-    let out = stdout(p.run(&["list"]));
+    let out = stdout(p.run(&["plugin", "list"]));
     assert!(out.contains("Project: none here"), "{out}");
     assert!(out.contains("~/.avm.json"), "{out}");
     assert!(out.contains("9.1.0  10.2.0*  18.3.0"), "{out}");
     fs::write(p.0.join("project/.avm.json"), r#"{"tools":{"node":"99"}}"#).unwrap();
-    let out = stdout(p.run(&["list"]));
+    let out = stdout(p.run(&["plugin", "list"]));
     assert!(
         out.contains("local") && out.contains("./.avm.json"),
         "{out}"
@@ -887,9 +899,13 @@ fn list_starts_each_plugin_once() {
         fs::create_dir_all(&bin).unwrap();
         let script = format!("#!/bin/sh\necho \"{tool} $1\" >> '{}'\nif [ \"$1\" = installed-versions ]; then echo '{{\"versions\":[\"1.0.0\"]}}'; fi\n", calls.display());
         fs::write(bin.join("avm-plugin"), script).unwrap();
-        fs::set_permissions(bin.join("avm-plugin"), fs::Permissions::from_mode(0o755)).unwrap();
+        fs::set_permissions(
+            bin.join("avm-plugin"),
+            std::fs::Permissions::from_mode(0o755),
+        )
+        .unwrap();
     }
-    let out = stdout(p.run(&["list"]));
+    let out = stdout(p.run(&["plugin", "list"]));
     for tool in ["node", "java"] {
         assert!(
             out.lines()
@@ -911,7 +927,11 @@ fn outdated_lists_versions_for_all_tools_concurrently() {
         fs::create_dir_all(&bin).unwrap();
         let script = "#!/bin/sh\nif [ \"$1\" = versions ]; then sleep 2; echo '{\"versions\":[{\"version\":\"2.0.0\",\"label\":\"2.0.0\",\"is_lts\":false,\"channel\":null,\"is_security\":false}]}'; fi\n";
         fs::write(bin.join("avm-plugin"), script).unwrap();
-        fs::set_permissions(bin.join("avm-plugin"), fs::Permissions::from_mode(0o755)).unwrap();
+        fs::set_permissions(
+            bin.join("avm-plugin"),
+            std::fs::Permissions::from_mode(0o755),
+        )
+        .unwrap();
     }
     fs::write(
         p.0.join("project/.avm.json"),
@@ -934,4 +954,18 @@ fn outdated_lists_versions_for_all_tools_concurrently() {
         "{:?}",
         start.elapsed()
     );
+}
+
+#[test]
+fn alias_names_cannot_shadow_built_in_commands() {
+    let p = Project::new();
+    assert!(p.run(&["init"]).status.success());
+    for name in ["alias", "run", "plugin", "x", "help", "-x", ""] {
+        let out = p.run(&["alias", "add", name, "echo no"]);
+        assert!(!out.status.success(), "'{name}' was accepted");
+    }
+    let out = p.run(&["alias", "add", "run", "echo no"]);
+    assert!(String::from_utf8_lossy(&out.stderr).contains("reserved"));
+    // `list` stopped being a built-in, so it is a plain alias name now.
+    assert!(p.run(&["alias", "add", "list", "echo ok"]).status.success());
 }

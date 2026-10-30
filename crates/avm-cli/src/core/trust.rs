@@ -4,8 +4,8 @@
 //! absolute path to the sha256 it had when trusted; any edit re-blocks it.
 use super::store;
 use anyhow::{Context, Result};
+use fs_err as fs;
 use std::collections::BTreeMap;
-use std::fs;
 use std::path::{Path, PathBuf};
 
 /// Location of the trust store (`~/.avm/trusted.json`).
@@ -51,7 +51,7 @@ pub fn is_trusted(file: &Path, trusted_paths: &[String]) -> bool {
     let Some(dir) = file.parent() else {
         return false;
     };
-    let home = avm_plugin_api::home_dir().ok();
+    let home = avm_plugin_sdk::home_dir().ok();
     if home
         .as_deref()
         .and_then(|h| h.canonicalize().ok())
@@ -66,7 +66,7 @@ pub fn is_trusted(file: &Path, trusted_paths: &[String]) -> bool {
     {
         return true;
     }
-    match avm_plugin_api::sha256_file(&file) {
+    match avm_plugin_sdk::sha256_file(&file) {
         Ok(hash) => list().get(&*file.to_string_lossy()) == Some(&hash),
         Err(_) => false,
     }
@@ -75,8 +75,8 @@ pub fn is_trusted(file: &Path, trusted_paths: &[String]) -> bool {
 /// Record `file`'s current sha256 as trusted, under the store lock.
 pub fn trust(file: &Path) -> Result<()> {
     let file = key(file)?;
-    let hash = avm_plugin_api::sha256_file(&file)?;
-    let _guard = avm_plugin_api::storage::lock(&store_path()?)?;
+    let hash = avm_plugin_sdk::sha256_file(&file)?;
+    let _guard = avm_plugin_sdk::storage::lock(&store_path()?)?;
     let mut store = read_store()?;
     store.insert(file.to_string_lossy().into_owned(), hash);
     save(&store)
@@ -85,7 +85,7 @@ pub fn trust(file: &Path) -> Result<()> {
 /// Returns whether an entry was removed.
 pub fn revoke(file: &Path) -> Result<bool> {
     let file = key(file)?;
-    let _guard = avm_plugin_api::storage::lock(&store_path()?)?;
+    let _guard = avm_plugin_sdk::storage::lock(&store_path()?)?;
     let mut store = read_store()?;
     let removed = store.remove(&*file.to_string_lossy()).is_some();
     save(&store)?;

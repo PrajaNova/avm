@@ -9,7 +9,7 @@ pub(crate) const PYTHON_BIN: &str = if cfg!(windows) {
     "python3"
 };
 
-use avm_plugin_api::{runner, tool_dir, Manifest, ToolProvider, ToolVersion, ToolVersionQuery};
+use avm_plugin_sdk::{runner, tool_dir, Manifest, ToolProvider, ToolVersion, ToolVersionQuery};
 use std::path::PathBuf;
 use std::process::ExitCode;
 
@@ -36,7 +36,7 @@ impl ToolProvider for PythonProvider {
     }
 
     fn installed_versions(&self) -> anyhow::Result<Vec<String>> {
-        avm_plugin_api::list_installed("python", |v| self.is_installed(v))
+        avm_plugin_sdk::list_installed("python", |v| self.is_installed(v))
     }
 
     fn available_versions(&self, query: ToolVersionQuery) -> anyhow::Result<Vec<ToolVersion>> {
@@ -55,20 +55,20 @@ impl ToolProvider for PythonProvider {
         &self,
         version: &str,
         platforms: &[String],
-    ) -> anyhow::Result<avm_plugin_api::protocol::ResolveResponse> {
+    ) -> anyhow::Result<avm_plugin_sdk::protocol::ResolveResponse> {
         versions::resolve_downloads(version, platforms)
     }
 
     fn install_locked(
         &self,
         version: &str,
-        asset: &avm_plugin_api::protocol::LockedAsset,
+        asset: &avm_plugin_sdk::protocol::LockedAsset,
     ) -> anyhow::Result<()> {
         install::install(version, Some(asset))
     }
 
     fn uninstall(&self, version: &str) -> anyhow::Result<()> {
-        avm_plugin_api::remove_version("python", version)
+        avm_plugin_sdk::remove_version("python", version)
     }
 }
 

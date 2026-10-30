@@ -1,10 +1,11 @@
 #![cfg(unix)]
 
-use avm_plugin_api::{
+use avm_plugin_sdk::{
     protocol::{LockedAsset, ResolveRequest, ResolveResponse},
     sha256_file,
 };
-use std::{fs, os::unix::fs::PermissionsExt, process::Command};
+use fs_err as fs;
+use std::{os::unix::fs::PermissionsExt, process::Command};
 
 const TRIPLES: [&str; 6] = [
     "aarch64-apple-darwin",
@@ -22,7 +23,11 @@ fn resolves_cross_platform_python_and_installs_from_a_local_index() {
     fs::create_dir_all(&source).unwrap();
     fs::create_dir_all(root.join("home")).unwrap();
     fs::write(source.join("python3"), "#!/bin/sh\necho locked-python\n").unwrap();
-    fs::set_permissions(source.join("python3"), fs::Permissions::from_mode(0o755)).unwrap();
+    fs::set_permissions(
+        source.join("python3"),
+        std::fs::Permissions::from_mode(0o755),
+    )
+    .unwrap();
     let archive = root.join("python.tar.gz");
     assert!(Command::new("tar")
         .arg("-czf")
@@ -97,7 +102,7 @@ fn resolves_cross_platform_python_and_installs_from_a_local_index() {
         "3.12.3".into(),
         serde_json::to_string(&asset).unwrap(),
     ];
-    let guard = avm_plugin_api::storage::lock(&root.join("home/.avm/tools/python/.install-3.12.3"))
+    let guard = avm_plugin_sdk::storage::lock(&root.join("home/.avm/tools/python/.install-3.12.3"))
         .unwrap();
     let mut children: Vec<_> = (0..2).map(|_| command(&args).spawn().unwrap()).collect();
     std::thread::sleep(std::time::Duration::from_millis(100));

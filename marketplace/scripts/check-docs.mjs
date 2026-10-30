@@ -12,9 +12,10 @@ const { CLI_COMMANDS } = await data('../src/data/cliReference.ts');
 const { FEATURE_GUIDES } = await data('../src/data/featureGuides.ts');
 const commands = CLI_COMMANDS.map(({ command }) => command);
 assert.equal(new Set(commands).size, commands.length, 'Duplicate command reference entry');
-const args = await read('../../crates/avm-cli/src/cli/args.rs');
+const managerFiles = ['alias/alias', 'app/app', 'env/env', 'global/global', 'plugins/plugin', 'project/project', 'shims/shims', 'tool/tool'];
+const args = (await Promise.all(managerFiles.map((name) => read(`../../crates/avm-cli/src/${name}_manager.rs`)))).join('\n');
 const hidden = new Set(['ExecShim', 'Pa', 'Ea', 'UpdateCheck', 'PluginCommand']);
-for (const [enumName, prefix] of [['Commands', 'avm'], ['PluginCommands', 'avm plugin'], ['AliasCommands', 'avm alias'], ['EnvCommands', 'avm env'], ['ShimsCommands', 'avm shims']]) {
+for (const [enumName, prefix] of [['AliasManager', 'avm'], ['AppManager', 'avm'], ['EnvManager', 'avm'], ['GlobalManager', 'avm'], ['PluginManager', 'avm'], ['ProjectManager', 'avm'], ['ShimsManager', 'avm'], ['ToolManager', 'avm'], ['PluginCommands', 'avm plugin'], ['AliasCommands', 'avm alias'], ['EnvCommands', 'avm env'], ['ShimsCommands', 'avm shims']]) {
   const body = args.split(`pub enum ${enumName} {`)[1]?.split('\n}')[0];
   assert.ok(body, `Missing CLI enum ${enumName}`);
   for (const [, variant] of body.matchAll(/^    ([A-Z]\w*)\s*[{(,]/gm)) {

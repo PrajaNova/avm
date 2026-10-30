@@ -10,7 +10,7 @@ pub struct AsdfToolProvider {
 impl AsdfToolProvider {
     /// Install directory for `version`; errors if the version string is invalid.
     fn install_path(&self, version: &str) -> Result<PathBuf> {
-        avm_plugin_api::download::validate_version(version)?;
+        avm_plugin_sdk::download::validate_version(version)?;
         Ok(tool_dir(&self.name)?.join(version))
     }
 
@@ -57,7 +57,7 @@ impl AsdfToolProvider {
         let script = match exec_env {
             Some(path) => format!(
                 ". {} >/dev/null 2>&1; env -0",
-                avm_plugin_api::sh_quote(&path.to_string_lossy())
+                avm_plugin_sdk::sh_quote(&path.to_string_lossy())
             ),
             None => "env -0".to_string(),
         };
@@ -148,8 +148,8 @@ impl ToolProvider for AsdfToolProvider {
     }
 
     fn install(&self, version: &str) -> Result<()> {
-        avm_plugin_api::download::validate_version(version)?;
-        let _guard = avm_plugin_api::storage::lock(
+        avm_plugin_sdk::download::validate_version(version)?;
+        let _guard = avm_plugin_sdk::storage::lock(
             &tool_dir(&self.name)?.join(format!(".install-{version}")),
         )?;
         if self.is_installed(version) {
@@ -178,7 +178,7 @@ pub(super) fn sandbox_asdf_command(cmd: &mut Command, plugin_path: &Path) {
     cmd.current_dir(plugin_path);
     cmd.env("ASDF_DIR", plugin_path);
     cmd.env("PATH", DEFAULT_PLUGIN_PATH_ENV);
-    if let Ok(home) = avm_plugin_api::home_dir() {
+    if let Ok(home) = avm_plugin_sdk::home_dir() {
         cmd.env("HOME", home);
     }
     if let Ok(tmpdir) = std::env::var("TMPDIR") {

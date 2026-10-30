@@ -5,7 +5,7 @@ use super::*;
 pub(super) fn run_with_timeout(mut cmd: Command, timeout_ms: u64) -> Result<String> {
     let started = std::time::Instant::now();
     cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
-    let (mut child, tree) = avm_plugin_api::process::spawn_isolated(&mut cmd)
+    let (mut child, tree) = avm_plugin_sdk::process::spawn_isolated(&mut cmd)
         .context("failed to start plugin command")?;
 
     // Pipes have a small OS buffer (~64KB). Waiting for the child to exit

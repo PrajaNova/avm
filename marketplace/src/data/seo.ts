@@ -1,4 +1,4 @@
-import registry from '../../registry.json';
+import { registry } from './registry';
 import { version } from '../../../package.json';
 import { ASDF_SIDEBAR_CONFIG } from './docsNav';
 import { FEATURE_GUIDES } from './featureGuides';

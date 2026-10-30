@@ -1,6 +1,6 @@
-use crate::cli::shell::Shell;
+use crate::common::shell::Shell;
 use anyhow::{anyhow, Context, Result};
-use std::fs;
+use fs_err as fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -23,7 +23,7 @@ pub fn detach(cmd: &mut Command) {
 /// Make `new` executable and atomically rename it over `exe`.
 pub fn replace_binary(exe: &Path, new: &Path) -> Result<()> {
     use std::os::unix::fs::PermissionsExt;
-    fs::set_permissions(new, fs::Permissions::from_mode(0o755))?;
+    fs::set_permissions(new, std::fs::Permissions::from_mode(0o755))?;
     fs::rename(new, exe).context("failed to swap in the new binary") // atomic
 }
 
@@ -52,11 +52,11 @@ pub fn run_replacing_process(mut command: Command) -> Result<()> {
 /// Marks `path` rwxr-xr-x.
 pub fn make_executable(path: &Path) -> std::io::Result<()> {
     use std::os::unix::fs::PermissionsExt;
-    fs::set_permissions(path, fs::Permissions::from_mode(0o755))
+    fs::set_permissions(path, std::fs::Permissions::from_mode(0o755))
 }
 
 /// Rejects a plugin source owned by root (unless we are root) or world-writable.
-pub fn check_plugin_source_perms(meta: &fs::Metadata) -> Result<()> {
+pub fn check_plugin_source_perms(meta: &std::fs::Metadata) -> Result<()> {
     use std::os::unix::fs::{MetadataExt, PermissionsExt};
     if meta.uid() == 0 && current_euid() != 0 {
         return Err(anyhow!("plugin sources owned by root are not allowed"));

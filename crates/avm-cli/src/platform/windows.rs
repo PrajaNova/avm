@@ -1,6 +1,6 @@
-use crate::cli::shell::Shell;
+use crate::common::shell::Shell;
 use anyhow::{anyhow, Context, Result};
-use std::fs;
+use fs_err as fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -74,6 +74,6 @@ pub fn make_executable(_path: &Path) -> std::io::Result<()> {
 }
 
 /// Windows has no owner or mode bits to check.
-pub fn check_plugin_source_perms(_meta: &fs::Metadata) -> Result<()> {
+pub fn check_plugin_source_perms(_meta: &std::fs::Metadata) -> Result<()> {
     Ok(())
 }

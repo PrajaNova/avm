@@ -1,11 +1,12 @@
 #![cfg(unix)]
 
-use avm_plugin_api::{
+use avm_plugin_sdk::{
     download::host_platform,
     protocol::{LockedAsset, ResolveRequest, ResolveResponse},
     sha256_file,
 };
-use std::{fs, os::unix::fs::PermissionsExt, process::Command};
+use fs_err as fs;
+use std::{os::unix::fs::PermissionsExt, process::Command};
 
 #[test]
 fn resolves_platform_checksums_and_installs_the_locked_archive() {
@@ -28,7 +29,7 @@ fn resolves_platform_checksums_and_installs_the_locked_archive() {
     let source = root.join(&name).join("bin");
     fs::create_dir_all(&source).unwrap();
     fs::write(source.join("node"), "#!/bin/sh\necho locked-node\n").unwrap();
-    fs::set_permissions(source.join("node"), fs::Permissions::from_mode(0o755)).unwrap();
+    fs::set_permissions(source.join("node"), std::fs::Permissions::from_mode(0o755)).unwrap();
     let archive = release.join(format!("{name}.tar.gz"));
     assert!(Command::new("tar")
         .args(["-czf"])
@@ -93,7 +94,7 @@ fn resolves_platform_checksums_and_installs_the_locked_archive() {
         serde_json::to_string(&asset).unwrap(),
     ];
     let guard =
-        avm_plugin_api::storage::lock(&root.join("home/.avm/tools/node/.install-20.1.0")).unwrap();
+        avm_plugin_sdk::storage::lock(&root.join("home/.avm/tools/node/.install-20.1.0")).unwrap();
     let mut children: Vec<_> = (0..2).map(|_| command(&args).spawn().unwrap()).collect();
     std::thread::sleep(std::time::Duration::from_millis(100));
     assert!(!root.join("home/.avm/tools/node/20.1.0").exists());

@@ -1,7 +1,7 @@
 //! `avm self-update` and the once-a-day "new version" notice (#28).
 use crate::plugins as runtime;
 use anyhow::{anyhow, Context, Result};
-use std::fs;
+use fs_err as fs;
 use std::io::IsTerminal;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};

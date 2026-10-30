@@ -1,6 +1,6 @@
 #![cfg(unix)]
 
-use std::fs;
+use fs_err as fs;
 use std::os::unix::fs::PermissionsExt;
 use std::path::PathBuf;
 use std::process::{Command, Output};
@@ -39,7 +39,7 @@ esac
 "#.replace("TOOL", tool);
             let file = plugin.join("avm-plugin");
             fs::write(&file, script).unwrap();
-            fs::set_permissions(file, fs::Permissions::from_mode(0o755)).unwrap();
+            fs::set_permissions(file, std::fs::Permissions::from_mode(0o755)).unwrap();
         }
         fs::write(root.join("home/.avm.json"), r#"{"tools":{"node":"16.0.0"},"env":{"SCOPE":"global"},"aliases":{"x":"echo wrong-alias"}}"#).unwrap();
         fs::write(root.join("project/.avm.json"), r#"{"tools":{"node":"20.0.0"},"env":{"SCOPE":"local","PATH":"/usr/bin:/bin"},"aliases":{"check":"node $1; java; printf '%s' \"$SCOPE\""}}"#).unwrap();

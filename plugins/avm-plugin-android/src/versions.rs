@@ -1,5 +1,5 @@
 use anyhow::{Context, Result};
-use avm_plugin_api::{ToolVersion, ToolVersionQuery};
+use avm_plugin_sdk::{ToolVersion, ToolVersionQuery};
 use std::collections::HashSet;
 
 const DEFAULT_REPOSITORY_URL: &str = "https://dl.google.com/android/repository/repository2-3.xml";
@@ -8,7 +8,7 @@ const DEFAULT_REPOSITORY_URL: &str = "https://dl.google.com/android/repository/r
 pub fn available_versions(query: ToolVersionQuery) -> Result<Vec<ToolVersion>> {
     let url = std::env::var("AVM_ANDROID_REPOSITORY_URL")
         .unwrap_or_else(|_| DEFAULT_REPOSITORY_URL.to_string());
-    let xml = String::from_utf8(avm_plugin_api::fetch(&url, 30)?)
+    let xml = String::from_utf8(avm_plugin_sdk::fetch(&url, 30)?)
         .context("Android repository index was not valid UTF-8")?;
     let mut levels = platform_levels(&xml);
     // Newest first, matching how node's release index is ordered.

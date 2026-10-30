@@ -4,9 +4,9 @@
 //! plugin, because this runs on every shimmed `node`/`java` call.
 // ponytail: first-party tools only; add `version-files`/`parse-version-file`
 // plugin verbs when a third-party plugin needs its own files.
+use fs_err as fs;
 use nodejs_semver::{Range, Version};
 use std::collections::HashMap;
-use std::fs;
 use std::path::Path;
 
 /// `tool → (installed version or raw spec, origin file, spec as written)`. Nearest directory
@@ -102,7 +102,7 @@ fn parse_sdkmanrc(raw: &str) -> Option<String> {
 /// newest installed version that satisfies it; unmatched specs come back
 /// as-is so the caller reports "not installed".
 pub fn resolve(tool: &str, spec: &str) -> String {
-    let installed = avm_plugin_api::tool_dir(tool)
+    let installed = avm_plugin_sdk::tool_dir(tool)
         .ok()
         .and_then(|dir| fs::read_dir(dir).ok())
         .map(|entries| {

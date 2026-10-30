@@ -1,33 +1,41 @@
 {
-  "schema_version": 1,
-  "plugins": [
-    {
-      "name": "node",
-      "description": "Node.js — versions, install, package.json scripts",
-      "section_label": "Node",
-      "repo": "PrajaNova/avm",
-      "release_tag": "avm-plugin-node-v0.3.3"
-    },
-    {
-      "name": "java",
-      "description": "OpenJDK (Eclipse Temurin, via the foojay Disco API) — versions, install, JAVA_HOME",
-      "section_label": "OpenJDK",
-      "repo": "PrajaNova/avm",
-      "release_tag": "avm-plugin-java-v0.3.1"
-    },
-    {
-      "name": "python",
-      "description": "CPython (python-build-standalone) — versions, install, .python-version",
-      "section_label": "Python",
-      "repo": "PrajaNova/avm",
-      "release_tag": "avm-plugin-python-v0.1.0"
-    },
-    {
-      "name": "android",
-      "description": "Android SDK (cmdline-tools, platform-tools, sdkmanager) — versions, install, ANDROID_HOME",
-      "section_label": "Android SDK",
-      "repo": "PrajaNova/avm",
-      "release_tag": "avm-plugin-android-v0.3.2"
-    }
-  ]
+  "node": {
+    "repo": "https://github.com/PrajaNova/avm",
+    "desc": "Node.js — versions, install, package.json scripts",
+    "tags": [
+      "node",
+      "nodejs",
+      "npm",
+      "javascript"
+    ]
+  },
+  "java": {
+    "repo": "https://github.com/PrajaNova/avm",
+    "desc": "OpenJDK (Eclipse Temurin, via the foojay Disco API) — versions, install, JAVA_HOME",
+    "tags": [
+      "java",
+      "jdk",
+      "openjdk",
+      "temurin"
+    ]
+  },
+  "python": {
+    "repo": "https://github.com/PrajaNova/avm",
+    "desc": "CPython (python-build-standalone) — versions, install, .python-version",
+    "tags": [
+      "python",
+      "cpython",
+      "pip"
+    ]
+  },
+  "android": {
+    "repo": "https://github.com/PrajaNova/avm",
+    "desc": "Android SDK (cmdline-tools, platform-tools, sdkmanager) — versions, install, ANDROID_HOME",
+    "tags": [
+      "android",
+      "sdk",
+      "adb",
+      "emulator"
+    ]
+  }
 }

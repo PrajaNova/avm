@@ -2,7 +2,7 @@
 
 The official plugin registry and documentation portal for [avm (Any Version Manager)](https://github.com/PrajaNova/avm).
 
-`avm plugin install <name>` resolves a plugin from GitHub Releases (a prebuilt native binary, never source): first-party names from `PrajaNova/avm`'s `avm-plugin-<name>-v*` tags, third-party plugins via `avm plugin install <owner>/<repo>`. `registry.json` here only feeds this site (and CLIs older than the registry removal).
+`avm plugin install <name>` resolves a plugin from GitHub Releases (a prebuilt native binary, never source): names are looked up in `registry.json` here (`{ "<name>": { "repo", "desc", "tags" } }`), which also feeds this site; third-party plugins install via `avm plugin install <owner>/<repo>`.
 
 This directory also contains the modern **avm Documentation & Marketplace Web Portal**, deployable to GitHub Pages at `https://getavm.dev/`.
 
@@ -30,7 +30,7 @@ Requirements for the repo:
 - The executable speaks avm's plugin protocol (JSON-over-stdio commands:
   `manifest`, `versions`, `is-installed`, `installed-versions`,
   `executable-path`, `env-vars`, `install`, `uninstall`) — see
-  `avm_plugin_api::runner` / `avm_plugin_api::protocol` in
+  `avm_plugin_sdk::runner` / `avm_plugin_sdk::protocol` in
   [PrajaNova/avm](https://github.com/PrajaNova/avm), or any of the
   `avm-plugin-{node,java,android}` repos, for the reference shape.
 

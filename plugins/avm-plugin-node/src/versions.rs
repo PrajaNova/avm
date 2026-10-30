@@ -1,5 +1,5 @@
 use anyhow::{Context, Result};
-use avm_plugin_api::{ToolVersion, ToolVersionQuery};
+use avm_plugin_sdk::{ToolVersion, ToolVersionQuery};
 use serde_json::Value;
 
 #[derive(serde::Deserialize)]
@@ -14,7 +14,7 @@ struct IndexEntry {
 /// Fetches the Node.js release index from the mirror and returns versions filtered by `query`; errors on network or parse failure.
 pub fn available_versions(query: ToolVersionQuery) -> Result<Vec<ToolVersion>> {
     let mirror = crate::install::mirror();
-    let raw = avm_plugin_api::fetch(&format!("{}/index.json", mirror.trim_end_matches('/')), 20)?;
+    let raw = avm_plugin_sdk::fetch(&format!("{}/index.json", mirror.trim_end_matches('/')), 20)?;
     let index: Vec<IndexEntry> =
         serde_json::from_slice(&raw).context("failed to parse Node.js version index")?;
     let versions = index.into_iter().map(to_tool_version).collect();

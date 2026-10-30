@@ -1,7 +1,7 @@
 //! Small JSON state files: read with a default when missing, write atomically.
 use anyhow::{Context, Result};
+use fs_err as fs;
 use serde::{de::DeserializeOwned, Serialize};
-use std::fs;
 use std::io::ErrorKind;
 use std::path::Path;
 
@@ -16,7 +16,7 @@ pub fn read_or_default<T: DeserializeOwned + Default>(path: &Path, what: &str) -
 
 /// Serialize `value` as pretty JSON to `path`, atomically.
 pub fn write_pretty<T: Serialize>(path: &Path, value: &T) -> Result<()> {
-    avm_plugin_api::storage::atomic_write(path, &serde_json::to_vec_pretty(value)?)
+    avm_plugin_sdk::storage::atomic_write(path, &serde_json::to_vec_pretty(value)?)
 }
 
 #[cfg(test)]

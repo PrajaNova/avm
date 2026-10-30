@@ -3,7 +3,7 @@ mod install;
 mod versions;
 
 use anyhow::Result;
-use avm_plugin_api::{runner, tool_dir, Manifest, ToolProvider, ToolVersion, ToolVersionQuery};
+use avm_plugin_sdk::{runner, tool_dir, Manifest, ToolProvider, ToolVersion, ToolVersionQuery};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::process::ExitCode;
@@ -31,7 +31,7 @@ impl ToolProvider for AndroidProvider {
     }
 
     fn installed_versions(&self) -> Result<Vec<String>> {
-        avm_plugin_api::list_installed("android", |v| self.is_installed(v))
+        avm_plugin_sdk::list_installed("android", |v| self.is_installed(v))
     }
 
     fn available_versions(&self, query: ToolVersionQuery) -> Result<Vec<ToolVersion>> {
@@ -58,7 +58,7 @@ impl ToolProvider for AndroidProvider {
     }
 
     fn uninstall(&self, version: &str) -> Result<()> {
-        avm_plugin_api::remove_version("android", version)
+        avm_plugin_sdk::remove_version("android", version)
     }
 }
 

@@ -1,5 +1,5 @@
 use anyhow::{anyhow, Context, Result};
-use avm_plugin_api::{ToolVersion, ToolVersionQuery};
+use avm_plugin_sdk::{ToolVersion, ToolVersionQuery};
 use serde::Deserialize;
 
 /// The foojay Disco API (https://api.foojay.io) aggregates JDK builds across
@@ -82,7 +82,7 @@ struct PackageInfoResponse {
 
 /// The sha256 foojay reports for `package` (Adoptium's published checksum).
 pub fn package_sha256(package: &Package) -> Result<String> {
-    parse_sha256(&avm_plugin_api::fetch(&package.links.pkg_info_uri, 20)?)
+    parse_sha256(&avm_plugin_sdk::fetch(&package.links.pkg_info_uri, 20)?)
 }
 
 /// Extracts the sha256 checksum from a foojay package-info response; errors on invalid JSON or when none is listed.
@@ -115,7 +115,7 @@ fn package_index_for(os: &str, arch: &str, archive: &str) -> Result<Vec<Package>
         if os == "linux" { "&lib_c_type=glibc" } else { "" },
     );
 
-    let raw = avm_plugin_api::fetch(&url, 20)?;
+    let raw = avm_plugin_sdk::fetch(&url, 20)?;
     let parsed: PackagesResponse =
         serde_json::from_slice(&raw).context("failed to parse foojay Disco API response")?;
     Ok(parsed.result)
@@ -148,12 +148,12 @@ fn host_arch_param() -> Result<&'static str> {
 pub fn resolve_downloads(
     version: &str,
     platforms: &[String],
-) -> Result<avm_plugin_api::protocol::ResolveResponse> {
-    use avm_plugin_api::protocol::{LockedAsset, ResolveResponse};
-    avm_plugin_api::download::validate_version(version)?;
+) -> Result<avm_plugin_sdk::protocol::ResolveResponse> {
+    use avm_plugin_sdk::protocol::{LockedAsset, ResolveResponse};
+    avm_plugin_sdk::download::validate_version(version)?;
     let mut assets = std::collections::BTreeMap::new();
     for platform in platforms {
-        avm_plugin_api::download::validate_platform(platform)?;
+        avm_plugin_sdk::download::validate_platform(platform)?;
         let (os, arch) = platform
             .split_once('_')
             .ok_or_else(|| anyhow!("invalid platform"))?;
@@ -171,7 +171,7 @@ pub fn resolve_downloads(
             sha256: package_sha256(&package)?,
             url: package.links.pkg_download_redirect,
         };
-        avm_plugin_api::download::validate_asset(&asset)?;
+        avm_plugin_sdk::download::validate_asset(&asset)?;
         assets.insert(platform.clone(), asset);
     }
     Ok(ResolveResponse {

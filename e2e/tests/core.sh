@@ -11,7 +11,6 @@ rel="$W/fake-release"
 mkdir -p "$rel/build" "$rel/api/repos/o/fake/releases"
 printf '#!/bin/sh\necho fake\n' > "$rel/build/avm-plugin-fake" && chmod +x "$rel/build/avm-plugin-fake"
 tar -czf "$rel/avm-plugin-fake_linux_amd64.tar.gz" -C "$rel/build" avm-plugin-fake
-echo '{"plugins":[{"name":"fake","description":"x","repo":"o/fake"}]}' > "$rel/registry.json"
 publish() { # $1 = checksums.txt contents, or "" for none
   local assets="{\"name\":\"avm-plugin-fake_linux_amd64.tar.gz\",\"browser_download_url\":\"file://$rel/avm-plugin-fake_linux_amd64.tar.gz\"}"
   if [ -n "$1" ]; then
@@ -20,7 +19,7 @@ publish() { # $1 = checksums.txt contents, or "" for none
   fi
   echo "{\"tag_name\":\"v1.0.0\",\"assets\":[$assets]}" > "$rel/api/repos/o/fake/releases/latest"
 }
-add_fake() { AVM_MARKETPLACE_URL="$rel/registry.json" AVM_GITHUB_API_URL="$rel/api" avm-bin plugin add fake 2>&1; }
+add_fake() { AVM_GITHUB_API_URL="$rel/api" avm-bin plugin install o/fake 2>&1; }
 
 publish "$(printf '0%.0s' $(seq 64))  avm-plugin-fake_linux_amd64.tar.gz"
 expect_contains "tampered plugin is refused" "$(add_fake)" "checksum mismatch"
@@ -30,7 +29,20 @@ expect_contains "plugin without checksums.txt is refused" "$(add_fake)" "no chec
 publish "$(cd "$rel" && sha256sum avm-plugin-fake_linux_amd64.tar.gz)"
 expect_contains "verified plugin installs" "$(add_fake)" "Installed fake"
 expect_contains "meta.json records verified" "$(cat "$HOME/.avm/plugins/avm-plugin-fake/meta.json")" '"verified":true'
-avm plugin remove fake >/dev/null 2>&1
+avm plugin uninstall fake >/dev/null 2>&1
+
+log "core: install by name through the registry"
+echo '{"fake":{"repo":"https://github.com/o/fake","desc":"a fake plugin","tags":["demo"]}}' > "$rel/registry.json"
+assets="{\"name\":\"avm-plugin-fake_linux_amd64.tar.gz\",\"browser_download_url\":\"file://$rel/avm-plugin-fake_linux_amd64.tar.gz\"},{\"name\":\"checksums.txt\",\"browser_download_url\":\"file://$rel/checksums.txt\"}"
+# `latest` is a decoy with no assets; only the tagged release in the listing can install.
+echo '{"tag_name":"v0","assets":[]}' > "$rel/api/repos/o/fake/releases/latest"
+echo "[{\"tag_name\":\"avm-plugin-other-v9.9.9\",\"assets\":[]},{\"tag_name\":\"avm-plugin-fake-v1.0.0\",\"assets\":[$assets]}]" > "$rel/api/repos/o/fake/releases?per_page=100"
+by_name() { AVM_REGISTRY_URL="$rel/registry.json" AVM_GITHUB_API_URL="$rel/api" avm-bin plugin "$@" 2>&1; }
+expect_contains "plugin search reads the registry" "$(by_name search demo)" "a fake plugin"
+expect_contains "install by registry name picks the avm-plugin-fake-v* release" "$(by_name install fake)" "Installed fake"
+expect_contains "unknown name points at search" "$(by_name install nope)" "no plugin named 'nope' in the registry"
+expect_contains "unreachable registry says where it looked" "$(AVM_REGISTRY_URL="$rel/missing.json" avm-bin plugin install fake 2>&1)" "failed to load the plugin registry"
+avm plugin uninstall fake >/dev/null 2>&1
 
 log "core: asdf-style plugin"
 ap="$W/asdf-kotlin"
@@ -38,7 +50,7 @@ mkdir -p "$ap/bin"
 printf '#!/bin/sh\necho 1.9.0 2.0.0\n' > "$ap/bin/list-all"
 printf '#!/bin/sh\nmkdir -p "$ASDF_INSTALL_PATH/bin"\nprintf "#!/bin/sh\\necho kotlin-$ASDF_INSTALL_VERSION\\n" > "$ASDF_INSTALL_PATH/bin/kotlin"\nchmod +x "$ASDF_INSTALL_PATH/bin/kotlin"\n' > "$ap/bin/install"
 chmod +x "$ap/bin/list-all" "$ap/bin/install"
-expect_contains "avm plugin add <asdf plugin dir>" "$(avm plugin add "$ap" 2>&1)" "Installed plugin"
+expect_contains "avm plugin install <asdf plugin dir>" "$(avm plugin install "$ap" 2>&1)" "Installed plugin"
 expect_contains "asdf plugin lists versions" "$(avm kotlin versions 2>&1)" "2.0.0"
 expect_ok "avm kotlin use 2.0.0 (installs via bin/install)" avm kotlin use 2.0.0
 expect_contains "avm which kotlin" "$(avm which kotlin)" "2.0.0"
@@ -95,17 +107,17 @@ cache="$HOME/.avm/update-check.json"
 # `script` gives the command a pseudo-terminal, like a real shell.
 notice_env() { env -u AVM_NO_UPDATE_CHECK -u CI AVM_GITHUB_API_URL="$su/api" "$@"; }
 echo "{\"checked_at\":$(date +%s),\"notified_at\":0,\"latest\":\"9.9.9\"}" > "$cache"
-expect_contains "notice at a terminal when a newer release is known" "$(notice_env script -qec "avm-bin list" /dev/null)" "avm 9.9.9 is available"
-expect_not_contains "at most once a day" "$(notice_env script -qec "avm-bin list" /dev/null)" "is available"
+expect_contains "notice at a terminal when a newer release is known" "$(notice_env script -qec "avm-bin plugin list" /dev/null)" "avm 9.9.9 is available"
+expect_not_contains "at most once a day" "$(notice_env script -qec "avm-bin plugin list" /dev/null)" "is available"
 echo "{\"checked_at\":$(date +%s),\"notified_at\":0,\"latest\":\"9.9.9\"}" > "$cache"
-expect_not_contains "no notice when stderr isn't a terminal" "$(notice_env avm-bin list 2>&1)" "is available"
-expect_not_contains "no notice in CI" "$(notice_env CI=true script -qec "avm-bin list" /dev/null)" "is available"
-expect_not_contains "no notice with AVM_NO_UPDATE_CHECK=1" "$(AVM_NO_UPDATE_CHECK=1 script -qec "avm-bin list" /dev/null)" "is available"
+expect_not_contains "no notice when stderr isn't a terminal" "$(notice_env avm-bin plugin list 2>&1)" "is available"
+expect_not_contains "no notice in CI" "$(notice_env CI=true script -qec "avm-bin plugin list" /dev/null)" "is available"
+expect_not_contains "no notice with AVM_NO_UPDATE_CHECK=1" "$(AVM_NO_UPDATE_CHECK=1 script -qec "avm-bin plugin list" /dev/null)" "is available"
 expect_not_contains "no notice from shims or avm env" "$(notice_env script -qec "avm-bin env" /dev/null)" "is available"
 
 avm_release v9.9.9 "$good_sum" > "$su/api/repos/PrajaNova/avm/releases/latest"
 echo '{"checked_at":0,"notified_at":0}' > "$cache"
-notice_env script -qec "avm-bin list" /dev/null >/dev/null
+notice_env script -qec "avm-bin plugin list" /dev/null >/dev/null
 for _ in 1 2 3 4 5 6 7 8 9 10; do grep -q 9.9.9 "$cache" && break; sleep 1; done
 expect_contains "background check records the latest release" "$(cat "$cache")" '"latest":"9.9.9"'
 rm -f "$cache"

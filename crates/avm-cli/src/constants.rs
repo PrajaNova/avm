@@ -12,8 +12,10 @@ pub const MARKETPLACE_TIMEOUT_SECS: u32 = 20;
 pub const MARKETPLACE_INSTALL_TIMEOUT_MS: u64 = 300_000;
 pub const DEFAULT_PLUGIN_PATH_ENV: &str =
     "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin";
-/// First-party plugins are released from this repo as `avm-plugin-<name>-v<version>` tags.
-pub const FIRST_PARTY_REPO: &str = "PrajaNova/avm";
+/// Plugin registry: name to repo, description and tags. `AVM_REGISTRY_URL` overrides it.
+pub const REGISTRY_URL: &str =
+    "https://raw.githubusercontent.com/PrajaNova/avm/main/marketplace/registry.json";
+/// A repo that ships several plugins tags each release `avm-plugin-<name>-v<version>`.
 pub const PLUGIN_TAG_PREFIX: &str = "avm-plugin-";
 
 pub const PLUGIN_PROCESS_READ_TIMEOUT_MS: u64 = 30_000;

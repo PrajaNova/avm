@@ -2,7 +2,6 @@
 pub mod config;
 pub mod lockfile;
 pub mod resolver;
-pub mod shims;
 pub mod store;
 pub mod tracked;
 pub mod trust;

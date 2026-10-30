@@ -1,5 +1,5 @@
 //! Decides who handles `avm <key> ...`.
-use super::PluginManager;
+use super::PluginRegistry;
 use crate::resolver::{ResolvedAliasLookup, ResolvedConfig};
 
 /// Who runs `avm <key> ...`: an alias first, then an installed plugin's own command.
@@ -20,5 +20,5 @@ pub fn route(cfg: &ResolvedConfig, key: &str) -> Route {
 
 /// Whether a plugin for `name` is installed locally (no network).
 pub fn is_installed_plugin(name: &str) -> bool {
-    PluginManager::new().is_ok_and(|plugins| plugins.provider(name).is_some())
+    PluginRegistry::new().is_ok_and(|plugins| plugins.provider(name).is_some())
 }

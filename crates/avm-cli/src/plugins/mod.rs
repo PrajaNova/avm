@@ -3,27 +3,37 @@
 mod asdf;
 mod discovery;
 mod marketplace;
+mod plugin_handler;
+mod plugin_list_handler;
+mod plugin_manager;
 mod process;
+mod registry_service;
 mod route;
 mod timeout;
 
 use crate::constants::*;
 use anyhow::{anyhow, Context, Result};
-use avm_plugin_api::{
+use avm_plugin_sdk::{
     env_timeout_ms, fetch, fetch_with_headers, list_installed, remove_version, run_timed,
     sha256_file, tool_dir, verify_sha256, wait_deadline, Manifest, ToolProvider, ToolVersion,
     ToolVersionQuery,
 };
+use fs_err as fs;
 use std::collections::{BTreeSet, HashMap};
-use std::fs;
 use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
 pub use asdf::AsdfToolProvider;
-pub use discovery::PluginManager;
+pub use discovery::PluginRegistry;
 use discovery::*;
 pub use marketplace::*;
+#[allow(unused_imports)]
+pub(crate) use plugin_handler::*;
+#[allow(unused_imports)]
+pub(crate) use plugin_list_handler::*;
+pub use plugin_manager::*;
 pub use process::PluginProcess;
+use registry_service::*;
 pub use route::{is_installed_plugin, route, Route};
 use timeout::*;

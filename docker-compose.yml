@@ -1,0 +1,20 @@
+# A clean Linux shell with avm built from this checkout, to try features by hand
+# before shipping:
+#
+#   docker compose run --rm --build avm     # rebuild from local sources, open a shell
+#
+# Nothing persists after you exit (--rm). GITHUB_TOKEN is passed through when set
+# to avoid GitHub API rate limits.
+services:
+  avm:
+    build:
+      context: .
+      dockerfile: e2e/Dockerfile
+      target: playground
+    platform: linux/amd64 # Android's Linux tools ship for x86_64 only
+    image: avm-playground
+    stdin_open: true
+    tty: true
+    environment:
+      - GITHUB_TOKEN
+      - AVM_NO_UPDATE_CHECK=1

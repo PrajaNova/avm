@@ -1,11 +1,9 @@
 use super::*;
 
-/// Where a plugin's compiled release lives: `<owner>/<repo>`, and a tag
-/// (`None` = that repo's latest release).
+/// Where a plugin's compiled release lives: its name and the `<owner>/<repo>` that releases it.
 pub struct PluginSource {
     pub name: String,
     pub repo: String,
-    pub tag: Option<String>,
 }
 
 /// GitHub API base URL, overridable with `AVM_GITHUB_API_URL`.
@@ -20,27 +18,9 @@ pub(super) fn github_json<T: serde::de::DeserializeOwned>(path: &str) -> Result<
     serde_json::from_slice(&body).with_context(|| format!("malformed response from {url}"))
 }
 
-/// Plugin names released from the first-party repo, newest tag first per name.
-pub(super) fn first_party_tags() -> Result<Vec<(String, String)>> {
-    #[derive(serde::Deserialize)]
-    struct Tag {
-        tag_name: String,
-    }
-    let releases: Vec<Tag> =
-        github_json(&format!("repos/{FIRST_PARTY_REPO}/releases?per_page=100"))?;
-    Ok(releases
-        .into_iter()
-        .filter_map(|r| {
-            let rest = r.tag_name.strip_prefix(PLUGIN_TAG_PREFIX)?;
-            let (name, _) = rest.rsplit_once("-v")?;
-            Some((name.to_string(), r.tag_name))
-        })
-        .collect())
-}
-
 /// Turn what the user typed into a release source:
-/// `node` → newest `avm-plugin-node-v*` release of the first-party repo,
-/// `owner/repo` or `https://github.com/owner/repo` → that repo's latest release.
+/// `node` → the repo the registry lists for `node`,
+/// `owner/repo` or `https://github.com/owner/repo` → that repo.
 /// Returns `None` for anything else (asdf git URLs, local paths).
 pub fn resolve_plugin_source(spec: &str) -> Result<Option<PluginSource>> {
     let repo = spec
@@ -59,32 +39,23 @@ pub fn resolve_plugin_source(spec: &str) -> Result<Option<PluginSource>> {
             return Ok(None);
         }
         let name = name.strip_prefix(PLUGIN_TAG_PREFIX).unwrap_or(name);
-        avm_plugin_api::validate_name(name)?;
+        avm_plugin_sdk::validate_name(name)?;
         return Ok(Some(PluginSource {
             name: name.to_string(),
             repo: repo.to_string(),
-            tag: None,
         }));
     }
     if spec.contains('/') || is_git_url(spec) || Path::new(spec).exists() {
         return Ok(None);
     }
-    avm_plugin_api::validate_name(spec)?;
-    let tag = first_party_tags()?
-        .into_iter()
-        .find(|(n, _)| n == spec)
-        .map(|(_, tag)| tag)
-        .ok_or_else(|| {
-            anyhow!("no plugin named '{spec}' — try `avm plugin search {spec}`, or install a third-party one with `avm plugin install <owner>/<repo>`")
-        })?;
+    avm_plugin_sdk::validate_name(spec)?;
     Ok(Some(PluginSource {
         name: spec.to_string(),
-        repo: FIRST_PARTY_REPO.to_string(),
-        tag: Some(tag),
+        repo: registry_repo(spec)?,
     }))
 }
 
-/// `(name, description)` rows matching `keyword`: first-party release names plus
+/// `(name, description)` rows matching `keyword`: registry plugins plus
 /// GitHub repos tagged with the `avm-plugin` topic.
 pub fn search_plugins(keyword: &str) -> Result<Vec<(String, String)>> {
     if !keyword
@@ -95,12 +66,7 @@ pub fn search_plugins(keyword: &str) -> Result<Vec<(String, String)>> {
             "search keyword may only contain letters, digits, '-' and '_'"
         ));
     }
-    let mut rows: Vec<(String, String)> = first_party_tags()?
-        .into_iter()
-        .map(|(name, _)| name)
-        .filter(|name| name.contains(keyword))
-        .map(|name| (name, format!("first-party ({FIRST_PARTY_REPO})")))
-        .collect();
+    let mut rows = search_registry(keyword)?;
     #[derive(serde::Deserialize)]
     struct Repo {
         full_name: String,
@@ -110,7 +76,7 @@ pub fn search_plugins(keyword: &str) -> Result<Vec<(String, String)>> {
     struct Found {
         items: Vec<Repo>,
     }
-    // Third-party results are best-effort: first-party matches still print offline-from-search errors.
+    // Third-party results are best-effort: registry matches still print when GitHub search fails.
     if let Ok(found) =
         github_json::<Found>(&format!("search/repositories?q={keyword}+topic:avm-plugin"))
     {
@@ -177,6 +143,22 @@ pub fn github_release(repo: &str, tag: Option<&str>) -> Result<GithubRelease> {
     serde_json::from_slice(&body).with_context(|| format!("malformed release info for {repo}"))
 }
 
+/// The release to install for plugin `name` from `repo`: the newest `avm-plugin-<name>-v*`
+/// release (a repo that ships several plugins), else the repo's latest release.
+fn plugin_release(repo: &str, name: &str) -> Result<GithubRelease> {
+    let prefix = format!("{PLUGIN_TAG_PREFIX}{name}-v");
+    // A failed listing is not fatal: a single-plugin repo only needs `latest`.
+    let listed: Result<Vec<GithubRelease>> =
+        github_json(&format!("repos/{repo}/releases?per_page=100"));
+    match listed
+        .ok()
+        .and_then(|rs| rs.into_iter().find(|r| r.tag_name.starts_with(&prefix)))
+    {
+        Some(release) => Ok(release),
+        None => github_release(repo, None),
+    }
+}
+
 /// The local path behind a `file://` asset URL (offline mirrors, tests); curl is
 /// limited to http(s), so these are copied instead.
 fn mirror_path(url: &str) -> Option<&str> {
@@ -239,7 +221,7 @@ pub fn fetch_verified_archive(
         Some(local) => fs::copy(local, &tmp)
             .map(|_| ())
             .with_context(|| format!("failed to copy {local}"))?,
-        None => avm_plugin_api::download::download(
+        None => avm_plugin_sdk::download::download(
             &asset.browser_download_url,
             &tmp,
             MARKETPLACE_INSTALL_TIMEOUT_MS,
@@ -266,7 +248,7 @@ pub fn fetch_verified_archive(
         }
     };
 
-    let extracted = avm_plugin_api::download::extract_archive(
+    let extracted = avm_plugin_sdk::download::extract_archive(
         &tmp,
         extract_dir,
         0,
@@ -287,7 +269,7 @@ pub fn fetch_verified_archive(
 pub fn install_from_marketplace(source: &PluginSource, plugin_dir: &Path) -> Result<String> {
     let (os, arch) = marketplace_platform()?;
     let (name, repo) = (source.name.as_str(), &source.repo);
-    let release = github_release(repo, source.tag.as_deref())?;
+    let release = plugin_release(repo, name)?;
     let asset_name = format!("avm-plugin-{name}_{os}_{arch}.{PLUGIN_ARCHIVE_EXT}");
     if !release.assets.iter().any(|a| a.name == asset_name) {
         let prefix = format!("avm-plugin-{name}_");

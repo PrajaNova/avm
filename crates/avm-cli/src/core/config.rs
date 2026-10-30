@@ -1,7 +1,7 @@
 use anyhow::{anyhow, Context, Result};
+use fs_err as fs;
 use serde::Serialize;
 use std::collections::HashMap;
-use std::fs;
 use std::path::Path;
 
 pub const CONFIG_FILE: &str = ".avm.json";
@@ -132,7 +132,7 @@ pub fn load_file(file_path: &Path) -> Result<ConfigLoadResult> {
 pub fn save(root: &Path, cfg: &ConfigLoadResult) -> Result<()> {
     validate_env(&cfg.env)?;
     let raw = serde_json::to_vec_pretty(cfg)?;
-    avm_plugin_api::storage::atomic_write(&root.join(CONFIG_FILE), &raw)
+    avm_plugin_sdk::storage::atomic_write(&root.join(CONFIG_FILE), &raw)
         .context("failed to save config")
 }
 

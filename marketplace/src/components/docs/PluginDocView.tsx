@@ -9,7 +9,7 @@ import {
   FileJson,
   Cpu
 } from 'lucide-react';
-import registry from '../../../registry.json';
+import { registry } from '../../data/registry';
 import { EXTENDED_PLUGIN_METADATA } from '../../data/registryData';
 import { PLUGIN_WALKTHROUGHS } from '../../data/pluginWalkthroughData';
 import { WalkthroughVideo } from '../WalkthroughVideo';

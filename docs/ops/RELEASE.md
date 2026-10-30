@@ -6,7 +6,7 @@ publishes anything; CI (tests) is the only workflow that runs on its own.
 ## avm
 
 1. On a branch, set the version (no `v`) in `package.json`,
-   `crates/avm-cli/Cargo.toml` and `crates/avm-plugin-api/Cargo.toml`, run
+   `crates/avm-cli/Cargo.toml` and `crates/avm-plugin-sdk/Cargo.toml`, run
    `cargo build` to refresh `Cargo.lock`, and move the CHANGELOG
    `[Unreleased]` entries under `## [<version>] - <date>`. Merge to `main`.
 2. Run the release, from `main`:
@@ -63,14 +63,19 @@ case included.
 The workspace workflow builds linux amd64/arm64, macOS arm64/Intel and
 Windows, with checksums and attestations. Plugin releases have namespaced
 tags and are marked as GitHub prereleases to keep `/releases/latest`
-pointing to the CLI. `avm plugin install <name>` picks the newest `avm-plugin-<name>-v*`
-tag from this repo's 100 most recent releases; third-party `owner/repo` installs
-take their repository's latest stable release. No registry entry needs updating.
+pointing to the CLI. `avm plugin install <name>` looks the name up in
+`marketplace/registry.json` (name to repo, description and tags), then installs
+the newest `avm-plugin-<name>-v*` release from that repo (its latest release when
+the repo has no such tags). A new plugin needs one registry entry; a new version
+of an existing plugin needs none, since the registry stores no versions.
+Third-party `owner/repo` installs skip the registry.
 
-### Older CLIs
+### Registry file
 
-CLIs before the registry removal still read `marketplace/registry.json`, so
-keep that file (and its `release_tag`s) updated until they are retired.
+`marketplace/registry.json` is `{ "<name>": { "repo": "https://github.com/<owner>/<repo>", "desc": "...", "tags": [...] } }`.
+The CLI fetches it from `main` (override with `AVM_REGISTRY_URL`, a URL or a file path),
+so merging an entry is all it takes to publish a plugin. Releases of the CLI from before
+this format read a different shape and cannot install by name until updated.
 
 The old `avm-plugin-node`/`avm-plugin-java`/`avm-plugin-android` repositories
 have been deleted now that their code and release history live in this
@@ -94,4 +99,4 @@ connection and its Root Directory is left empty. Repo secrets required:
 `https://getavm.dev/`.
 
 The old `avm-marketplace` repository has been deleted; `marketplace/registry.json`
-in this repo is now the only copy CLI releases read.
+in this repo is the only registry.

@@ -1,6 +1,6 @@
 use anyhow::{anyhow, Context, Result};
-use avm_plugin_api::protocol::{LockedAsset, ResolveResponse};
-use avm_plugin_api::{tool_dir, ToolVersion, ToolVersionQuery};
+use avm_plugin_sdk::protocol::{LockedAsset, ResolveResponse};
+use avm_plugin_sdk::{tool_dir, ToolVersion, ToolVersionQuery};
 use serde::Deserialize;
 use std::collections::BTreeMap;
 use std::time::{Duration, SystemTime};
@@ -45,7 +45,7 @@ struct Build {
 /// `CACHE_TTL` to show up; delete `~/.avm/tools/python/.index.ndjson` to force it.
 fn index_bytes() -> Result<Vec<u8>> {
     if let Ok(src) = std::env::var("AVM_PYTHON_INDEX") {
-        return avm_plugin_api::fetch(&src, 120);
+        return avm_plugin_sdk::fetch(&src, 120);
     }
     let cache = tool_dir("python")?.join(".index.ndjson");
     let age = std::fs::metadata(&cache)
@@ -57,12 +57,12 @@ fn index_bytes() -> Result<Vec<u8>> {
             return Ok(bytes);
         }
     }
-    match avm_plugin_api::fetch(DEFAULT_INDEX, 120) {
+    match avm_plugin_sdk::fetch(DEFAULT_INDEX, 120) {
         Ok(bytes) => {
             if let Some(dir) = cache.parent() {
                 let _ = std::fs::create_dir_all(dir);
             }
-            let _ = avm_plugin_api::storage::atomic_write(&cache, &bytes);
+            let _ = avm_plugin_sdk::storage::atomic_write(&cache, &bytes);
             Ok(bytes)
         }
         // Offline: a stale index still beats no index.
@@ -159,18 +159,18 @@ pub fn host_platform() -> Result<String> {
 
 /// Resolves download URLs and checksums for `version` on each requested platform; errors on an unknown version or unsupported platform.
 pub fn resolve_downloads(version: &str, platforms: &[String]) -> Result<ResolveResponse> {
-    avm_plugin_api::download::validate_version(version)?;
+    avm_plugin_sdk::download::validate_version(version)?;
     let index = parse_index(&index_bytes()?)?;
     let builds = parse_triple(version)
         .and_then(|t| index.get(&t))
         .ok_or_else(|| anyhow!("unknown Python version '{version}' (run `avm python versions`)"))?;
     let mut assets = BTreeMap::new();
     for platform in platforms {
-        avm_plugin_api::download::validate_platform(platform)?;
+        avm_plugin_sdk::download::validate_platform(platform)?;
         let build = builds
             .get(target_triple(platform)?)
             .ok_or_else(|| anyhow!("no Python {version} build for {platform}"))?;
-        avm_plugin_api::download::validate_asset(&build.asset)?;
+        avm_plugin_sdk::download::validate_asset(&build.asset)?;
         assets.insert(platform.clone(), build.asset.clone());
     }
     Ok(ResolveResponse {

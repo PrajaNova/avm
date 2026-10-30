@@ -76,8 +76,8 @@ New-Item -ItemType Directory -Force $P | Out-Null
 Set-Location $W
 
 Section 'global and local alias with the same name, global and local env'
-avm add -g hello 'echo hello-global' | Out-Null
-Push-Location $P; avm init | Out-Null; avm add hello 'echo hello-local' | Out-Null; Pop-Location
+avm alias add -g hello 'echo hello-global' | Out-Null
+Push-Location $P; avm init | Out-Null; avm alias add hello 'echo hello-local' | Out-Null; Pop-Location
 Check 'outside: global alias' { (Out { avm hello }) -eq 'hello-global' }
 Check 'project: local alias wins' { Push-Location $P; try { (Out { avm hello }) -eq 'hello-local' } finally { Pop-Location } }
 avm env add -g AVM_E2E_SCOPE global | Out-Null

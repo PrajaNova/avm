@@ -1,5 +1,5 @@
-use avm_plugin_api::{runner, Manifest};
 use avm_plugin_node::NodeProvider;
+use avm_plugin_sdk::{runner, Manifest};
 use std::process::ExitCode;
 
 /// Plugin entry point: runs the Node provider through the plugin protocol.

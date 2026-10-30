@@ -26,7 +26,7 @@ The rest of this doc is what to fill in, and how it all fits together.
 ## The `ToolProvider` trait
 
 Everything a plugin does is one Rust trait
-(`avm_plugin_api::ToolProvider`, from the
+(`avm_plugin_sdk::ToolProvider`, from the
 [main avm repo](https://github.com/PrajaNova/avm)):
 
 ```rust
@@ -53,7 +53,7 @@ pub trait ToolProvider: Send + Sync {
 Your `main.rs` wraps an instance of your provider with the shared runner:
 
 ```rust
-use avm_plugin_api::{runner, Manifest};
+use avm_plugin_sdk::{runner, Manifest};
 
 fn main() -> std::process::ExitCode {
     let manifest = Manifest {
@@ -105,7 +105,7 @@ missing checksums must fail instead of returning unverified assets.
 
 The host passes the original locked URL (or local archive path) and SHA-256
 in `install-locked`'s asset JSON. Plugins must verify it before extraction. Use
-`avm_plugin_api::download::download_verified` to download or copy and verify it before
+`avm_plugin_sdk::download::download_verified` to download or copy and verify it before
 extraction; this path never honors `AVM_ALLOW_UNVERIFIED`. Keep the existing
 installer's staging, error handling and final layout. Older plugins retain
 ordinary installs through default methods that reject lockfile operations.
@@ -169,13 +169,15 @@ doesn't distinguish "installed by hand for testing" from "installed via
    a build provenance attestation automatically; its caller must grant
    `contents: write`, `id-token: write`, and `attestations: write`.
 3. **Make it discoverable** (optional): add the `avm-plugin` topic to the
-   GitHub repo so `avm plugin search <keyword>` lists it. There is no registry to
-   edit; people install it with `avm plugin install <owner>/<repo>`.
+   GitHub repo so `avm plugin search <keyword>` lists it. People can always install
+   it with `avm plugin install <owner>/<repo>`. To make `avm plugin install <name>`
+   work, add an entry to `marketplace/registry.json` in a pull request:
+   `"<name>": { "repo": "https://github.com/<owner>/<repo>", "desc": "...", "tags": [...] }`.
 
 ## Verifying what your plugin downloads
 
 If `install` downloads a runtime, verify it before extracting — use
-`avm_plugin_api::verify_sha256(path, checksums_text, file_name)` against the
+`avm_plugin_sdk::verify_sha256(path, checksums_text, file_name)` against the
 upstream's checksum file (or a one-line `"<sha256>  <name>"` when the
 upstream reports a single hash). Fail closed, and honor
 `AVM_ALLOW_UNVERIFIED=1` as the only escape hatch. The first-party plugins

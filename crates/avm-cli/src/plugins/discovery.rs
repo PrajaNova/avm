@@ -1,11 +1,11 @@
 use super::*;
 
 #[derive(Debug)]
-pub struct PluginManager {
+pub struct PluginRegistry {
     pub(super) plugin_dir: PathBuf,
 }
 
-impl PluginManager {
+impl PluginRegistry {
     /// Create a manager over the plugin directory, creating it if missing.
     pub fn new() -> Result<Self> {
         let dir = default_plugin_dir();
@@ -139,7 +139,7 @@ impl PluginManager {
 
     /// Remove the installed plugin directory for `name`, if any; errors on an invalid name or failed removal.
     pub fn remove_plugin(&self, name: &str) -> Result<()> {
-        avm_plugin_api::validate_name(name)?;
+        avm_plugin_sdk::validate_name(name)?;
         if let Some((_, target)) = self.find_any(name) {
             fs::remove_dir_all(target).context("remove plugin")?;
         }

@@ -1,8 +1,8 @@
 use crate::versions;
 use anyhow::{Context, Result};
-use avm_plugin_api::protocol::LockedAsset;
-use avm_plugin_api::tool_dir;
-use std::fs;
+use avm_plugin_sdk::protocol::LockedAsset;
+use avm_plugin_sdk::tool_dir;
+use fs_err as fs;
 
 const TAR_TIMEOUT_MS: u64 = 300_000;
 
@@ -13,9 +13,9 @@ pub fn install_python(version: &str) -> Result<()> {
 
 /// Installs Python `version` under a per-version lock, doing nothing if already installed; uses `locked` when given and errors on download or extract failure.
 pub fn install(version: &str, locked: Option<&LockedAsset>) -> Result<()> {
-    avm_plugin_api::download::validate_version(version)?;
+    avm_plugin_sdk::download::validate_version(version)?;
     let tools_root = tool_dir("python")?;
-    let _guard = avm_plugin_api::storage::lock(&tools_root.join(format!(".install-{version}")))?;
+    let _guard = avm_plugin_sdk::storage::lock(&tools_root.join(format!(".install-{version}")))?;
     let target = tools_root.join(version);
     if target.join("bin").join(crate::PYTHON_BIN).exists() {
         return Ok(());
@@ -41,7 +41,7 @@ pub fn install(version: &str, locked: Option<&LockedAsset>) -> Result<()> {
                 &resolved.assets[&platform]
             }
         };
-        avm_plugin_api::download::download_verified(asset, &archive)
+        avm_plugin_sdk::download::download_verified(asset, &archive)
     })();
     if let Err(e) = download {
         let _ = fs::remove_dir_all(&tmp);
@@ -49,7 +49,7 @@ pub fn install(version: &str, locked: Option<&LockedAsset>) -> Result<()> {
     }
 
     // The archive's single root dir is `python/`; strip it.
-    avm_plugin_api::download::extract_archive(
+    avm_plugin_sdk::download::extract_archive(
         &archive,
         &root,
         1,

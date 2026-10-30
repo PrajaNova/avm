@@ -1,7 +1,7 @@
 use crate::install;
 use crate::versions;
 use anyhow::{anyhow, Context, Result};
-use avm_plugin_api::{tool_dir, ToolVersionQuery};
+use avm_plugin_sdk::{tool_dir, ToolVersionQuery};
 use std::io::Write;
 use std::path::PathBuf;
 use std::process::{Command, ExitCode, Stdio};

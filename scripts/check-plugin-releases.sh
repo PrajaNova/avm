@@ -7,7 +7,7 @@ WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 export HOME="$WORK/home" AVM_PLUGIN_DIR="$WORK/home/.avm/plugins" AVM_NO_UPDATE_CHECK=1
 export AVM_GITHUB_API_URL="$WORK/api"
-mkdir -p "$HOME" "$WORK/build" "$WORK/api/repos/PrajaNova/avm/releases/tags"
+mkdir -p "$HOME" "$WORK/build" "$WORK/api/repos/PrajaNova/avm"
 case "$(uname -s)" in Darwin) os=darwin ;; Linux) os=linux ;; *) exit 1 ;; esac
 case "$(uname -m)" in arm64|aarch64) arch=arm64 ;; x86_64) arch=amd64 ;; *) exit 1 ;; esac
 archive="avm-plugin-fake_${os}_${arch}.tar.gz"
@@ -19,10 +19,10 @@ chmod +x "$WORK/build/avm-plugin-fake"
 tar -czf "$WORK/$archive" -C "$WORK/build" avm-plugin-fake
 (cd "$WORK" && shasum -a 256 "$archive") > "$WORK/checksums.txt"
 assets="[{\"name\":\"$archive\",\"browser_download_url\":\"file://$WORK/$archive\"},{\"name\":\"checksums.txt\",\"browser_download_url\":\"file://$WORK/checksums.txt\"}]"
-# First-party names resolve through the shared repo's release tags.
-printf '[{"tag_name":"avm-plugin-fake-v1.0.0"}]\n' > "$WORK/api/repos/PrajaNova/avm/releases?per_page=100"
-mkdir -p "$WORK/api/repos/PrajaNova/avm/releases/tags"
-printf '{"tag_name":"avm-plugin-fake-v1.0.0","assets":%s}\n' "$assets" > "$WORK/api/repos/PrajaNova/avm/releases/tags/avm-plugin-fake-v1.0.0"
+# Names resolve through the registry, then that repo's `avm-plugin-<name>-v*` release.
+printf '{"fake":{"repo":"https://github.com/PrajaNova/avm","desc":"fake plugin","tags":[]}}\n' > "$WORK/registry.json"
+export AVM_REGISTRY_URL="$WORK/registry.json"
+printf '[{"tag_name":"avm-plugin-fake-v1.0.0","assets":%s}]\n' "$assets" > "$WORK/api/repos/PrajaNova/avm/releases?per_page=100"
 "$BIN" plugin install fake
 [[ "$(cat "$AVM_PLUGIN_DIR/avm-plugin-fake/meta.json")" == *'"version":"avm-plugin-fake-v1.0.0"'* ]]
 "$BIN" plugin uninstall fake

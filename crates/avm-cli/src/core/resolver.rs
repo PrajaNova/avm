@@ -2,7 +2,7 @@ use std::collections::{BTreeSet, HashMap};
 use std::hash::{Hash, Hasher};
 use std::path::{Path, PathBuf};
 
-use avm_plugin_api::ResolvedAlias;
+use avm_plugin_sdk::ResolvedAlias;
 
 #[derive(Debug, Clone)]
 pub enum AliasSource {
@@ -188,8 +188,8 @@ pub fn load_unlocked(
         }
     }
     for (tool, spec) in cfg.local_tools.iter().chain(cfg.global_tools.iter()) {
-        avm_plugin_api::validate_name(tool)?;
-        avm_plugin_api::validate_version_spec(spec)?;
+        avm_plugin_sdk::validate_name(tool)?;
+        avm_plugin_sdk::validate_version_spec(spec)?;
     }
     Ok(cfg)
 }
@@ -212,7 +212,7 @@ fn signature(paths: &[PathBuf]) -> String {
                 path.canonicalize(),
                 meta.len(),
                 meta.modified(),
-                avm_plugin_api::sha256_file(path)
+                avm_plugin_sdk::sha256_file(path)
             ),
             Err(err) => format!("{path:?}:{:?}", err.kind()),
         })
@@ -341,7 +341,7 @@ fn load_config_layers(cwd: &Path, home: &Path, names: &[String]) -> anyhow::Resu
         if let Some(dir) = path.parent() {
             if std::fs::create_dir_all(dir).is_ok() {
                 if let Ok(raw) = serde_json::to_vec(&cache) {
-                    let _ = avm_plugin_api::storage::atomic_write(&path, &raw);
+                    let _ = avm_plugin_sdk::storage::atomic_write(&path, &raw);
                 }
             }
         }

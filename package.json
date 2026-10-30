@@ -22,6 +22,8 @@
     "ci": "cargo build --workspace && cargo test --workspace && bash scripts/check-changelog.sh",
     "changelog:check": "bash scripts/check-changelog.sh",
     "release:check": "bash scripts/check-release-version.sh",
+    "playground": "bash scripts/playground.sh",
+    "e2e": "bash e2e/run.sh",
     "postinstall": "node ./bin/install.js"
   },
   "files": [

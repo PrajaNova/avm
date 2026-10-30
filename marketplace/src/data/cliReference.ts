@@ -10,36 +10,6 @@ export const CLI_COMMANDS: CliCommand[] = [
     outputExample: '✓ Created .avm.json in current directory'
   },
   {
-    command: 'avm add',
-    args: '[--global] <alias> <command>',
-    category: 'Aliases',
-    description: 'Adds an executable alias to local or global .avm.json configuration.',
-    example: 'avm add dev "pnpm run dev --filter web"',
-    outputExample: "✓ Added local alias 'dev'"
-  },
-  {
-    command: 'avm remove',
-    args: '[--global] <alias>',
-    category: 'Aliases',
-    description: 'Removes an alias from the configuration file.',
-    example: 'avm remove dev',
-    outputExample: "✓ Removed local alias 'dev'"
-  },
-  {
-    command: 'avm list',
-    category: 'Core',
-    description: 'Displays all merged aliases, environment variables, tools, and plugin commands in effect.',
-    example: 'avm list',
-    outputExample: `Aliases:
-  dev       pnpm run dev (local)
-  release   npm run release $1 (global)
-Tools:
-  node      22.14.0 (local)
-  java      17.0.13+11 (global)
-Env:
-  NODE_ENV  development`
-  },
-  {
     command: 'avm which',
     args: '<alias-or-tool>',
     category: 'Core',
@@ -126,6 +96,14 @@ $env:JAVA_HOME = 'C:\\Users\\dev\\.avm\\tools\\java\\openjdk-17.0.13+11'`
     example: 'avm plugin install node',
     outputExample: `Fetching 'node' from PrajaNova/avm-plugin-node...
 ✓ Installed node v0.2.0`
+  },
+  {
+    command: 'avm plugin list',
+    category: 'Plugins',
+    description: 'Lists every tool with its active version, where it is pinned, and its installed versions (the active one starred), plus plugin-provided aliases. Also `avm -p list` and `avm plugin ls`. Aliases are under `avm alias list`, env vars under `avm env list`.',
+    example: 'avm plugin list',
+    outputExample: `TOOL  ACTIVE   SCOPE  SET BY       INSTALLED
+node  22.14.0  local  ./.avm.json  20.11.1  22.14.0*`
   },
   {
     command: 'avm plugin search',
@@ -215,21 +193,21 @@ $env:JAVA_HOME = 'C:\\Users\\dev\\.avm\\tools\\java\\openjdk-17.0.13+11'`
     "command": "avm alias add",
     "args": "[-g] <key> <command...>",
     "category": "Aliases",
-    "description": "Add a local or global alias. Equivalent to avm add (also avm aa).",
+    "description": "Add a local or global alias. Also avm -al add.",
     "example": "avm alias add test \"npm test\""
   },
   {
     "command": "avm alias remove",
     "args": "[-g] <key>",
     "category": "Aliases",
-    "description": "Remove an alias. Also avm alias rm, avm remove and avm rm.",
+    "description": "Remove an alias. Also avm alias rm.",
     "example": "avm alias remove test"
   },
   {
     "command": "avm alias list",
     "args": "",
     "category": "Aliases",
-    "description": "List merged configured aliases. Also avm alias ls; avm list has the shortcut avm ls.",
+    "description": "List merged configured aliases. Also avm alias ls and avm -al list.",
     "example": "avm alias list"
   },
 

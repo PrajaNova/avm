@@ -97,7 +97,7 @@ fn native_plugins_lock_and_install_offline_on_this_platform() {
     let root = std::env::temp_dir().join(format!("avm-native-lock-{}", std::process::id()));
     let bin = Path::new(env!("CARGO_BIN_EXE_avm-bin")).parent().unwrap();
     let ext = std::env::consts::EXE_SUFFIX;
-    let platform = avm_plugin_api::download::host_platform().unwrap();
+    let platform = avm_plugin_sdk::download::host_platform().unwrap();
     let node_platform = platform
         .replace("windows", "win")
         .replace("_amd64", "-x64")
@@ -141,15 +141,15 @@ fn native_plugins_lock_and_install_offline_on_this_platform() {
                 format!("#!/bin/sh\nprintf '%s\\n' '{{\"name\":\"{tool}\"}}'\n"),
             )
             .unwrap();
-            fs::set_permissions(file, fs::Permissions::from_mode(0o755)).unwrap();
+            fs::set_permissions(file, std::fs::Permissions::from_mode(0o755)).unwrap();
         }
     }
     let node_archive = release.join(format!("{node_name}.{suffix}"));
     let java_archive = root.join(format!("jdk.{suffix}"));
     archive(&root, &node_name, &node_archive);
     archive(&root, "jdk", &java_archive);
-    let node_hash = avm_plugin_api::sha256_file(&node_archive).unwrap();
-    let java_hash = avm_plugin_api::sha256_file(&java_archive).unwrap();
+    let node_hash = avm_plugin_sdk::sha256_file(&node_archive).unwrap();
+    let java_hash = avm_plugin_sdk::sha256_file(&java_archive).unwrap();
     fs::write(
         release.join("SHASUMS256.txt"),
         format!("{node_hash}  {node_name}.{suffix}\n"),

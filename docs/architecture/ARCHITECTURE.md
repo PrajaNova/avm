@@ -8,7 +8,7 @@ shims, and a runtime plugin marketplace.
 | Crate | Responsibility |
 | --- | --- |
 | `crates/avm-cli` | The `avm-bin` binary. Modules: `cli/` (command routing, shell protocol), `config`/`resolver` (`.avm.json` parsing, local/global merge rules, alias/env/tool resolution), `shims` (shim generation, PATH lookup), `runtime` (plugin discovery, the protocol host runner `PluginProcess`, the marketplace installer, the legacy asdf compatibility adapter). |
-| `crates/avm-plugin-api` | The `ToolProvider` trait, the plugin wire-protocol types (`protocol` module), and the `runner` module every plugin's `main.rs` calls. This is the one crate a plugin repo depends on. |
+| `crates/avm-plugin-sdk` | The `ToolProvider` trait, the plugin wire-protocol types (`protocol` module), and the `runner` module every plugin's `main.rs` calls. This is the one crate a plugin repo depends on. |
 
 **Nothing else is compiled into `avm-bin`.** node, java, python, and android are
 workspace members under `plugins/` with local API dependencies
@@ -56,12 +56,13 @@ ordinary installs but lack the optional locked-download protocol.
 ## The plugin marketplace
 
 `avm plugin install <name>` is the only install path — nothing works out of
-the box, and there is no registry file. Names resolve from GitHub releases:
+the box. A bare name is looked up in `marketplace/registry.json` (name to repo,
+description, tags), then resolved from that repo's GitHub releases:
 
 ```mermaid
 flowchart TD
   A["avm plugin install node"] --> B{"Bare name?"}
-  B -->|Yes| C["List releases of PrajaNova/avm,\nfind newest tag avm-plugin-node-v*"]
+  B -->|Yes| C["Registry: node to repo,\nthen newest tag avm-plugin-node-v*\n(else the repo's latest release)"]
   B -->|"owner/repo"| D["Use that repo's latest release"]
   B -->|"git URL or path"| F["git-clone / copy (asdf-style plugin)"]
   C --> H["Find asset avm-plugin-<name>_<os>_<arch>.tar.gz"]
@@ -74,7 +75,7 @@ flowchart TD
 repos with the `avm-plugin` topic. `avm plugin uninstall <name>` removes a plugin;
 re-running `avm plugin install <name>` is the update path.
 
-`provider_by_name` (`crates/avm-cli/src/cli/commands/provider.rs`) is the
+`provider_by_name` (`crates/avm-cli/src/global/provider_handler.rs`) is the
 single lookup every command goes through, in two tiers:
 
 1. `PluginManager::protocol_provider` — a marketplace-installed plugin
@@ -106,12 +107,12 @@ Full protocol reference and a build-your-own-plugin walkthrough:
 
 - CLI commands stay in `avm-cli/src/cli`.
 - Config and resolver logic stays in `avm-cli/src/{config,resolver}.rs`.
-- Provider contracts and the wire protocol stay in `avm-plugin-api`.
+- Provider contracts and the wire protocol stay in `avm-plugin-sdk`.
 - Plugin discovery, the protocol host runner, the marketplace installer,
   and the asdf adapter stay in `avm-cli/src/plugins/`.
 - Shim creation and PATH handling stay in `avm-cli/src/core/shims/`.
 
-`package.json` script aliases are read in-process (`cli/state.rs`), not via
+`package.json` script aliases are read in-process (`common/state.rs`), not via
 the node plugin: it's a hot path (alias resolution runs on every command).
 
 ## Global packages across local version switches
@@ -119,7 +120,7 @@ the node plugin: it's a hot path (alias resolution runs on every command).
 A binary installed by a global package manager invocation (e.g.
 `npm install -g <pkg>` under the globally-pinned Node) stays reachable even
 when a *different* local version is active in a project. Shim resolution
-(`resolve_managed_binary` in `crates/avm-cli/src/cli/commands/shim.rs`)
+(`resolve_managed_binary` in `crates/avm-cli/src/shims/shims_handler.rs`)
 tries the local pin's bin directory first, then falls back to the global
 pin's, for any binary that isn't itself a pinned tool name — so `node`
 itself always resolves to whichever version is actually selected

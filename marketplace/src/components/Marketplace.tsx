@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Link } from 'react-router';
 import { Search, Package, Copy } from 'lucide-react';
 import { Platforms } from './OsIcons';
-import registry from '../../registry.json';
+import { registry } from '../data/registry';
 
 // Node and Java support .avm.lock frozen installs; Android and asdf plugins do not yet.
 const LOCKABLE = new Set(['node', 'java']);
@@ -31,7 +31,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({ onCopy }) => {
                 Plugin Ecosystem
               </span>
               <span className="text-xs font-mono px-2 py-0.5 rounded-full bg-muted text-secondary border border-line">
-                registry.json (v1)
+                registry.json
               </span>
             </div>
             <h1 className="text-3xl sm:text-4xl font-semibold text-ink tracking-tight">

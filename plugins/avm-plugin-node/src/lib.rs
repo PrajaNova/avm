@@ -1,7 +1,7 @@
 mod install;
 mod versions;
 
-use avm_plugin_api::{tool_dir, ToolProvider, ToolVersion, ToolVersionQuery};
+use avm_plugin_sdk::{tool_dir, ToolProvider, ToolVersion, ToolVersionQuery};
 use std::collections::HashMap;
 use std::path::PathBuf;
 
@@ -32,7 +32,7 @@ impl ToolProvider for NodeProvider {
     }
 
     fn installed_versions(&self) -> anyhow::Result<Vec<String>> {
-        avm_plugin_api::list_installed("node", |v| self.is_installed(v))
+        avm_plugin_sdk::list_installed("node", |v| self.is_installed(v))
     }
 
     fn available_versions(&self, query: ToolVersionQuery) -> anyhow::Result<Vec<ToolVersion>> {
@@ -63,19 +63,19 @@ impl ToolProvider for NodeProvider {
         &self,
         version: &str,
         platforms: &[String],
-    ) -> anyhow::Result<avm_plugin_api::protocol::ResolveResponse> {
+    ) -> anyhow::Result<avm_plugin_sdk::protocol::ResolveResponse> {
         install::resolve_downloads(version, platforms)
     }
 
     fn install_locked(
         &self,
         version: &str,
-        asset: &avm_plugin_api::protocol::LockedAsset,
+        asset: &avm_plugin_sdk::protocol::LockedAsset,
     ) -> anyhow::Result<()> {
         install::install(version, Some(asset))
     }
 
     fn uninstall(&self, version: &str) -> anyhow::Result<()> {
-        avm_plugin_api::remove_version("node", version)
+        avm_plugin_sdk::remove_version("node", version)
     }
 }

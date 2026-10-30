@@ -1,12 +1,13 @@
 use crate::resolver::ResolvedConfig;
 use anyhow::{anyhow, bail, Context, Result};
-use avm_plugin_api::{
+use avm_plugin_sdk::{
     download::{validate_asset, validate_platform, validate_version},
     protocol::LockedAsset,
     ToolProvider, ToolVersionQuery,
 };
+use fs_err as fs;
 use serde::{Deserialize, Serialize};
-use std::{collections::BTreeMap, fs, path::Path};
+use std::{collections::BTreeMap, path::Path};
 
 pub const LOCK_FILE: &str = ".avm.lock";
 
@@ -164,7 +165,7 @@ impl Lockfile {
     pub fn save(&self, dir: &Path) -> Result<()> {
         let mut raw = serde_json::to_vec_pretty(self)?;
         raw.push(b'\n');
-        avm_plugin_api::storage::atomic_write(&dir.join(LOCK_FILE), &raw)
+        avm_plugin_sdk::storage::atomic_write(&dir.join(LOCK_FILE), &raw)
     }
 }
 

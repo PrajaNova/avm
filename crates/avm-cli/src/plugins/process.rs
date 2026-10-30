@@ -66,7 +66,7 @@ impl PluginProcess {
     /// includes the plugin executable's mtime and size, so updating the plugin
     /// invalidates it. `avm prune` removes old entries.
     fn env_cache_path(&self, version: &str) -> Option<PathBuf> {
-        avm_plugin_api::download::validate_version(version).ok()?;
+        avm_plugin_sdk::download::validate_version(version).ok()?;
         let meta = fs::metadata(&self.executable).ok()?;
         let nanos = meta
             .modified()
@@ -101,14 +101,14 @@ impl ToolProvider for PluginProcess {
     }
 
     fn is_installed(&self, version: &str) -> bool {
-        self.call_json::<avm_plugin_api::protocol::IsInstalledResponse>(&["is-installed", version])
+        self.call_json::<avm_plugin_sdk::protocol::IsInstalledResponse>(&["is-installed", version])
             .map(|r| r.installed)
             .unwrap_or(false)
     }
 
     fn installed_versions(&self) -> Result<Vec<String>> {
         Ok(self
-            .call_json::<avm_plugin_api::protocol::InstalledVersionsResponse>(&[
+            .call_json::<avm_plugin_sdk::protocol::InstalledVersionsResponse>(&[
                 "installed-versions",
             ])?
             .versions)
@@ -117,7 +117,7 @@ impl ToolProvider for PluginProcess {
     fn available_versions(&self, query: ToolVersionQuery) -> Result<Vec<ToolVersion>> {
         let query_arg = query.to_arg();
         Ok(self
-            .call_json::<avm_plugin_api::protocol::VersionsResponse>(&[
+            .call_json::<avm_plugin_sdk::protocol::VersionsResponse>(&[
                 "versions", "--query", &query_arg,
             ])?
             .versions)
@@ -125,7 +125,7 @@ impl ToolProvider for PluginProcess {
 
     fn executable_path(&self, version: &str) -> Result<Option<PathBuf>> {
         Ok(self
-            .call_json::<avm_plugin_api::protocol::ExecutablePathResponse>(&[
+            .call_json::<avm_plugin_sdk::protocol::ExecutablePathResponse>(&[
                 "executable-path",
                 version,
             ])?
@@ -143,7 +143,7 @@ impl ToolProvider for PluginProcess {
             return Ok(env);
         }
         let env = self
-            .call_json::<avm_plugin_api::protocol::EnvVarsResponse>(&["env-vars", version])?
+            .call_json::<avm_plugin_sdk::protocol::EnvVarsResponse>(&["env-vars", version])?
             .env;
         // Best effort: a cache that can't be written just means a spawn next time.
         if let Some((path, raw)) = cache.zip(serde_json::to_vec(&env).ok()) {
@@ -151,7 +151,7 @@ impl ToolProvider for PluginProcess {
                 .parent()
                 .is_some_and(|dir| fs::create_dir_all(dir).is_ok())
             {
-                let _ = avm_plugin_api::storage::atomic_write(&path, &raw);
+                let _ = avm_plugin_sdk::storage::atomic_write(&path, &raw);
             }
         }
         Ok(env)
@@ -169,8 +169,8 @@ impl ToolProvider for PluginProcess {
         &self,
         version: &str,
         platforms: &[String],
-    ) -> Result<avm_plugin_api::protocol::ResolveResponse> {
-        let request = serde_json::to_string(&avm_plugin_api::protocol::ResolveRequest {
+    ) -> Result<avm_plugin_sdk::protocol::ResolveResponse> {
+        let request = serde_json::to_string(&avm_plugin_sdk::protocol::ResolveRequest {
             version: version.to_string(),
             platforms: platforms.to_vec(),
         })?;
@@ -180,7 +180,7 @@ impl ToolProvider for PluginProcess {
     fn install_locked(
         &self,
         version: &str,
-        asset: &avm_plugin_api::protocol::LockedAsset,
+        asset: &avm_plugin_sdk::protocol::LockedAsset,
     ) -> Result<()> {
         let asset = serde_json::to_string(asset)?;
         self.run_status(&["install-locked", version, &asset])

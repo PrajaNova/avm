@@ -1,10 +1,11 @@
 #![cfg(unix)]
 
-use avm_plugin_api::{
+use avm_plugin_sdk::{
     protocol::{LockedAsset, ResolveRequest, ResolveResponse},
     sha256_file,
 };
-use std::{fs, os::unix::fs::PermissionsExt, process::Command};
+use fs_err as fs;
+use std::{os::unix::fs::PermissionsExt, process::Command};
 
 #[test]
 fn resolves_cross_platform_java_and_installs_without_the_live_index() {
@@ -14,7 +15,7 @@ fn resolves_cross_platform_java_and_installs_without_the_live_index() {
     fs::create_dir_all(root.join("home")).unwrap();
     fs::create_dir_all(root.join("disco")).unwrap();
     fs::write(source.join("java"), "#!/bin/sh\necho locked-java\n").unwrap();
-    fs::set_permissions(source.join("java"), fs::Permissions::from_mode(0o755)).unwrap();
+    fs::set_permissions(source.join("java"), std::fs::Permissions::from_mode(0o755)).unwrap();
     let archive = root.join("jdk.tar.gz");
     assert!(Command::new("tar")
         .args(["-czf"])
@@ -92,7 +93,7 @@ fn resolves_cross_platform_java_and_installs_without_the_live_index() {
         "openjdk-21.0.1+12".into(),
         serde_json::to_string(&asset).unwrap(),
     ];
-    let guard = avm_plugin_api::storage::lock(
+    let guard = avm_plugin_sdk::storage::lock(
         &root.join("home/.avm/tools/java/.install-openjdk-21.0.1+12"),
     )
     .unwrap();

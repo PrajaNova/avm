@@ -9,6 +9,15 @@ The format follows Keep a Changelog style, and releases use semantic versioning.
 ### Added
 - GitHub Action (`PrajaNova/avm/action`) and `scripts/ci-setup.sh` for any CI: install avm and plugins, use `.avm.lock` when present (`--frozen`), cache tools and plugins, and export PATH and env. Documented in `docs/ops/CI.md` and the website's Lockfiles & CI page.
 
+### Changed
+- **Breaking:** `avm plugin install <name>` and `avm plugin search` read a plugin registry, `marketplace/registry.json`, now a plain map `{ "<name>": { "repo", "desc", "tags" } }` (override the location with `AVM_REGISTRY_URL`). The binary still comes from that repo's release: the newest `avm-plugin-<name>-v*` release, else its latest. Older CLIs read the previous registry shape and cannot install by name against this file.
+- **Breaking:** alias management lives only under `avm alias` (short form `avm -al`): `avm alias add|remove|list`. The top-level `avm add`, `avm remove` and their shortcuts `aa`/`rm` are gone, so `avm <name>` always runs the alias `<name>`. Plugin commands stay under `avm plugin` / `avm -p`.
+- **Breaking:** the top-level `avm list` / `avm ls` is gone. Use `avm alias list` (`avm -al list`), `avm env list`, and the new `avm plugin list` (`avm -p list`), which shows tools with their active and installed versions plus plugin aliases.
+- Downloads and archive extraction show a spinner on a terminal (stderr only; hidden in CI and pipes).
+- File-system errors now include the path (`fs-err`).
+
+- **Breaking for plugin authors:** the `avm-plugin-api` crate is now `avm-plugin-sdk` (same modules and API; change the dependency and `use avm_plugin_api::` to `use avm_plugin_sdk::`).
+
 ### Fixed
 - PowerShell and cmd warnings (shown for an untrusted `.avm.json`) no longer let a crafted folder name run commands: curly quotes are escaped for PowerShell and cmd metacharacters for cmd.
 - Version ranges such as `>= 18` and `>=20.0.0-rc.1` now match (npm semver rules via `nodejs-semver`).

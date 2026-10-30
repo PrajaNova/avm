@@ -32,7 +32,7 @@ jobs:
         include:
           - { name: "Linux amd64", os: ubuntu-latest, run: "e2e/run.sh" }
           - { name: "Linux arm64", os: ubuntu-24.04-arm, run: "e2e/run.sh" }
-          - { name: "macOS (Apple Silicon)", os: macos-latest, run: "e2e/run.sh" }
+          - { name: "macOS (self-hosted)", os: self-hosted, run: "e2e/run.sh" }
           - { name: "Windows", os: windows-latest, run: "pwsh -File e2e/live.ps1" }
     env:
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # GitHub API rate limits on shared runners

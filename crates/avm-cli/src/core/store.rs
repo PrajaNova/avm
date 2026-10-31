@@ -1,4 +1,5 @@
 //! Small JSON state files: read with a default when missing, write atomically.
+use crate::constants::msg::{self, fill};
 use anyhow::{Context, Result};
 use fs_err as fs;
 use serde::{de::DeserializeOwned, Serialize};
@@ -8,7 +9,8 @@ use std::path::Path;
 /// A missing file is `T::default()`; a malformed one is an error naming `what`.
 pub fn read_or_default<T: DeserializeOwned + Default>(path: &Path, what: &str) -> Result<T> {
     match fs::read(path) {
-        Ok(raw) => serde_json::from_slice(&raw).with_context(|| format!("invalid {what}")),
+        Ok(raw) => serde_json::from_slice(&raw)
+            .with_context(|| fill(msg::STORE_INVALID, &[("what", what)])),
         Err(e) if e.kind() == ErrorKind::NotFound => Ok(T::default()),
         Err(e) => Err(e.into()),
     }

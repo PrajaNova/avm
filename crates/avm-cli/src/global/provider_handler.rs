@@ -1,6 +1,7 @@
 use crate::common::config_utils::{alias_source_label, config_root, edit_config};
 use crate::common::state::load_state;
 use crate::common::ui;
+use crate::constants::msg::{self, fill};
 use crate::global::{interactive_provider_menu, select_tool_version};
 use crate::plugins::installed_cell;
 use crate::plugins::PluginRegistry;
@@ -15,7 +16,7 @@ use avm_plugin_sdk::{ToolProvider, ToolVersionQuery};
 pub fn cmd_provider_tool(args: Vec<String>, cfg: &ResolvedConfig) -> Result<()> {
     let (provider_name, parts) = args
         .split_first()
-        .ok_or_else(|| anyhow!("plugin name required"))?;
+        .ok_or_else(|| anyhow!(msg::PROVIDER_NAME_REQUIRED))?;
     let provider = provider_by_name(provider_name)?;
 
     match parts {
@@ -60,7 +61,10 @@ pub fn cmd_provider_tool(args: Vec<String>, cfg: &ResolvedConfig) -> Result<()> 
         }
         [cmd, version] if cmd == "uninstall" => {
             provider.uninstall(version)?;
-            done!("Removed {provider_name} {version}");
+            ui::success(fill(
+                msg::PROVIDER_UNINSTALLED,
+                &[("name", provider_name), ("version", version)],
+            ));
             Ok(())
         }
         [cmd] if cmd == "--help" || cmd == "-h" || cmd == "help" => {
@@ -91,17 +95,21 @@ fn plugin_passthrough(provider_name: &str, parts: &[String], cfg: &ResolvedConfi
         if let Some((version, _)) = cfg.resolve_tool(provider_name) {
             cmd.env("AVM_RESOLVED_VERSION", version);
         }
-        let status = cmd
-            .status()
-            .with_context(|| format!("failed to run `avm {provider_name} {}`", parts.join(" ")))?;
+        let status = cmd.status().with_context(|| {
+            fill(
+                msg::PROVIDER_PASSTHROUGH_FAILED,
+                &[("name", provider_name), ("args", &parts.join(" "))],
+            )
+        })?;
         if !status.success() {
             std::process::exit(status.code().unwrap_or(1));
         }
         return Ok(());
     }
-    Err(anyhow!(
-        "unknown {provider_name} command. Run `avm {provider_name}` for an interactive menu, or `avm {provider_name} --help`"
-    ))
+    Err(anyhow!(fill(
+        msg::PROVIDER_UNKNOWN_COMMAND,
+        &[("name", provider_name)]
+    )))
 }
 
 /// Entry point for plugin commands: loads the current state and forwards to `cmd_provider_tool`.
@@ -120,7 +128,7 @@ fn parse_version_filter(value: &str) -> Result<ToolVersionQuery> {
     let major = value
         .trim_start_matches('v')
         .parse::<u64>()
-        .with_context(|| format!("unknown version filter: {value}"))?;
+        .with_context(|| fill(msg::PROVIDER_FILTER_UNKNOWN, &[("value", value)]))?;
     Ok(ToolVersionQuery::Major(major))
 }
 
@@ -144,25 +152,25 @@ fn install_and_pin(
     if !provider.is_installed(version) {
         install_provider_version(provider, version)?;
     }
+    let vars = [("name", provider_name), ("version", version)];
     with_fresh_shims(provider_name, || {
-        match scope {
-            PinScope::None => {
-                done!("Installed {provider_name} {version}");
-            }
+        let done = match scope {
+            PinScope::None => msg::PROVIDER_INSTALLED,
             PinScope::GlobalOnly => {
                 set_tool_version(provider_name, version, true)?;
-                done!("Installed {provider_name} {version} (global pin set)");
+                msg::PROVIDER_INSTALLED_GLOBAL
             }
             PinScope::Auto => {
                 set_tool_version(provider_name, version, false)?;
                 if global_pin(provider_name)?.is_none() {
                     set_tool_version(provider_name, version, true)?;
-                    done!("Installed {provider_name} {version} (local + global pin set)");
+                    msg::PROVIDER_INSTALLED_BOTH
                 } else {
-                    done!("Installed {provider_name} {version} (local pin set)");
+                    msg::PROVIDER_INSTALLED_LOCAL
                 }
             }
-        }
+        };
+        ui::success(fill(done, &vars));
         Ok(())
     })
 }
@@ -198,10 +206,13 @@ pub fn set_tool_version(tool: &str, version: &str, global: bool) -> Result<()> {
         cfg.tools.insert(tool.to_string(), version.to_string());
         Ok(())
     })?;
-    if global {
-        done!("Set global {tool} version to {version}");
+    let template = if global {
+        msg::PROVIDER_SET_GLOBAL
     } else {
-        done!("Set local {tool} version to {version}");
+        msg::PROVIDER_SET_LOCAL
+    };
+    ui::success(fill(template, &[("tool", tool), ("version", version)]));
+    if !global {
         crate::project::refresh_lock();
     }
     Ok(())
@@ -231,27 +242,24 @@ pub fn ensure_provider_version_installed(
         return Ok(());
     }
 
-    println!("Installing {provider_name} {version}...");
+    let vars = [("name", provider_name), ("version", version)];
+    ui::info(fill(msg::PROVIDER_INSTALLING, &vars));
     install_provider_version(provider, version)?;
-    done!("Installed {provider_name} {version}");
+    ui::success(fill(msg::PROVIDER_INSTALLED, &vars));
     Ok(())
 }
 
 /// Prints usage for `avm <plugin>` subcommands.
 fn print_provider_help(provider_name: &str) {
-    println!("Usage: avm {provider_name} [COMMAND]");
-    println!();
-    println!("Commands:");
-    println!("  list                         Show selected and installed versions");
-    println!("  versions                     Pick from available versions");
-    println!("  <major> versions             Pick from one major line");
-    println!("  latest versions              Pick the latest available version");
-    println!("  use <version> [-g|--global]  Set version locally or globally");
-    println!("  set <version> [-g|--global]  Alias for use");
-    println!("  install <version|latest|N>   Install + auto-pin (local; global if unpinned)");
-    println!("  install <version> --global   Install + pin globally only");
-    println!("  install <version> --no-pin   Install without pinning");
-    println!("  uninstall <version>          Remove managed version");
+    ui::info(fill(msg::PROVIDER_HELP, &[("name", provider_name)]));
+}
+
+/// Fills `{name}` in each line template.
+fn fill_lines(lines: &[&str], name: &str) -> Vec<String> {
+    lines
+        .iter()
+        .map(|line| fill(line, &[("name", name)]))
+        .collect()
 }
 
 /// Warns when a non-shim binary for `tool` comes first on PATH and would bypass AVM shims.
@@ -264,21 +272,18 @@ fn warn_if_shim_is_not_preferred(tool: &str) {
         return;
     }
 
-    eprintln!(
-        "warning: plain `{tool}` currently resolves to {} before AVM shims",
-        first_match.display()
-    );
-    warn!("run `eval \"$(avm shell-init)\"` and then `rehash` or `hash -r`");
+    ui::notice(fill(
+        msg::PROVIDER_SHIM_SHADOWED,
+        &[("tool", tool), ("path", &first_match.display().to_string())],
+    ));
+    ui::warn(msg::PROVIDER_SHIM_HINT);
 }
 
 /// Looks up an installed plugin by name; errors with the install hint when it is not found.
 pub fn provider_by_name(name: &str) -> Result<Box<dyn ToolProvider>> {
-    PluginRegistry::new()?.provider(name).ok_or_else(|| {
-        anyhow!(crate::constants::msg::fill(
-            crate::constants::msg::PLUGIN_NOT_INSTALLED,
-            &[("name", name)]
-        ))
-    })
+    PluginRegistry::new()?
+        .provider(name)
+        .ok_or_else(|| anyhow!(fill(msg::PLUGIN_NOT_INSTALLED, &[("name", name)])))
 }
 
 /// Prints the plugin's selected version and its installed versions.
@@ -288,22 +293,27 @@ pub fn print_provider_status(
     provider: &dyn ToolProvider,
     cfg: &ResolvedConfig,
 ) -> Result<()> {
-    println!("Plugin: {provider_name}");
+    ui::info(fill(
+        msg::PROVIDER_STATUS_PLUGIN,
+        &[("name", provider_name)],
+    ));
     if let Some((version, source)) = cfg.resolve_tool(provider_name) {
-        println!(
-            "Selected version: {version} ({})",
-            alias_source_label(&source)
-        );
+        ui::info(fill(
+            msg::PROVIDER_STATUS_SELECTED,
+            &[
+                ("version", &version),
+                ("source", alias_source_label(&source)),
+            ],
+        ));
     } else {
-        println!("Selected version: none");
+        ui::info(msg::PROVIDER_STATUS_SELECTED_NONE);
     }
     print_installed_versions(provider, cfg.resolve_tool(provider_name).map(|(v, _)| v))?;
-    println!();
-    println!("Commands:");
-    println!("  avm {provider_name} versions");
-    println!("  avm {provider_name} use <version>");
-    println!("  avm {provider_name} install <version>");
-    println!("  avm {provider_name} uninstall <version>");
+    ui::blank();
+    ui::section(
+        msg::PROVIDER_COMMANDS_HEADING,
+        &fill_lines(&msg::PROVIDER_STATUS_COMMANDS, provider_name),
+    );
     Ok(())
 }
 
@@ -313,13 +323,21 @@ fn print_installed_versions(provider: &dyn ToolProvider, active: Option<String>)
     crate::version_files::sort_versions(&mut installed);
     let active = active.as_deref();
     if installed.is_empty() && active.is_none() {
-        println!("Installed {} versions: none", provider.name());
+        ui::info(fill(
+            msg::PROVIDER_INSTALLED_NONE,
+            &[("name", provider.name())],
+        ));
     } else {
-        println!(
-            "Installed {} versions: {}",
-            provider.name(),
-            installed_cell(&installed, active).replace("  ", ", ")
-        );
+        ui::info(fill(
+            msg::PROVIDER_INSTALLED_LIST,
+            &[
+                ("name", provider.name()),
+                (
+                    "versions",
+                    &installed_cell(&installed, active).replace("  ", ", "),
+                ),
+            ],
+        ));
     }
     Ok(())
 }
@@ -333,7 +351,10 @@ fn print_available_versions(
 ) -> Result<()> {
     let versions = provider.available_versions(query)?;
     if versions.is_empty() {
-        println!("Available {provider_name} versions: none");
+        ui::info(fill(
+            msg::PROVIDER_AVAILABLE_NONE,
+            &[("name", provider_name)],
+        ));
         return Ok(());
     }
 
@@ -341,14 +362,18 @@ fn print_available_versions(
         return select_tool_version(provider_name, provider, versions);
     }
 
-    println!("Available {provider_name} versions:");
+    ui::info(fill(
+        msg::PROVIDER_AVAILABLE_HEADING,
+        &[("name", provider_name)],
+    ));
     for version in &versions {
-        println!("  {}", version.label);
+        ui::info(format!("  {}", version.label));
     }
 
-    println!();
-    println!("Use:");
-    println!("  avm {provider_name} install <version>");
-    println!("  avm {provider_name} use <version>");
+    ui::blank();
+    ui::section(
+        msg::PROVIDER_USE_HEADING,
+        &fill_lines(&msg::PROVIDER_USE_COMMANDS, provider_name),
+    );
     Ok(())
 }

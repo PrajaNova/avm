@@ -43,20 +43,24 @@ impl PluginProcess {
         cmd.args(args);
         let timeout = env_timeout_ms("AVM_PLUGIN_READ_TIMEOUT", PLUGIN_PROCESS_READ_TIMEOUT_MS);
         let output = run_with_timeout(cmd, timeout).with_context(|| {
-            format!(
-                "plugin '{}' ({}) failed on `{}`",
-                self.tool_name,
-                self.executable.display(),
-                args.join(" ")
+            fill(
+                msg::PLUGIN_CALL_FAILED,
+                &[
+                    ("name", &self.tool_name),
+                    ("exe", &self.executable.display().to_string()),
+                    ("args", &args.join(" ")),
+                ],
             )
         })?;
         serde_json::from_str(output.trim()).with_context(|| {
-            format!(
-                "plugin '{}' ({}) returned malformed output for `{}`: {}",
-                self.tool_name,
-                self.executable.display(),
-                args.join(" "),
-                output.trim()
+            fill(
+                msg::PLUGIN_CALL_MALFORMED,
+                &[
+                    ("name", &self.tool_name),
+                    ("exe", &self.executable.display().to_string()),
+                    ("args", &args.join(" ")),
+                    ("output", output.trim()),
+                ],
             )
         })
     }
@@ -89,7 +93,10 @@ impl PluginProcess {
         run_timed(
             cmd,
             PLUGIN_PROCESS_INSTALL_TIMEOUT_MS,
-            &format!("plugin '{}' `{}`", self.tool_name, args.join(" ")),
+            &fill(
+                msg::PLUGIN_RUN_LABEL,
+                &[("name", &self.tool_name), ("args", &args.join(" "))],
+            ),
             "AVM_PLUGIN_INSTALL_TIMEOUT",
         )
     }

@@ -1,6 +1,3 @@
-#[macro_use]
-mod say;
-
 mod alias;
 mod app;
 mod args;

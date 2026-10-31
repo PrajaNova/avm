@@ -1,7 +1,8 @@
 //! `avm plugin prune`, plus the `.last_used` marker shims write.
 use crate::common::state::home_dir;
+use crate::common::ui;
+use crate::constants::msg::{self, fill};
 use crate::core::tracked;
-use crate::global::confirm;
 use crate::{config, shims};
 use ::fs_err as fs;
 use anyhow::{anyhow, Context, Result};
@@ -79,7 +80,7 @@ fn human(bytes: u64) -> String {
 fn parse_days(spec: &str) -> Result<u64> {
     spec.strip_suffix('d')
         .and_then(|n| n.parse().ok())
-        .ok_or_else(|| anyhow!("--older-than takes days, like 90d"))
+        .ok_or_else(|| anyhow!(msg::PRUNE_DAYS_FORMAT))
 }
 
 /// Global npm packages in a node version's bin (anything beyond node's own tools).
@@ -154,9 +155,9 @@ pub fn cmd_prune(
         let path = PathBuf::from(dir);
         if path.is_dir() {
             let cfg = crate::resolver::load(&path, &home, HashMap::new()).with_context(|| {
-                format!(
-                    "cannot safely prune: failed to resolve tracked project {}",
-                    path.display()
+                fill(
+                    msg::PRUNE_RESOLVE_FAILED,
+                    &[("path", &path.display().to_string())],
                 )
             })?;
             keep.extend(
@@ -233,13 +234,14 @@ pub fn cmd_prune(
 
     let skipped_note = || {
         if unrecorded > 0 {
-            println!(
-                "Skipped {unrecorded} version(s) avm hasn't seen used yet; add --include-unrecorded to consider them (check the list with --dry-run first)."
-            );
+            ui::info(fill(
+                msg::PRUNE_SKIPPED,
+                &[("count", &unrecorded.to_string())],
+            ));
         }
     };
     if doomed.is_empty() {
-        println!("Nothing to prune.");
+        ui::info(msg::PRUNE_NOTHING);
         skipped_note();
         return Ok(());
     }
@@ -253,34 +255,48 @@ pub fn cmd_prune(
                     .duration_since(t)
                     .map(|d| d.as_secs() / 86_400)
                     .unwrap_or(0);
-                format!("last used {days}d ago")
+                fill(msg::PRUNE_LAST_USED, &[("days", &days.to_string())])
             })
-            .unwrap_or_else(|| "no recorded use".to_string());
-        println!("  {tool} {version}  {}  ({used})", human(size));
+            .unwrap_or_else(|| msg::PRUNE_NO_USE.to_string());
+        let entry = [
+            ("tool", tool.as_str()),
+            ("version", version),
+            ("size", &human(size)),
+            ("used", &used),
+        ];
+        ui::info(fill(msg::PRUNE_ENTRY, &entry));
         let pkgs = global_packages(tool, path);
         if !pkgs.is_empty() {
-            println!(
-                "    warning: holds global packages ({}); other versions fall back to them",
-                pkgs.join(", ")
-            );
+            ui::info(fill(
+                msg::PRUNE_GLOBAL_PACKAGES,
+                &[("packages", &pkgs.join(", "))],
+            ));
         }
     }
-    println!("{} version(s), {} to reclaim.", doomed.len(), human(total));
+    ui::info(fill(
+        msg::PRUNE_SUMMARY,
+        &[
+            ("count", &doomed.len().to_string()),
+            ("size", &human(total)),
+        ],
+    ));
     skipped_note();
-    println!("Kept: global pins and pins of {} project(s) avm has seen (it records them as you use them).", live_dirs.len());
-    if dry_run || !confirm("Remove them?", yes)? {
+    ui::info(fill(
+        msg::PRUNE_KEPT,
+        &[("count", &live_dirs.len().to_string())],
+    ));
+    if dry_run || !ui::confirm(msg::PRUNE_CONFIRM, yes)? {
         return Ok(());
     }
     // A project tracked while we waited may need a version we're about to delete.
     let _guard = avm_plugin_sdk::storage::lock(&tracked)?;
     if tracked::dirs()? != tracked_snapshot {
-        return Err(anyhow!(
-            "a project was tracked while pruning; nothing was removed, re-run `avm plugin prune`"
-        ));
+        return Err(anyhow!(msg::PRUNE_RACE));
     }
     for (tool, version, path, _) in doomed {
-        fs::remove_dir_all(&path).with_context(|| format!("failed to remove {tool} {version}"))?;
-        done!("Removed {tool} {version}");
+        let vars = [("tool", tool.as_str()), ("version", version.as_str())];
+        fs::remove_dir_all(&path).with_context(|| fill(msg::PRUNE_REMOVE_FAILED, &vars))?;
+        ui::success(fill(msg::PRUNE_REMOVED, &vars));
     }
     // Forget projects that no longer exist.
     tracked::replace(&live_dirs)?;

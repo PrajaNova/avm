@@ -3,14 +3,13 @@ use crate::common::config_utils::alias_source_label;
 use crate::common::state::load_state;
 use crate::common::ui;
 use crate::config::CONFIG_FILE;
+use crate::constants::msg::{self, fill};
 use crate::global::{ensure_provider_version_installed, provider_by_name, set_tool_version};
 use crate::resolver::{AliasSource, ResolvedConfig};
 use crate::shims;
 use crate::version_files::{numbers, pick};
-use anyhow::{anyhow, Context, Result};
+use anyhow::{Context, Result};
 use avm_plugin_sdk::ToolVersionQuery;
-use std::io;
-use std::io::Write;
 use std::path::Path;
 
 struct Status {
@@ -32,7 +31,7 @@ fn available_versions(tool: &str) -> Option<Result<Vec<String>>> {
         provider
             .available_versions(ToolVersionQuery::Recent)
             .map(|versions| versions.into_iter().map(|v| v.version).collect())
-            .with_context(|| format!("couldn't list {tool} versions")),
+            .with_context(|| fill(msg::OUTDATED_LIST_FAILED, &[("tool", tool)])),
     )
 }
 
@@ -145,7 +144,7 @@ pub fn cmd_outdated(json: bool) -> Result<()> {
         return Ok(());
     }
     if rows.is_empty() {
-        println!("No tools pinned here.");
+        ui::info(msg::OUTDATED_NONE_PINNED);
         return Ok(());
     }
     let dash = || "-".to_string();
@@ -176,31 +175,13 @@ pub fn cmd_outdated(json: bool) -> Result<()> {
     Ok(())
 }
 
-/// Asks a yes/no question; `yes` skips the prompt.
-/// Errors when there is no terminal to prompt on and `yes` was not given.
-pub fn confirm(question: &str, yes: bool) -> Result<bool> {
-    if yes {
-        return Ok(true);
-    }
-    if !ui::can_select() {
-        return Err(anyhow!(
-            "{question} Re-run with -y to confirm (no terminal to ask)."
-        ));
-    }
-    print!("{question} [y/N] ");
-    io::stdout().flush()?;
-    let mut answer = String::new();
-    io::stdin().read_line(&mut answer)?;
-    Ok(matches!(answer.trim(), "y" | "Y" | "yes"))
-}
-
 /// `avm plugin upgrade`: moves pinned tools to the newest in-range version, or the newest overall with `bump`.
 /// `dry_run` only prints the plan; `yes` skips the confirmation.
 pub fn cmd_upgrade(tools: Vec<String>, bump: bool, dry_run: bool, yes: bool) -> Result<()> {
     let cfg = load_state()?;
     let rows = statuses(&cfg, &tools)?;
     if rows.is_empty() {
-        println!("No tools pinned here.");
+        ui::info(msg::OUTDATED_NONE_PINNED);
         return Ok(());
     }
     let mut plan = Vec::new();
@@ -213,12 +194,18 @@ pub fn cmd_upgrade(tools: Vec<String>, bump: bool, dry_run: bool, yes: bool) -> 
         match target {
             Some(t) if t != s.current => {
                 if bump && s.from_file {
-                    println!("{}: pinned by {}; edit it to move to {t}", s.tool, s.source);
+                    ui::info(fill(
+                        msg::OUTDATED_PINNED_BY_FILE,
+                        &[("tool", &s.tool), ("source", &s.source), ("target", &t)],
+                    ));
                 } else {
                     plan.push((s, t));
                 }
             }
-            _ => println!("{}: {} is up to date", s.tool, s.current),
+            _ => ui::info(fill(
+                msg::OUTDATED_UP_TO_DATE,
+                &[("tool", &s.tool), ("current", &s.current)],
+            )),
         }
     }
     if plan.is_empty() {
@@ -226,19 +213,21 @@ pub fn cmd_upgrade(tools: Vec<String>, bump: bool, dry_run: bool, yes: bool) -> 
     }
     for (s, target) in &plan {
         let pin = if s.from_file {
-            "installs; the version file already covers it".to_string()
+            msg::OUTDATED_PIN_FILE.to_string()
         } else {
-            format!("{} pin", s.source)
+            fill(msg::OUTDATED_PIN_SCOPE, &[("source", &s.source)])
         };
-        println!("{}: {} → {target} ({pin})", s.tool, s.current);
+        ui::info(fill(
+            msg::OUTDATED_PLAN,
+            &[
+                ("tool", &s.tool),
+                ("current", &s.current),
+                ("target", target),
+                ("pin", &pin),
+            ],
+        ));
     }
-    if dry_run
-        || (bump
-            && !confirm(
-                "Move these pins to the latest release (may cross a major version)?",
-                yes,
-            )?)
-    {
+    if dry_run || (bump && !ui::confirm(msg::OUTDATED_BUMP_CONFIRM, yes)?) {
         return Ok(());
     }
     for (s, target) in plan {

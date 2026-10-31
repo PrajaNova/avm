@@ -1,5 +1,7 @@
 //! `avm trust`.
+use crate::common::ui;
 use crate::config;
+use crate::constants::msg::{self, fill};
 use crate::project::TrustArgs;
 use ::fs_err as fs;
 use anyhow::{anyhow, Context, Result};
@@ -17,7 +19,7 @@ pub fn cmd_trust(args: TrustArgs) -> Result<()> {
     }
     let target = match args.path {
         Some(path) => path,
-        None => std::env::current_dir().context("failed to read current directory")?,
+        None => std::env::current_dir().context(msg::PROJECT_CWD_FAILED)?,
     };
     let files: Vec<PathBuf> = if target.is_dir() {
         let names = config::file_names(&std::env::var("AVM_ENV").unwrap_or_default())?;
@@ -31,23 +33,18 @@ pub fn cmd_trust(args: TrustArgs) -> Result<()> {
         vec![target.clone()]
     };
     if files.is_empty() {
-        return Err(anyhow!(
-            "no active avm config or .env in {}",
-            target.display()
-        ));
+        let path = target.display().to_string();
+        return Err(anyhow!(fill(msg::TRUST_NONE, &[("path", &path)])));
     }
     for file in files {
+        let path = file.display().to_string();
         if args.revoke {
-            let removed = crate::trust::revoke(&file)?;
-            println!(
-                "{} {}",
-                if removed {
-                    "✓ Revoked trust for"
-                } else {
-                    "Was not trusted:"
-                },
-                file.display()
-            );
+            let template = if crate::trust::revoke(&file)? {
+                msg::TRUST_REVOKED
+            } else {
+                msg::TRUST_WAS_NOT
+            };
+            ui::info(fill(template, &[("path", &path)]));
             continue;
         }
         // Show what's being trusted: the commands and env it will run with.
@@ -58,21 +55,21 @@ pub fn cmd_trust(args: TrustArgs) -> Result<()> {
         {
             let cfg = config::load_file(&file)?;
             for (key, value) in cfg.aliases.iter().collect::<BTreeMap<_, _>>() {
-                println!("  alias {key} → {value}");
+                ui::info(fill(msg::TRUST_ALIAS, &[("key", key), ("value", value)]));
             }
             for (key, value) in cfg.env.iter().collect::<BTreeMap<_, _>>() {
-                println!("  env   {key}={value}");
+                ui::info(fill(msg::TRUST_ENV, &[("key", key), ("value", value)]));
             }
         } else {
             for line in fs::read_to_string(&file)?
                 .lines()
                 .filter(|l| !l.trim().is_empty() && !l.trim_start().starts_with('#'))
             {
-                println!("  {line}");
+                ui::info(format!("  {line}"));
             }
         }
         crate::trust::trust(&file)?;
-        done!("Trusted {}", file.display());
+        ui::success(fill(msg::TRUST_DONE, &[("path", &path)]));
     }
     Ok(())
 }

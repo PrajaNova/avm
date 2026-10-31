@@ -1,4 +1,5 @@
 use crate::common::shell::Shell;
+use crate::constants::msg;
 use anyhow::{anyhow, Context, Result};
 use fs_err as fs;
 use std::path::{Path, PathBuf};
@@ -24,7 +25,7 @@ pub fn detach(cmd: &mut Command) {
 pub fn replace_binary(exe: &Path, new: &Path) -> Result<()> {
     use std::os::unix::fs::PermissionsExt;
     fs::set_permissions(new, std::fs::Permissions::from_mode(0o755))?;
-    fs::rename(new, exe).context("failed to swap in the new binary") // atomic
+    fs::rename(new, exe).context(msg::BINARY_SWAP_FAILED) // atomic
 }
 
 /// Nothing is parked aside on Unix.
@@ -46,7 +47,7 @@ pub fn resolve_program(program: &str, _path: &str, _skip_shims: bool) -> Result<
 /// Replaces this process with `command`; only returns the error if that fails.
 pub fn run_replacing_process(mut command: Command) -> Result<()> {
     use std::os::unix::process::CommandExt;
-    Err(command.exec()).context("failed to execute command")
+    Err(command.exec()).context(msg::COMMAND_EXEC_FAILED)
 }
 
 /// Marks `path` rwxr-xr-x.
@@ -59,10 +60,10 @@ pub fn make_executable(path: &Path) -> std::io::Result<()> {
 pub fn check_plugin_source_perms(meta: &std::fs::Metadata) -> Result<()> {
     use std::os::unix::fs::{MetadataExt, PermissionsExt};
     if meta.uid() == 0 && current_euid() != 0 {
-        return Err(anyhow!("plugin sources owned by root are not allowed"));
+        return Err(anyhow!(msg::PLUGIN_SOURCE_ROOT_OWNED));
     }
     if meta.permissions().mode() & 0o002 != 0 {
-        return Err(anyhow!("plugin source must not be world-writable"));
+        return Err(anyhow!(msg::PLUGIN_SOURCE_WORLD_WRITABLE));
     }
     Ok(())
 }

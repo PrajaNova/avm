@@ -5,7 +5,9 @@ use crate::common::shell::Shell;
 use crate::common::state::{
     env_baseline, load_state, untrusted_files, untrusted_notice, ENV_BASELINE, INHERITED_ENV,
 };
+use crate::common::ui;
 use crate::config;
+use crate::constants::msg::{self, fill};
 use crate::env::EnvCommands;
 use anyhow::{anyhow, Result};
 
@@ -83,7 +85,10 @@ pub fn cmd_env_add(key: String, value: String, global: bool) -> Result<()> {
         cfg.env.insert(key.clone(), value.clone());
         Ok(())
     })?;
-    done!("Added {} env var '{key}={value}'", scope(global));
+    ui::success(fill(
+        msg::ENV_ADDED,
+        &[("scope", scope(global)), ("key", &key), ("value", &value)],
+    ));
     Ok(())
 }
 
@@ -91,9 +96,12 @@ pub fn cmd_env_add(key: String, value: String, global: bool) -> Result<()> {
 pub fn cmd_env_remove(key: String, global: bool) -> Result<()> {
     edit_config(global, false, |cfg| match cfg.env.remove(&key) {
         Some(_) => Ok(()),
-        None => Err(anyhow!("env var '{key}' not found")),
+        None => Err(anyhow!(fill(msg::ENV_NOT_FOUND, &[("key", &key)]))),
     })?;
-    done!("Removed {} env var '{key}'", scope(global));
+    ui::success(fill(
+        msg::ENV_REMOVED,
+        &[("scope", scope(global)), ("key", &key)],
+    ));
     Ok(())
 }
 
@@ -102,7 +110,7 @@ pub fn cmd_env_list() -> Result<()> {
     let cfg = load_state()?;
     let merged = merge_env(&cfg);
     if merged.is_empty() {
-        println!("No env vars configured.");
+        ui::info(msg::ENV_NONE);
         return Ok(());
     }
     let mut keys: Vec<_> = merged.keys().collect();

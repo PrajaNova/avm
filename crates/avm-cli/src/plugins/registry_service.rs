@@ -39,29 +39,32 @@ fn registry_url() -> String {
 /// Fetches and validates the registry; errors say where it was read from.
 pub(super) fn load_registry() -> Result<Registry> {
     let url = registry_url();
-    let body = fetch(&url, MARKETPLACE_TIMEOUT_SECS).with_context(|| {
-        format!("failed to load the plugin registry from {url} (override with AVM_REGISTRY_URL)")
-    })?;
-    parse_registry(&body).with_context(|| format!("invalid plugin registry at {url}"))
+    let body = fetch(&url, MARKETPLACE_TIMEOUT_SECS)
+        .with_context(|| fill(msg::REGISTRY_LOAD_FAILED, &[("url", &url)]))?;
+    parse_registry(&body).with_context(|| fill(msg::REGISTRY_INVALID, &[("url", &url)]))
 }
 
 /// Parses registry JSON, rejecting an unsupported schema, duplicate names and entries whose
 /// name or repo link is unusable.
 fn parse_registry(body: &[u8]) -> Result<Registry> {
-    let file: RegistryFile = serde_json::from_slice(body).context("malformed JSON")?;
+    let file: RegistryFile = serde_json::from_slice(body).context(msg::REGISTRY_MALFORMED_JSON)?;
     if file.schema_version != SCHEMA_VERSION {
-        return Err(anyhow!(
-            "unsupported registry schema_version {} (this avm reads {SCHEMA_VERSION}); update avm",
-            file.schema_version
-        ));
+        return Err(anyhow!(fill(
+            msg::REGISTRY_SCHEMA_UNSUPPORTED,
+            &[
+                ("found", &file.schema_version.to_string()),
+                ("supported", &SCHEMA_VERSION.to_string())
+            ]
+        )));
     }
     let mut registry = Registry::new();
     for entry in file.plugins {
         avm_plugin_sdk::validate_name(&entry.name)?;
-        repo_slug(&entry.repo).with_context(|| format!("plugin '{}'", entry.name))?;
+        repo_slug(&entry.repo)
+            .with_context(|| fill(msg::REGISTRY_ENTRY_CONTEXT, &[("name", &entry.name)]))?;
         let name = entry.name.clone();
         if registry.insert(name.clone(), entry).is_some() {
-            return Err(anyhow!("plugin '{name}' is listed twice"));
+            return Err(anyhow!(fill(msg::REGISTRY_DUPLICATE, &[("name", &name)])));
         }
     }
     Ok(registry)
@@ -82,18 +85,16 @@ pub(super) fn repo_slug(link: &str) -> Result<String> {
     if slug.split('/').count() == 2 && slug.split('/').all(part_ok) {
         Ok(slug.to_string())
     } else {
-        Err(anyhow!(
-            "invalid repo link '{link}' (expected https://github.com/<owner>/<repo>)"
-        ))
+        Err(anyhow!(fill(msg::REGISTRY_REPO_INVALID, &[("link", link)])))
     }
 }
 
 /// The repo (`owner/repo`) that releases plugin `name`, or an error pointing at search.
 pub(super) fn registry_repo(name: &str) -> Result<String> {
     let registry = load_registry()?;
-    let entry = registry.get(name).ok_or_else(|| {
-        anyhow!("no plugin named '{name}' in the registry — try `avm plugin search {name}`, or install a third-party one with `avm plugin install <owner>/<repo>`")
-    })?;
+    let entry = registry
+        .get(name)
+        .ok_or_else(|| anyhow!(fill(msg::REGISTRY_PLUGIN_UNKNOWN, &[("name", name)])))?;
     repo_slug(&entry.repo)
 }
 

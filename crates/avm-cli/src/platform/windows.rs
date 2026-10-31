@@ -1,4 +1,5 @@
 use crate::common::shell::Shell;
+use crate::constants::msg::{self, fill};
 use anyhow::{anyhow, Context, Result};
 use fs_err as fs;
 use std::path::{Path, PathBuf};
@@ -25,10 +26,10 @@ pub fn detach(cmd: &mut Command) {
 pub fn replace_binary(exe: &Path, new: &Path) -> Result<()> {
     let old = old_binary(exe);
     let _ = fs::remove_file(&old);
-    fs::rename(exe, &old).context("failed to move the running avm-bin aside")?;
+    fs::rename(exe, &old).context(msg::BINARY_MOVE_ASIDE_FAILED)?;
     if let Err(err) = fs::rename(new, exe) {
         let _ = fs::rename(&old, exe);
-        return Err(err).context("failed to swap in the new binary");
+        return Err(err).context(msg::BINARY_SWAP_FAILED);
     }
     Ok(())
 }
@@ -59,12 +60,12 @@ pub fn resolve_program(program: &str, path: &str, skip_shims: bool) -> Result<Pa
         return Ok(PathBuf::from(program));
     }
     crate::shims::which_in_path(program, std::ffi::OsStr::new(path), skip_shims)
-        .ok_or_else(|| anyhow!("command '{program}' not found in PATH"))
+        .ok_or_else(|| anyhow!(fill(msg::COMMAND_NOT_FOUND, &[("program", program)])))
 }
 
 /// Windows can't exec-replace: runs `command` and exits with its status.
 pub fn run_replacing_process(mut command: Command) -> Result<()> {
-    let status = command.status().context("failed to execute command")?;
+    let status = command.status().context(msg::COMMAND_EXEC_FAILED)?;
     std::process::exit(status.code().unwrap_or(1));
 }
 

@@ -9,7 +9,7 @@ impl PluginRegistry {
     /// Create a manager over the plugin directory, creating it if missing.
     pub fn new() -> Result<Self> {
         let dir = default_plugin_dir();
-        fs::create_dir_all(&dir).context("create plugin directory")?;
+        fs::create_dir_all(&dir).context(msg::PLUGIN_DIR_CREATE_FAILED)?;
         Ok(Self { plugin_dir: dir })
     }
 
@@ -85,24 +85,22 @@ impl PluginRegistry {
             self.plugin_dir.join(plugin_name)
         } else {
             let source_metadata =
-                fs::symlink_metadata(source).context("invalid plugin source path")?;
+                fs::symlink_metadata(source).context(msg::PLUGIN_SOURCE_PATH_INVALID)?;
             if source_metadata.file_type().is_symlink() {
-                return Err(anyhow!("plugin source must not be a symlink"));
+                return Err(anyhow!(msg::PLUGIN_SOURCE_SYMLINK));
             }
 
-            let source_dir = fs::canonicalize(source).context("invalid plugin source path")?;
+            let source_dir = fs::canonicalize(source).context(msg::PLUGIN_SOURCE_PATH_INVALID)?;
             validate_plugin_source_permissions(&source_dir)?;
             let source_name = source_dir
                 .file_name()
                 .and_then(|name| name.to_str())
-                .ok_or_else(|| anyhow!("invalid plugin source"))?;
+                .ok_or_else(|| anyhow!(msg::PLUGIN_SOURCE_INVALID))?;
             self.plugin_dir.join(source_name)
         };
 
         if target.exists() {
-            return Err(anyhow!(
-                "plugin already installed; run `avm uninstall <name>` first",
-            ));
+            return Err(anyhow!(msg::PLUGIN_ALREADY_INSTALLED));
         }
 
         let install_result = if is_remote {
@@ -118,8 +116,8 @@ impl PluginRegistry {
                 "AVM_GIT_CLONE_TIMEOUT",
             )
         } else {
-            let source = fs::canonicalize(source).context("invalid plugin source path")?;
-            copy_dir_recursive(&source, &target).context("plugin copy failed")
+            let source = fs::canonicalize(source).context(msg::PLUGIN_SOURCE_PATH_INVALID)?;
+            copy_dir_recursive(&source, &target).context(msg::PLUGIN_COPY_FAILED)
         };
 
         if let Err(err) = install_result {
@@ -132,16 +130,14 @@ impl PluginRegistry {
         }
 
         let _ = fs::remove_dir_all(&target);
-        Err(anyhow!(
-            "invalid plugin: missing asdf bin/list-all + bin/install"
-        ))
+        Err(anyhow!(msg::PLUGIN_INVALID_ASDF))
     }
 
     /// Remove the installed plugin directory for `name`, if any; errors on an invalid name or failed removal.
     pub fn remove_plugin(&self, name: &str) -> Result<()> {
         avm_plugin_sdk::validate_name(name)?;
         if let Some((_, target)) = self.find_any(name) {
-            fs::remove_dir_all(target).context("remove plugin")?;
+            fs::remove_dir_all(target).context(msg::PLUGIN_REMOVE_FAILED)?;
         }
         Ok(())
     }
@@ -205,9 +201,9 @@ pub(super) fn tool_name<'a>(dir: &'a str, prefix: &str) -> &'a str {
 
 /// Check a local plugin source is a directory, not root-owned (unless we are root), and not world-writable (Unix).
 pub(super) fn validate_plugin_source_permissions(path: &Path) -> Result<()> {
-    let meta = fs::metadata(path).context("failed to read plugin source metadata")?;
+    let meta = fs::metadata(path).context(msg::PLUGIN_SOURCE_META_FAILED)?;
     if !meta.is_dir() {
-        return Err(anyhow!("plugin source must be a directory"));
+        return Err(anyhow!(msg::PLUGIN_SOURCE_NOT_DIR));
     }
 
     crate::platform::check_plugin_source_perms(&meta)?;
@@ -219,7 +215,7 @@ pub(super) fn validate_plugin_source_permissions(path: &Path) -> Result<()> {
 pub(super) fn derive_remote_plugin_name(source: &str) -> Result<String> {
     let trimmed = source.trim();
     if trimmed.is_empty() {
-        return Err(anyhow!("plugin source is empty"));
+        return Err(anyhow!(msg::PLUGIN_SOURCE_EMPTY));
     }
 
     let mut candidate = trimmed;
@@ -238,14 +234,14 @@ pub(super) fn derive_remote_plugin_name(source: &str) -> Result<String> {
     let name = candidate
         .split('/')
         .rfind(|part| !part.is_empty())
-        .ok_or_else(|| anyhow!("unable to derive plugin name"))?;
+        .ok_or_else(|| anyhow!(msg::PLUGIN_NAME_UNDERIVABLE))?;
 
     let name = name.strip_suffix(".git").unwrap_or(name);
     if name.is_empty() || name.contains('\0') || name.contains('/') || name.contains('\\') {
-        return Err(anyhow!("invalid plugin name derived from source"));
+        return Err(anyhow!(msg::PLUGIN_NAME_INVALID));
     }
     if name.chars().any(|ch| ch.is_control()) {
-        return Err(anyhow!("invalid plugin name derived from source"));
+        return Err(anyhow!(msg::PLUGIN_NAME_INVALID));
     }
 
     Ok(name.to_string())
@@ -253,17 +249,15 @@ pub(super) fn derive_remote_plugin_name(source: &str) -> Result<String> {
 
 /// Copy a directory tree; errors on symlinks or special files so a plugin cannot point outside its own directory.
 pub(super) fn copy_dir_recursive(source: &Path, destination: &Path) -> Result<()> {
-    fs::create_dir_all(destination).context("failed to create plugin destination")?;
-    for entry in fs::read_dir(source).context("failed to read plugin source")? {
+    fs::create_dir_all(destination).context(msg::PLUGIN_DEST_CREATE_FAILED)?;
+    for entry in fs::read_dir(source).context(msg::PLUGIN_SOURCE_READ_FAILED)? {
         let entry = entry?;
         let file_type = entry.file_type()?;
         let src = entry.path();
         let dst = destination.join(entry.file_name());
 
         if file_type.is_symlink() {
-            return Err(anyhow!(
-                "plugin source contains symlink entries; remove symlinks before installing"
-            ));
+            return Err(anyhow!(msg::PLUGIN_SOURCE_HAS_SYMLINKS));
         }
 
         if file_type.is_dir() {
@@ -272,11 +266,19 @@ pub(super) fn copy_dir_recursive(source: &Path, destination: &Path) -> Result<()
         }
 
         if file_type.is_file() {
-            fs::copy(&src, &dst).with_context(|| format!("failed to copy {:?}", src))?;
+            fs::copy(&src, &dst).with_context(|| {
+                fill(
+                    msg::PLUGIN_COPY_FILE_FAILED,
+                    &[("path", &format!("{src:?}"))],
+                )
+            })?;
             continue;
         }
 
-        return Err(anyhow!("unsupported plugin source entry type: {:?}", src));
+        return Err(anyhow!(fill(
+            msg::PLUGIN_ENTRY_UNSUPPORTED,
+            &[("path", &format!("{src:?}"))]
+        )));
     }
     Ok(())
 }

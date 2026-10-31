@@ -20,24 +20,5 @@ pub const PLUGIN_TAG_PREFIX: &str = "avm-plugin-";
 pub const PLUGIN_PROCESS_READ_TIMEOUT_MS: u64 = 30_000;
 pub const PLUGIN_PROCESS_INSTALL_TIMEOUT_MS: u64 = 1_800_000;
 
-/// User-facing console text for plugin and alias commands.
-pub mod msg {
-    pub const PLUGIN_FETCHING: &str = "Fetching '{name}' from {repo}...";
-    pub const PLUGIN_INSTALLED: &str = "✓ Installed {name} {version}";
-    pub const PLUGIN_INSTALLING_FROM: &str = "Installing plugin from {source}...";
-    pub const PLUGIN_INSTALLED_PLAIN: &str = "✓ Installed plugin";
-    pub const PLUGIN_REMOVED: &str = "Plugin '{name}' removed.";
-    pub const PLUGIN_SEARCH_EMPTY: &str = "No plugins match '{keyword}'.";
-    pub const PLUGIN_SEARCH_HINT: &str = "Install with: avm plugin install <name>";
-    pub const PLUGIN_NOT_INSTALLED: &str =
-        "plugin '{name}' is not installed — run `avm plugin install {name}`";
-    pub const PLUGIN_TEMPLATE_INTRO: &str = "Start a new plugin from the template repo:";
-    pub const PLUGIN_TEMPLATE_CMD: &str = "  gh repo create avm-plugin-{name} --template PrajaNova/avm-plugin-template --public --clone";
-
-    /// Fills `{key}` placeholders: `fill(msg::PLUGIN_REMOVED, &[("name", "node")])`.
-    pub fn fill(template: &str, vars: &[(&str, &str)]) -> String {
-        vars.iter().fold(template.to_string(), |out, (key, value)| {
-            out.replace(&format!("{{{key}}}"), value)
-        })
-    }
-}
+/// User-facing console and error text, one file per feature.
+pub mod msg;

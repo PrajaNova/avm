@@ -5,8 +5,8 @@ use super::*;
 pub(super) fn run_with_timeout(mut cmd: Command, timeout_ms: u64) -> Result<String> {
     let started = std::time::Instant::now();
     cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
-    let (mut child, tree) = avm_plugin_sdk::process::spawn_isolated(&mut cmd)
-        .context("failed to start plugin command")?;
+    let (mut child, tree) =
+        avm_plugin_sdk::process::spawn_isolated(&mut cmd).context(msg::PLUGIN_CMD_START_FAILED)?;
 
     // Pipes have a small OS buffer (~64KB). Waiting for the child to exit
     // before reading them deadlocks the moment output exceeds that: the
@@ -31,13 +31,12 @@ pub(super) fn run_with_timeout(mut cmd: Command, timeout_ms: u64) -> Result<Stri
         buf
     });
 
-    let status =
-        wait_deadline(&mut child, timeout_ms).context("failed while waiting for plugin command")?;
+    let status = wait_deadline(&mut child, timeout_ms).context(msg::PLUGIN_CMD_WAIT_FAILED)?;
     drop(tree);
     // Detached Unix descendants can leave the group; they must not extend our deadline.
     while !stdout_reader.is_finished() || !stderr_reader.is_finished() {
         if started.elapsed().as_millis() >= u128::from(timeout_ms) {
-            return Err(anyhow!("plugin command timed out"));
+            return Err(anyhow!(msg::PLUGIN_CMD_TIMEOUT));
         }
         std::thread::sleep(std::time::Duration::from_millis(5));
     }
@@ -46,7 +45,7 @@ pub(super) fn run_with_timeout(mut cmd: Command, timeout_ms: u64) -> Result<Stri
         None => {
             let _ = stdout_reader.join();
             let _ = stderr_reader.join();
-            return Err(anyhow!("plugin command timed out"));
+            return Err(anyhow!(msg::PLUGIN_CMD_TIMEOUT));
         }
     };
 
@@ -55,9 +54,9 @@ pub(super) fn run_with_timeout(mut cmd: Command, timeout_ms: u64) -> Result<Stri
 
     if !status.success() {
         if !err.trim().is_empty() {
-            return Err(anyhow!("plugin command failed: {err}"));
+            return Err(anyhow!(fill(msg::PLUGIN_CMD_FAILED, &[("stderr", &err)])));
         }
-        return Err(anyhow!("plugin command failed with exit code"));
+        return Err(anyhow!(msg::PLUGIN_CMD_FAILED_EXIT));
     }
 
     Ok(out)

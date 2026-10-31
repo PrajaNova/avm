@@ -1,5 +1,6 @@
 use crate::common::state::{home_dir, restore_inherited_env, UNTRUSTED_DOTENV};
 use crate::config;
+use crate::constants::msg::{self, fill};
 use anyhow::{anyhow, Context, Result};
 use fs_err as fs;
 use std::collections::HashSet;
@@ -22,7 +23,7 @@ pub fn bootstrap() -> Result<()> {
 /// Loads `.env` files from the filesystem root down to the cwd, nearer files overriding farther ones.
 /// Pre-existing process variables are protected; untrusted `.env` files are skipped with a notice.
 fn load_dotenv_env() -> Result<()> {
-    let cwd = std::env::current_dir().context("failed to read current directory")?;
+    let cwd = std::env::current_dir().context(msg::CWD_READ_FAILED)?;
     let protected: HashSet<String> = std::env::vars().map(|(key, _)| key).collect();
     let trusted_paths = home_dir()
         .and_then(|home| config::load(&home))
@@ -49,11 +50,26 @@ fn load_dotenv_env() -> Result<()> {
     Ok(())
 }
 
+/// Builds a `path:line` error from `template`; `line_no` is zero-based.
+fn env_file_error(template: &str, path: &Path, line_no: usize) -> anyhow::Error {
+    anyhow!(fill(
+        template,
+        &[
+            ("path", &path.display().to_string()),
+            ("line", &(line_no + 1).to_string()),
+        ]
+    ))
+}
+
 /// Parses one `.env` file (`KEY=VALUE`, optional `export `, `#` comments) and sets each variable not in `protected`.
 /// Errors on an unreadable file or a malformed assignment.
 fn load_env_file(path: &Path, protected: &HashSet<String>) -> Result<()> {
-    let contents = fs::read_to_string(path)
-        .with_context(|| format!("failed to read env file {}", path.display()))?;
+    let contents = fs::read_to_string(path).with_context(|| {
+        fill(
+            msg::ENV_FILE_READ_FAILED,
+            &[("path", &path.display().to_string())],
+        )
+    })?;
 
     for (line_no, raw_line) in contents.lines().enumerate() {
         let line = raw_line.trim();
@@ -63,20 +79,12 @@ fn load_env_file(path: &Path, protected: &HashSet<String>) -> Result<()> {
 
         let line = line.strip_prefix("export ").unwrap_or(line);
         let Some((key, value)) = line.split_once('=') else {
-            return Err(anyhow!(
-                "invalid env assignment at {}:{}",
-                path.display(),
-                line_no + 1
-            ));
+            return Err(env_file_error(msg::ENV_FILE_BAD_ASSIGNMENT, path, line_no));
         };
 
         let key = key.trim();
         if key.is_empty() {
-            return Err(anyhow!(
-                "invalid env key at {}:{}",
-                path.display(),
-                line_no + 1
-            ));
+            return Err(env_file_error(msg::ENV_FILE_BAD_KEY, path, line_no));
         }
         if protected.contains(key) {
             continue;

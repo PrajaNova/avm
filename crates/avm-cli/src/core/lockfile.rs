@@ -1,3 +1,4 @@
+use crate::constants::msg::{self, fill};
 use crate::resolver::ResolvedConfig;
 use anyhow::{anyhow, bail, Context, Result};
 use avm_plugin_sdk::{
@@ -65,19 +66,19 @@ pub fn load(dir: &Path) -> Result<Option<Lockfile>> {
                 break;
             }
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => continue,
-            Err(e) => return Err(e).context("read .avm.lock"),
+            Err(e) => return Err(e).context(msg::LOCK_READ_FAILED),
         }
     }
     let Some((path, raw)) = found else {
         return Ok(None);
     };
-    let lock: Lockfile =
-        serde_json::from_slice(&raw).with_context(|| format!("invalid {}", path.display()))?;
+    let lock: Lockfile = serde_json::from_slice(&raw)
+        .with_context(|| fill(msg::LOCK_INVALID, &[("path", &path.display().to_string())]))?;
     if lock.version != 1 {
-        bail!(
-            "unsupported .avm.lock version {}; update avm or regenerate with `avm plugin lock`",
-            lock.version
-        );
+        bail!(fill(
+            msg::LOCK_UNSUPPORTED_VERSION,
+            &[("version", &lock.version.to_string())]
+        ));
     }
     for (tool, entry) in &lock.tools {
         validate_tool(tool)?;
@@ -89,29 +90,21 @@ pub fn load(dir: &Path) -> Result<Option<Lockfile>> {
                 .as_ref()
                 != Some(&entry.resolved)
         {
-            bail!(
-                "locked {tool} {} does not satisfy '{}'; run `avm plugin lock`",
-                entry.resolved,
-                entry.requested
-            );
+            bail!(unsatisfied(tool, entry));
         }
         if let Some((_, build)) = entry.requested.split_once('+') {
             if entry.resolved.split_once('+').map(|(_, b)| b) != Some(build) {
-                bail!(
-                    "locked {tool} {} does not satisfy '{}'; run `avm plugin lock`",
-                    entry.resolved,
-                    entry.requested
-                );
+                bail!(unsatisfied(tool, entry));
             }
         }
         if entry.plugin.name != *tool || entry.plugin.version.is_empty() || entry.assets.is_empty()
         {
-            bail!("invalid lock entry for {tool}; run `avm plugin lock`");
+            bail!(fill(msg::LOCK_INVALID_ENTRY, &[("tool", tool)]));
         }
         for (platform, hash) in &entry.plugin.binaries {
             validate_platform(platform)?;
             if hash.len() != 64 || !hash.bytes().all(|c| c.is_ascii_hexdigit()) {
-                bail!("invalid plugin hash for {tool}");
+                bail!(fill(msg::LOCK_INVALID_HASH, &[("tool", tool)]));
             }
         }
         for (platform, asset) in &entry.assets {
@@ -122,6 +115,18 @@ pub fn load(dir: &Path) -> Result<Option<Lockfile>> {
     Ok(Some(lock))
 }
 
+/// The error for a locked version that no longer satisfies what the lock requested.
+fn unsatisfied(tool: &str, entry: &LockedTool) -> String {
+    fill(
+        msg::LOCK_UNSATISFIED,
+        &[
+            ("tool", tool),
+            ("resolved", &entry.resolved),
+            ("requested", &entry.requested),
+        ],
+    )
+}
+
 /// Reject empty tool names or names with characters other than ASCII alphanumerics, `-` and `_`.
 pub fn validate_tool(tool: &str) -> Result<()> {
     if tool.is_empty()
@@ -129,7 +134,7 @@ pub fn validate_tool(tool: &str) -> Result<()> {
             .bytes()
             .all(|c| c.is_ascii_alphanumeric() || b"-_".contains(&c))
     {
-        bail!("invalid tool name '{tool}'");
+        bail!(fill(msg::TOOL_INVALID_NAME, &[("tool", tool)]));
     }
     Ok(())
 }
@@ -145,7 +150,7 @@ impl Lockfile {
                     .is_none_or(|entry| entry.requested != *spec)
             })
         {
-            bail!(".avm.lock is out of date with the selected tools; run `avm plugin lock`");
+            bail!(msg::LOCK_OUT_OF_DATE);
         }
         Ok(())
     }
@@ -172,7 +177,10 @@ impl Lockfile {
 /// Use the existing version-range matcher over the provider's release list.
 pub fn resolve_spec(provider: &dyn ToolProvider, spec: &str) -> Result<String> {
     if spec.trim().is_empty() {
-        bail!("version required for {}", provider.name());
+        bail!(fill(
+            msg::LOCK_VERSION_REQUIRED,
+            &[("tool", provider.name())]
+        ));
     }
     let numeric = crate::version_files::numbers(spec);
     let literal = validate_version(spec).is_ok();
@@ -225,8 +233,12 @@ pub fn resolve_spec(provider: &dyn ToolProvider, spec: &str) -> Result<String> {
     let version = if candidates.iter().any(|v| v == spec) {
         spec.to_string()
     } else {
-        crate::version_files::pick(provider.name(), range, candidates)
-            .ok_or_else(|| anyhow!("no {} version matches '{spec}'", provider.name()))?
+        crate::version_files::pick(provider.name(), range, candidates).ok_or_else(|| {
+            anyhow!(fill(
+                msg::LOCK_NO_MATCH,
+                &[("tool", provider.name()), ("spec", spec)]
+            ))
+        })?
     };
     validate_version(&version)?;
     Ok(version)

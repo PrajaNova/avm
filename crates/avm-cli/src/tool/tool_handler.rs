@@ -1,5 +1,7 @@
 use crate::common::env_utils::{child_env, extend_env, merge_env};
 use crate::common::state::load_state;
+use crate::common::ui;
+use crate::constants::msg::{self, fill};
 use crate::global::provider_by_name;
 use crate::resolver::ResolvedConfig;
 use crate::tool::ExecArgs;
@@ -15,7 +17,7 @@ pub fn cmd_exec(args: ExecArgs) -> Result<()> {
     let (program, arguments) = args
         .command
         .split_first()
-        .ok_or_else(|| anyhow!("command required after --"))?;
+        .ok_or_else(|| anyhow!(msg::TOOL_COMMAND_REQUIRED))?;
     let program = crate::platform::resolve_program(
         program,
         env.get("PATH").map(String::as_str).unwrap_or(""),
@@ -31,7 +33,7 @@ pub fn cmd_exec(args: ExecArgs) -> Result<()> {
 fn tool_spec(value: &str) -> Result<(&str, &str)> {
     let (tool, version) = value
         .split_once('@')
-        .ok_or_else(|| anyhow!("expected tool@version, got '{value}'"))?;
+        .ok_or_else(|| anyhow!(fill(msg::TOOL_EXPECTED_SPEC, &[("value", value)])))?;
     let valid_tool = !tool.is_empty()
         && tool
             .bytes()
@@ -45,7 +47,7 @@ fn tool_spec(value: &str) -> Result<(&str, &str)> {
             .bytes()
             .all(|c| c.is_ascii_alphanumeric() || b".-_+*".contains(&c))
     {
-        return Err(anyhow!("invalid tool specification '{value}'"));
+        return Err(anyhow!(fill(msg::TOOL_INVALID_SPEC, &[("value", value)])));
     }
     Ok((tool, version))
 }
@@ -63,7 +65,7 @@ pub fn temporary_tool_env(
     let mut seen = HashSet::new();
     for (tool, _) in &specs {
         if !seen.insert(*tool) {
-            return Err(anyhow!("tool '{tool}' specified more than once"));
+            return Err(anyhow!(fill(msg::TOOL_DUPLICATE, &[("tool", tool)])));
         }
     }
     let mut cfg = cfg.clone();
@@ -71,31 +73,40 @@ pub fn temporary_tool_env(
     let mut provider_env = HashMap::new();
     for (tool, spec) in specs {
         let provider = provider_by_name(tool)?;
+        let not_installed = || {
+            anyhow!(fill(
+                msg::TOOL_NOT_INSTALLED,
+                &[("tool", tool), ("spec", spec)]
+            ))
+        };
         let version = if provider.is_installed(spec) {
             spec.to_string()
         } else if no_install {
             let range = if spec == "latest" { "*" } else { spec };
-            crate::version_files::pick(tool, range, provider.installed_versions()?).ok_or_else(
-                || anyhow!("{tool}@{spec} is not installed; omit --no-install to install it"),
-            )?
+            crate::version_files::pick(tool, range, provider.installed_versions()?)
+                .ok_or_else(not_installed)?
         } else {
             crate::lockfile::resolve_spec(provider.as_ref(), spec.trim())?
         };
         if !provider.is_installed(&version) {
             if no_install {
-                return Err(anyhow!(
-                    "{tool}@{spec} is not installed; omit --no-install to install it"
-                ));
+                return Err(not_installed());
             }
-            eprintln!("Installing {tool} {version}...");
+            ui::notice(fill(
+                msg::TOOL_INSTALLING,
+                &[("tool", tool), ("version", &version)],
+            ));
             provider.install(&version)?;
         }
-        let executable = provider
-            .executable_path(&version)?
-            .ok_or_else(|| anyhow!("{tool} {version} has no installed executable"))?;
+        let executable = provider.executable_path(&version)?.ok_or_else(|| {
+            anyhow!(fill(
+                msg::TOOL_NO_EXECUTABLE,
+                &[("tool", tool), ("version", &version)]
+            ))
+        })?;
         let bin = executable
             .parent()
-            .ok_or_else(|| anyhow!("{tool} executable has no parent directory"))?;
+            .ok_or_else(|| anyhow!(fill(msg::TOOL_NO_PARENT, &[("tool", tool)])))?;
         if !paths.contains(&bin.to_path_buf()) {
             paths.push(bin.to_path_buf());
         }
@@ -116,7 +127,7 @@ pub fn temporary_tool_env(
     env.insert(
         "PATH".to_string(),
         std::env::join_paths(paths)
-            .context("failed to build temporary tool PATH")?
+            .context(msg::TOOL_PATH_FAILED)?
             .to_string_lossy()
             .into_owned(),
     );

@@ -1,3 +1,5 @@
+use crate::common::ui;
+use crate::constants::msg::{self, fill};
 use std::collections::{BTreeSet, HashMap};
 use std::hash::{Hash, Hasher};
 use std::path::{Path, PathBuf};
@@ -144,7 +146,10 @@ pub fn load(
             Ok(()) => true,
             // A stale lock must not break shims or the prompt; only `install --frozen` is strict.
             Err(err) => {
-                eprintln!("avm: {err:#}; using .avm.json versions");
+                ui::error(fill(
+                    msg::RESOLVER_LOCK_FALLBACK,
+                    &[("err", &format!("{err:#}"))],
+                ));
                 false
             }
         },

@@ -2,6 +2,7 @@
 use crate::common::state::home_dir;
 use crate::config;
 use crate::config::{ConfigLoadResult, CONFIG_FILE};
+use crate::constants::msg::{self, fill};
 use crate::resolver::AliasSource;
 use anyhow::{anyhow, Context, Result};
 use std::collections::{BTreeSet, HashMap};
@@ -12,7 +13,7 @@ pub fn config_root(global: bool) -> Result<PathBuf> {
     if global {
         home_dir()
     } else {
-        std::env::current_dir().context("failed to read current directory")
+        std::env::current_dir().context(msg::CWD_READ_FAILED)
     }
 }
 
@@ -27,9 +28,12 @@ pub fn edit_config(
     let _guard = avm_plugin_sdk::storage::lock(&root.join(CONFIG_FILE))?;
     if !create && !root.join(CONFIG_FILE).exists() {
         return Err(if global {
-            anyhow!("no {CONFIG_FILE} found in {}", root.display())
+            anyhow!(fill(
+                msg::CONFIG_MISSING_AT,
+                &[("file", CONFIG_FILE), ("dir", &root.display().to_string())]
+            ))
         } else {
-            anyhow!("no {CONFIG_FILE} found in current directory. Run `avm init` first")
+            anyhow!(fill(msg::CONFIG_MISSING_LOCAL, &[("file", CONFIG_FILE)]))
         });
     }
     // Editing through avm keeps an already-trusted (or brand new) local file

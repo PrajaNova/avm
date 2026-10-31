@@ -3,16 +3,38 @@ use crate::alias::alias_utils::validate_alias_name;
 use crate::alias::{AddArgs, AliasCommands, RemoveArgs};
 use crate::common::config_utils::{edit_config, print_layered, scope};
 use crate::common::state::load_state;
+use crate::common::ui;
+use crate::constants::msg::{self, fill};
 use anyhow::{anyhow, Result};
 
 /// `avm alias add`: stores an alias in the local or global config; rejects reserved names.
+/// Asks before replacing any existing alias, even with the same command (`-y` skips the prompt).
 pub fn cmd_add(args: AddArgs) -> Result<()> {
     validate_alias_name(&args.key)?;
+    let value = args.value.join(" ");
+    let mut cancelled = false;
     edit_config(args.global, args.global, |cfg| {
-        cfg.aliases.insert(args.key.clone(), args.value.join(" "));
+        if let Some(old) = cfg.aliases.get(&args.key) {
+            let question = fill(
+                msg::ALIAS_OVERRIDE_PROMPT,
+                &[("key", &args.key), ("old", old), ("value", &value)],
+            );
+            if !ui::confirm(&question, args.yes)? {
+                cancelled = true;
+                return Ok(());
+            }
+        }
+        cfg.aliases.insert(args.key.clone(), value);
         Ok(())
     })?;
-    done!("Added {} alias '{}'", scope(args.global), args.key);
+    if cancelled {
+        ui::cancelled();
+    } else {
+        ui::success(fill(
+            msg::ALIAS_ADDED,
+            &[("scope", scope(args.global)), ("key", &args.key)],
+        ));
+    }
     Ok(())
 }
 
@@ -21,10 +43,16 @@ pub fn cmd_remove(args: RemoveArgs) -> Result<()> {
     edit_config(args.global, false, |cfg| {
         match cfg.aliases.remove(&args.key) {
             Some(_) => Ok(()),
-            None => Err(anyhow!("alias '{}' not found", args.key)),
+            None => Err(anyhow!(fill(
+                msg::ALIAS_NOT_FOUND,
+                &[("scope", scope(args.global)), ("key", &args.key)]
+            ))),
         }
     })?;
-    done!("Removed {} alias '{}'", scope(args.global), args.key);
+    ui::success(fill(
+        msg::ALIAS_REMOVED,
+        &[("scope", scope(args.global)), ("key", &args.key)],
+    ));
     Ok(())
 }
 
@@ -41,7 +69,7 @@ pub fn cmd_alias(command: AliasCommands) -> Result<()> {
 fn cmd_alias_list() -> Result<()> {
     let cfg = load_state()?;
     if cfg.local_aliases.is_empty() && cfg.global_aliases.is_empty() {
-        println!("No aliases configured.");
+        ui::info(msg::ALIAS_NONE);
         return Ok(());
     }
     print_layered(

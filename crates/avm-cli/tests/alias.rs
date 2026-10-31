@@ -268,6 +268,28 @@ mod commands {
         assert_that(&p.run(&["alias", "add", "", "echo x"])).fails_with("invalid alias name");
     }
 
+    /// Adding a name that already exists asks before replacing it; `-y` skips the question.
+    ///
+    /// 1. Add `gg` = `echo old`, then add `gg` = `echo new` with no terminal to ask on.
+    /// 2. It fails, names both commands, and tells the user to re-run with `-y`.
+    /// 3. The alias still runs `echo old`; with `-y` the same add replaces it.
+    #[test]
+    fn adding_an_existing_alias_asks_before_overriding() {
+        let p = Sandbox::new("avm-test");
+        success(p.run(&["alias", "add", "-g", "gg", "echo old"]));
+        assert_that(&p.run(&["alias", "add", "-g", "gg", "echo new"]))
+            .fails_with("alias 'gg' already exists")
+            .fails_with("current: echo old")
+            .fails_with("Re-run with -y");
+        assert_that(&p.run(&["gg"]))
+            .succeeds()
+            .stdout_contains("old");
+        success(p.run(&["alias", "add", "-y", "-g", "gg", "echo new"]));
+        assert_that(&p.run(&["gg"]))
+            .succeeds()
+            .stdout_contains("new");
+    }
+
     /// `avm <name>` is shorthand for `avm run <name>`, forwarding arguments.
     ///
     /// 1. Add the global alias `greet` = `echo hello`.

@@ -4,6 +4,7 @@ use crate::common::config_utils::alias_source_label;
 use crate::common::env_utils::child_env;
 use crate::common::state::load_state_with_aliases;
 use crate::common::ui;
+use crate::constants::msg::{self, fill};
 use crate::global::{cmd_plugin_command, cmd_provider_tool, ResolveArgs, RunArgs};
 use crate::plugins;
 use crate::resolver::{AliasSource, ResolvedConfig};
@@ -18,25 +19,35 @@ pub fn cmd_which(key: &str) -> Result<()> {
     let cfg = load_state_with_aliases()?;
     if let Some(alias) = cfg.resolve_alias(key) {
         match alias.source {
-            AliasSource::Local => println!(
-                "local alias '{key}': {} (from {})",
-                alias.command,
-                cfg.alias_origins
+            AliasSource::Local | AliasSource::Global => {
+                let template = match alias.source {
+                    AliasSource::Local => msg::GLOBAL_WHICH_LOCAL,
+                    _ => msg::GLOBAL_WHICH_GLOBAL,
+                };
+                let origin = cfg
+                    .alias_origins
                     .get(key)
                     .map(String::as_str)
-                    .unwrap_or("unknown")
-            ),
-            AliasSource::Global => println!(
-                "global alias '{key}': {} (from {})",
-                alias.command,
-                cfg.alias_origins
-                    .get(key)
-                    .map(String::as_str)
-                    .unwrap_or("unknown")
-            ),
+                    .unwrap_or("unknown");
+                ui::info(fill(
+                    template,
+                    &[
+                        ("key", key),
+                        ("command", &alias.command),
+                        ("origin", origin),
+                    ],
+                ));
+            }
             AliasSource::Plugin => {
                 let plugin = alias.plugin_name.unwrap_or_else(|| "plugin".to_string());
-                println!("plugin alias '{key}' from {plugin}: {}", alias.command);
+                ui::info(fill(
+                    msg::GLOBAL_WHICH_PLUGIN,
+                    &[
+                        ("key", key),
+                        ("plugin", &plugin),
+                        ("command", &alias.command),
+                    ],
+                ));
             }
         }
         return Ok(());
@@ -44,14 +55,17 @@ pub fn cmd_which(key: &str) -> Result<()> {
 
     if let Some((version, source)) = cfg.resolve_tool(key) {
         let origin = match (&source, cfg.tool_origins.get(key)) {
-            (_, Some(file)) => format!("from {file}"),
+            (_, Some(file)) => fill(msg::GLOBAL_WHICH_ORIGIN_FILE, &[("file", file)]),
             _ => alias_source_label(&source).to_string(),
         };
-        println!("tool '{key}': {version} ({origin})");
+        ui::info(fill(
+            msg::GLOBAL_WHICH_TOOL,
+            &[("key", key), ("version", &version), ("origin", &origin)],
+        ));
         return Ok(());
     }
 
-    println!("No mapping found for '{key}'.");
+    ui::info(fill(msg::GLOBAL_WHICH_NONE, &[("key", key)]));
     Ok(())
 }
 
@@ -129,7 +143,7 @@ pub fn cmd_run(args: RunArgs) -> Result<()> {
     let status = command
         .envs(env)
         .status()
-        .with_context(|| format!("failed to run alias via {shell}"))?;
+        .with_context(|| fill(msg::GLOBAL_RUN_FAILED, &[("shell", shell)]))?;
     std::process::exit(status.code().unwrap_or(1));
 }
 
@@ -152,9 +166,12 @@ fn build_shell_alias_string(template: &str, args: &[String]) -> Result<String> {
         }
         let index: usize = digits
             .parse()
-            .with_context(|| format!("invalid placeholder ${digits}"))?;
+            .with_context(|| fill(msg::GLOBAL_PLACEHOLDER_INVALID, &[("digits", &digits)]))?;
         if index == 0 || index > args.len() {
-            return Err(anyhow!("placeholder ${index} out of bounds"));
+            return Err(anyhow!(fill(
+                msg::GLOBAL_PLACEHOLDER_OUT_OF_BOUNDS,
+                &[("index", &index.to_string())]
+            )));
         }
         output.push_str(&sh_quote(&args[index - 1]));
         used_placeholder = true;
@@ -189,14 +206,20 @@ fn select_alias_suggestion(
     suggestions: &[String],
 ) -> Result<Option<String>> {
     if suggestions.is_empty() {
-        return Err(anyhow!("alias '{query}' not found"));
+        return Err(anyhow!(fill(
+            msg::GLOBAL_ALIAS_NOT_FOUND,
+            &[("key", query)]
+        )));
     }
 
     let labels: Vec<String> = suggestions.iter().map(|s| alias_label(cfg, s)).collect();
-    match ui::select(&format!("Alias '{query}' not found"), &labels)? {
+    match ui::select(
+        &fill(msg::GLOBAL_ALIAS_PICK_TITLE, &[("key", query)]),
+        &labels,
+    )? {
         Some(index) => Ok(Some(suggestions[index].clone())),
         None => {
-            println!("Cancelled.");
+            ui::cancelled();
             Ok(None)
         }
     }
@@ -204,10 +227,10 @@ fn select_alias_suggestion(
 
 /// Builds the "alias not found" error, listing close alias names and any untrusted config files that may hide it.
 fn alias_not_found_error(key: &str, cfg: &ResolvedConfig) -> anyhow::Error {
-    let mut message = format!("alias '{key}' not found");
+    let mut message = fill(msg::GLOBAL_ALIAS_NOT_FOUND, &[("key", key)]);
     let suggestions = cfg.suggest_aliases(key);
     if !suggestions.is_empty() {
-        message.push_str("\n\nDid you mean?\n");
+        message.push_str(msg::GLOBAL_DID_YOU_MEAN);
         message.push_str(
             &suggestions
                 .iter()
@@ -217,9 +240,9 @@ fn alias_not_found_error(key: &str, cfg: &ResolvedConfig) -> anyhow::Error {
         );
     }
     for file in &cfg.untrusted {
-        message.push_str(&format!(
-            "\n\n{} is not trusted, so its aliases are disabled. Review it, then run 'avm trust {}'.",
-            file.display(), file.display()
+        message.push_str(&fill(
+            msg::GLOBAL_UNTRUSTED_FILE,
+            &[("file", &file.display().to_string())],
         ));
     }
     anyhow!(message)
@@ -249,15 +272,18 @@ pub fn cmd_home() -> Result<()> {
         choices.push(HomeChoice::Alias(name.clone()));
     }
     for (tool, (version, _)) in tools {
-        labels.push(format!("{tool} {version}  [versions, install, pin]"));
+        labels.push(fill(
+            msg::GLOBAL_HOME_TOOL_LABEL,
+            &[("tool", &tool), ("version", &version)],
+        ));
         choices.push(HomeChoice::Tool(tool));
     }
     if choices.is_empty() {
         return print_help();
     }
-    labels.push("help  [all commands]".to_string());
+    labels.push(msg::GLOBAL_HOME_HELP_LABEL.to_string());
     choices.push(HomeChoice::Help);
-    match ui::select("avm: what do you want to run?", &labels)? {
+    match ui::select(msg::GLOBAL_HOME_TITLE, &labels)? {
         Some(index) => match choices.swap_remove(index) {
             HomeChoice::Alias(key) => cmd_run(RunArgs {
                 key,

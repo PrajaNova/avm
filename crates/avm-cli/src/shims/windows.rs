@@ -1,5 +1,6 @@
 //! Windows shims: `<tool>.exe` hard-linked (or copied) from avm-bin.
 use super::which;
+use crate::constants::msg::{self, fill};
 use anyhow::{Context, Result};
 use fs_err as fs;
 use std::path::{Path, PathBuf};
@@ -31,17 +32,17 @@ pub(super) fn write_shim(shims_dir: &Path, tool: &str) -> Result<()> {
     }
     fs::hard_link(&avm, &path)
         .or_else(|_| fs::copy(&avm, &path).map(|_| ()))
-        .with_context(|| format!("write shim for {tool}"))
+        .with_context(|| fill(msg::SHIM_WRITE_FAILED, &[("tool", tool)]))
 }
 
 /// The real avm-bin.exe to link shims to. When this process is itself a shim
 /// (reshim after `npm i -g` runs inside `npm.exe`), that's the one on PATH.
 fn avm_exe() -> Result<PathBuf> {
-    let exe = std::env::current_exe().context("locate avm-bin")?;
+    let exe = std::env::current_exe().context(msg::SHIM_LOCATE_BIN_FAILED)?;
     if invoked_as_shim().is_none() {
         return Ok(exe);
     }
-    which("avm-bin", true).context("avm-bin not found on PATH")
+    which("avm-bin", true).context(msg::SHIM_BIN_NOT_ON_PATH)
 }
 
 /// The shim name for a tool's `bin/` entry: `tsc.cmd` → `tsc`.

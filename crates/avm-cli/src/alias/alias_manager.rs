@@ -20,6 +20,9 @@ pub struct AddArgs {
     pub value: Vec<String>,
     #[arg(short = 'g', long)]
     pub global: bool,
+    /// Overwrite an existing alias without asking.
+    #[arg(short = 'y', long)]
+    pub yes: bool,
 }
 
 #[derive(Args)]

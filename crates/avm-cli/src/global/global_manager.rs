@@ -3,6 +3,7 @@
 //! manager claims. That is an alias first, then an installed plugin's command.
 use crate::args::{Cli, Commands};
 use crate::common::manager::Manager;
+use crate::constants::msg;
 use crate::global::{cmd_resolve, cmd_run, cmd_which};
 use crate::run::task::{Cmd, Task};
 use anyhow::{anyhow, Result};
@@ -64,6 +65,6 @@ pub fn run_external(args: Vec<String>) -> Result<()> {
     let argv = ["avm-bin", "run"].into_iter().map(String::from).chain(args);
     match Cli::try_parse_from(argv)?.command {
         Some(Commands::Global(GlobalManager::Run(run_args))) => cmd_run(run_args),
-        _ => Err(anyhow!("invalid alias invocation")),
+        _ => Err(anyhow!(msg::ALIAS_INVALID_INVOCATION)),
     }
 }

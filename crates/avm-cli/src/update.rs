@@ -1,4 +1,6 @@
 //! `avm self-update` and the once-a-day "new version" notice (#28).
+use crate::common::ui;
+use crate::constants::msg::{self, fill};
 use crate::plugins as runtime;
 use anyhow::{anyhow, Context, Result};
 use fs_err as fs;
@@ -55,7 +57,7 @@ fn upgrade_command(method: &InstallMethod) -> Option<&'static str> {
 
 /// The canonicalized path of the running avm-bin.
 fn current_exe() -> Result<PathBuf> {
-    let exe = std::env::current_exe().context("failed to locate avm-bin")?;
+    let exe = std::env::current_exe().context(msg::UPDATE_LOCATE_EXE_FAILED)?;
     Ok(exe.canonicalize().unwrap_or(exe))
 }
 
@@ -65,7 +67,10 @@ pub fn self_update(version: Option<String>) -> Result<()> {
     let exe = current_exe()?;
     let method = install_method(&exe);
     if let Some(cmd) = upgrade_command(&method) {
-        println!("avm was installed with {method:?}, so update it the same way:\n  {cmd}");
+        ui::info(fill(
+            msg::UPDATE_PACKAGE_MANAGED,
+            &[("method", &format!("{method:?}")), ("cmd", cmd)],
+        ));
         return Ok(());
     }
     crate::platform::remove_old_binary(&exe);
@@ -74,15 +79,18 @@ pub fn self_update(version: Option<String>) -> Result<()> {
     let release = runtime::github_release(REPO, tag.as_deref())?;
     let target = release.tag_name.trim_start_matches('v').to_string();
     if target == CURRENT || (tag.is_none() && !is_newer(&target, CURRENT)) {
-        done!("avm {CURRENT} is up to date");
+        ui::success(fill(msg::UPDATE_UP_TO_DATE, &[("current", CURRENT)]));
         return Ok(());
     }
 
     let (os, arch) = runtime::marketplace_platform()?;
     let asset = format!("avm_{os}_{arch}.{}", crate::platform::ARCHIVE_EXT);
-    let dir = exe
-        .parent()
-        .ok_or_else(|| anyhow!("{} has no parent directory", exe.display()))?;
+    let dir = exe.parent().ok_or_else(|| {
+        anyhow!(fill(
+            msg::UPDATE_NO_PARENT_DIR,
+            &[("exe", &exe.display().to_string())]
+        ))
+    })?;
     // Extract next to the binary so the swap is a same-filesystem rename.
     let staging = dir.join(format!(".avm-update-{}", std::process::id()));
     let result = runtime::fetch_verified_archive(REPO, &release, &asset, &staging).and_then(|_| {
@@ -92,10 +100,13 @@ pub fn self_update(version: Option<String>) -> Result<()> {
         )
     });
     let _ = fs::remove_dir_all(&staging);
-    result.with_context(|| format!("couldn't update {}", exe.display()))?;
+    result.with_context(|| fill(msg::UPDATE_FAILED, &[("exe", &exe.display().to_string())]))?;
 
     crate::platform::after_update();
-    done!("Updated avm {CURRENT} → {target}");
+    ui::success(fill(
+        msg::UPDATE_DONE,
+        &[("current", CURRENT), ("target", &target)],
+    ));
     Ok(())
 }
 
@@ -157,7 +168,10 @@ pub fn maybe_notify() {
                 .ok()
                 .and_then(|exe| upgrade_command(&install_method(&exe)))
                 .unwrap_or("avm self-update");
-            eprintln!("avm {latest} is available (you have {CURRENT}). Update with: {how}");
+            ui::notice(fill(
+                msg::UPDATE_AVAILABLE,
+                &[("latest", latest), ("current", CURRENT), ("how", how)],
+            ));
             cache.notified_at = now;
             dirty = true;
         }

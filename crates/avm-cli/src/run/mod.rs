@@ -4,6 +4,8 @@ mod wrappers;
 
 use crate::args::Cli;
 use crate::bootstrap::bootstrap;
+use crate::common::ui;
+use crate::constants::msg::{self, fill};
 use crate::run::dispatch::build;
 use crate::run::task::{Cmd, Runnable};
 use crate::run::wrappers::{WithProfiles, WithUpdateNotice};
@@ -16,7 +18,7 @@ use clap::Parser;
 /// CLI entry point: loads `.env`, handles Windows shim invocations, parses arguments and runs the command, exiting non-zero on error.
 pub fn main() {
     if let Err(err) = bootstrap() {
-        eprintln!("avm: failed to load .env: {err}");
+        ui::error(fill(msg::DOTENV_LOAD_FAILED, &[("err", &err.to_string())]));
         std::process::exit(1);
     }
     // Windows shims are avm-bin started as `node.exe`, `npm.exe`, ...
@@ -52,7 +54,7 @@ fn expand_alias_flag(args: impl Iterator<Item = String>) -> Vec<String> {
 /// Prints the error to stderr and exits with status 1; does nothing on `Ok`.
 fn exit_on_error(result: Result<()>) {
     if let Err(err) = result {
-        eprintln!("avm: {err:#}");
+        ui::error(fill(msg::COMMAND_FAILED, &[("err", &format!("{err:#}"))]));
         std::process::exit(1);
     }
 }

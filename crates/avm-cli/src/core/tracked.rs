@@ -1,5 +1,7 @@
 //! Project directories whose config pins tools, so `avm plugin prune` keeps their versions.
 use super::store;
+use crate::common::ui;
+use crate::constants::msg::{self, fill};
 use crate::shims;
 use anyhow::Result;
 use std::collections::BTreeSet;
@@ -36,6 +38,6 @@ pub fn track(dir: &Path) {
         Ok(())
     })();
     if let Err(err) = result {
-        warn!("could not track project for prune: {err}");
+        ui::warn(fill(msg::TRACKED_FAILED, &[("err", &err.to_string())]));
     }
 }

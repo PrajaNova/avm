@@ -3,7 +3,10 @@ use crossterm::cursor::MoveTo;
 use crossterm::event::{self, Event, KeyCode, KeyEventKind, KeyModifiers};
 use crossterm::execute;
 use crossterm::terminal::{Clear, ClearType};
+mod output;
 mod terminal;
+
+pub use output::*;
 
 use std::io::{self, IsTerminal, Write};
 use terminal::RawTerminal;

@@ -1,4 +1,5 @@
 //! Unix shims: a small `sh` script per tool.
+use crate::constants::msg::{self, fill};
 use anyhow::{Context, Result};
 use fs_err as fs;
 use std::path::Path;
@@ -36,13 +37,15 @@ exec "$(command -v avm-bin)" exec-shim {tool} -- "$@"
     }
     // Write beside it and rename, so readers see the old or the new script, never a partial one.
     let staged = shims_dir.join(format!(".{tool}.{}.tmp", std::process::id()));
-    fs::write(&staged, contents).with_context(|| format!("write shim for {tool}"))?;
+    fs::write(&staged, contents)
+        .with_context(|| fill(msg::SHIM_WRITE_FAILED, &[("tool", tool)]))?;
     let mut perms = fs::metadata(&staged)
-        .context("shim metadata")?
+        .context(msg::SHIM_METADATA_FAILED)?
         .permissions();
     perms.set_mode(perms.mode() | 0o755);
-    fs::set_permissions(&staged, perms).context("chmod shim")?;
-    fs::rename(&staged, &path).with_context(|| format!("install shim for {tool}"))?;
+    fs::set_permissions(&staged, perms).context(msg::SHIM_CHMOD_FAILED)?;
+    fs::rename(&staged, &path)
+        .with_context(|| fill(msg::SHIM_INSTALL_FAILED, &[("tool", tool)]))?;
     Ok(())
 }
 

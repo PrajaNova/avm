@@ -1,5 +1,7 @@
 use crate::common::env_utils::{child_env, managed_tool_bin_path};
 use crate::common::state::load_state;
+use crate::common::ui;
+use crate::constants::msg::{self, fill};
 use crate::project::mark_used;
 use crate::resolver::ResolvedConfig;
 use crate::shims;
@@ -15,24 +17,27 @@ pub fn cmd_shims(command: ShimsCommands) -> Result<()> {
     match command {
         ShimsCommands::Install => {
             shims::reshim()?;
-            println!("avm shims installed.");
+            ui::info(msg::SHIM_INSTALLED);
             Ok(())
         }
         ShimsCommands::Activate => {
             let written = shims::activate_profiles()?;
             if written.is_empty() {
-                println!("avm shims already active in your shell startup files.");
+                ui::info(msg::SHIM_ALREADY_ACTIVE);
             } else {
                 for path in &written {
-                    println!("Added avm shims to {}", path.display());
+                    ui::info(fill(
+                        msg::SHIM_ACTIVATED,
+                        &[("path", &path.display().to_string())],
+                    ));
                 }
-                println!("Open a new shell (or `source` the file) to apply.");
+                ui::info(msg::SHIM_OPEN_NEW_SHELL);
             }
             Ok(())
         }
         ShimsCommands::Remove { tool } => {
             shims::remove_shim(&tool)?;
-            println!("Removed shim for {tool}");
+            ui::info(fill(msg::SHIM_REMOVED, &[("tool", &tool)]));
             Ok(())
         }
         ShimsCommands::Path => {
@@ -57,13 +62,17 @@ pub fn cmd_exec_shim(args: ExecShimArgs) -> Result<()> {
             // A pinned tool that isn't installed is worth warning about; an
             // unknown binary (e.g. a global package) just falls through.
             if let Some((version, _)) = cfg.resolve_tool(effective_tool) {
-                eprintln!(
-                    "warning: managed {effective_tool} {version} is not installed; falling back to system {}",
-                    args.tool
-                );
+                ui::notice(fill(
+                    msg::SHIM_NOT_INSTALLED,
+                    &[
+                        ("tool", effective_tool),
+                        ("version", &version.to_string()),
+                        ("command", &args.tool),
+                    ],
+                ));
             }
             shims::which(&args.tool, true)
-                .ok_or_else(|| anyhow!("command '{}' not found in PATH", args.tool))?
+                .ok_or_else(|| anyhow!(fill(msg::COMMAND_NOT_FOUND, &[("program", &args.tool)])))?
         }
     };
 
@@ -71,16 +80,17 @@ pub fn cmd_exec_shim(args: ExecShimArgs) -> Result<()> {
         .args(&args.args)
         .envs(child_env(&cfg)?)
         .status()
-        .context("failed to run shim target")?;
+        .context(msg::SHIM_RUN_FAILED)?;
 
     // A global package install adds new binaries to a version's bin dir. Reshim
     // so `tsc`/`eslint`/etc. are runnable immediately, no manual step.
     // ponytail: reshims on any pkg-manager install verb; prune stale shims later if it matters.
     if status.success() && is_node_pkg_install(&args.tool, &args.args) {
         if let Err(err) = shims::reshim() {
-            eprintln!(
-                "avm: couldn't refresh shims after the install ({err:#}); run `avm shims install`"
-            );
+            ui::error(fill(
+                msg::SHIM_RESHIM_FAILED,
+                &[("err", &format!("{err:#}"))],
+            ));
         }
     }
 

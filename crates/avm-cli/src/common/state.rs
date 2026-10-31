@@ -1,5 +1,7 @@
 use crate::common::env_utils::extend_env;
+use crate::common::ui;
 use crate::config;
+use crate::constants::msg::{self, fill};
 use crate::resolver::ResolvedConfig;
 use ::fs_err as fs;
 use anyhow::{Context, Result};
@@ -21,10 +23,13 @@ pub fn load_state_with_aliases() -> Result<ResolvedConfig> {
 /// Loads the resolved config for the cwd, optionally including `package.json` scripts as aliases.
 /// A broken `package.json` is ignored with a warning.
 fn load_state_with(aliases: bool) -> Result<ResolvedConfig> {
-    let cwd = std::env::current_dir().context("failed to read current directory")?;
+    let cwd = std::env::current_dir().context(msg::CWD_READ_FAILED)?;
     let plugin_aliases = if aliases {
         package_json_aliases(&cwd).unwrap_or_else(|err| {
-            eprintln!("avm: ignoring package.json scripts: {err:#}");
+            ui::error(fill(
+                msg::STATE_SCRIPTS_IGNORED,
+                &[("err", &format!("{err:#}"))],
+            ));
             HashMap::new()
         })
     } else {
@@ -45,7 +50,7 @@ pub static INHERITED_ENV: std::sync::OnceLock<HashMap<String, String>> = std::sy
 /// Reads the saved env baseline from `_AVM_ENV_BASELINE`; empty if unset, errors if it is invalid.
 pub fn env_baseline() -> Result<BTreeMap<String, Option<String>>> {
     let baseline: BTreeMap<String, Option<String>> = match std::env::var(ENV_BASELINE) {
-        Ok(raw) => serde_json::from_str(&raw).context("invalid AVM environment baseline")?,
+        Ok(raw) => serde_json::from_str(&raw).context(msg::STATE_BASELINE_INVALID)?,
         Err(_) => BTreeMap::new(),
     };
     config::validate_env(
@@ -83,7 +88,7 @@ pub fn untrusted_files(cfg: &ResolvedConfig) -> Vec<PathBuf> {
 /// Message telling the user which config files are ignored for lack of trust and how to trust them.
 pub fn untrusted_notice(files: &[PathBuf]) -> String {
     let names: Vec<String> = files.iter().map(|f| f.display().to_string()).collect();
-    format!("avm: {} not trusted, so its aliases and env are ignored. Review each file, then run 'avm trust <file>' to enable it.", names.join(", "))
+    fill(msg::UNTRUSTED_NOTICE, &[("files", &names.join(", "))])
 }
 
 pub use avm_plugin_sdk::home_dir;
@@ -95,10 +100,10 @@ fn package_json_aliases(cwd: &Path) -> Result<HashMap<String, ResolvedAlias>> {
     if !package_json.exists() {
         return Ok(HashMap::new());
     }
-    let raw = fs::read_to_string(&package_json).context("failed to read package.json")?;
+    let raw = fs::read_to_string(&package_json).context(msg::PACKAGE_JSON_READ_FAILED)?;
     // Windows editors often save a BOM, which JSON parsers reject.
     let parsed: serde_json::Value = serde_json::from_str(raw.trim_start_matches('\u{feff}'))
-        .context("failed to parse package.json")?;
+        .context(msg::PACKAGE_JSON_PARSE_FAILED)?;
 
     let manager = if cwd.join("bun.lockb").exists() || cwd.join("bun.lock").exists() {
         "bun run"

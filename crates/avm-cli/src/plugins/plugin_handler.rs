@@ -1,3 +1,4 @@
+use crate::common::ui;
 use crate::constants::msg::*;
 use crate::global::{cmd_outdated, cmd_upgrade};
 use crate::plugins as runtime;
@@ -81,28 +82,22 @@ fn cmd_plugin_install(specs: Vec<String>) -> Result<()> {
     for spec in specs {
         match runtime::resolve_plugin_source(&spec)? {
             Some(source) => {
-                println!(
-                    "{}",
-                    fill(
-                        PLUGIN_FETCHING,
-                        &[("name", &source.name), ("repo", &source.repo)]
-                    )
-                );
+                ui::info(fill(
+                    PLUGIN_FETCHING,
+                    &[("name", &source.name), ("repo", &source.repo)],
+                ));
                 let version =
                     runtime::install_from_marketplace(&source, &plugin_manager.plugin_dir())?;
-                println!(
-                    "{}",
-                    fill(
-                        PLUGIN_INSTALLED,
-                        &[("name", &source.name), ("version", &version)]
-                    )
-                );
+                ui::info(fill(
+                    PLUGIN_INSTALLED,
+                    &[("name", &source.name), ("version", &version)],
+                ));
             }
             // Not a release source: an asdf-style git URL or a local path.
             None => {
-                println!("{}", fill(PLUGIN_INSTALLING_FROM, &[("source", &spec)]));
+                ui::info(fill(PLUGIN_INSTALLING_FROM, &[("source", &spec)]));
                 plugin_manager.install_plugin(&spec)?;
-                println!("{PLUGIN_INSTALLED_PLAIN}");
+                ui::info(PLUGIN_INSTALLED_PLAIN);
             }
         }
     }
@@ -114,7 +109,7 @@ fn cmd_plugin_uninstall(names: Vec<String>) -> Result<()> {
     let plugin_manager = PluginRegistry::new()?;
     for name in names {
         plugin_manager.remove_plugin(&name)?;
-        println!("{}", fill(PLUGIN_REMOVED, &[("name", &name)]));
+        ui::info(fill(PLUGIN_REMOVED, &[("name", &name)]));
     }
     Ok(())
 }
@@ -123,13 +118,13 @@ fn cmd_plugin_uninstall(names: Vec<String>) -> Result<()> {
 fn cmd_plugin_search(keyword: &str) -> Result<()> {
     let rows = runtime::search_plugins(keyword)?;
     if rows.is_empty() {
-        println!("{}", fill(PLUGIN_SEARCH_EMPTY, &[("keyword", keyword)]));
+        ui::info(fill(PLUGIN_SEARCH_EMPTY, &[("keyword", keyword)]));
         return Ok(());
     }
     for (name, description) in rows {
-        println!("  {name} - {description}");
+        ui::info(format!("  {name} - {description}"));
     }
-    println!();
-    println!("{PLUGIN_SEARCH_HINT}");
+    ui::blank();
+    ui::info(PLUGIN_SEARCH_HINT);
     Ok(())
 }

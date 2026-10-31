@@ -1,6 +1,7 @@
 mod shims_handler;
 mod shims_manager;
 
+use crate::constants::msg::{self, fill};
 use anyhow::{Context, Result};
 use fs_err as fs;
 use std::path::{Path, PathBuf};
@@ -48,7 +49,7 @@ pub fn shim_dir() -> Result<PathBuf> {
 /// or `eslint` become runnable through the same dir-aware dispatch.
 pub fn reshim() -> Result<()> {
     let shims_dir = shim_dir()?;
-    fs::create_dir_all(&shims_dir).context("create shims dir")?;
+    fs::create_dir_all(&shims_dir).context(msg::SHIM_CREATE_DIR_FAILED)?;
     remove_stale_shims(&shims_dir);
     // One shim failing (e.g. in use) mustn't stop the rest; report the first.
     let mut first_err = None;
@@ -135,7 +136,12 @@ pub fn activate_profiles() -> Result<Vec<PathBuf>> {
             .append(true)
             .open(&path)
             .and_then(|mut file| std::io::Write::write_all(&mut file, block.as_bytes()));
-        appended.with_context(|| format!("failed to update {}", path.display()))?;
+        appended.with_context(|| {
+            fill(
+                msg::SHIM_PROFILE_UPDATE_FAILED,
+                &[("path", &path.display().to_string())],
+            )
+        })?;
         written.push(path);
     }
     Ok(written)
@@ -151,7 +157,7 @@ pub fn remove_shim(tool: &str) -> Result<()> {
     ] {
         let path = shim_dir()?.join(name);
         if path.exists() {
-            fs::remove_file(path).context("remove shim")?;
+            fs::remove_file(path).context(msg::SHIM_REMOVE_FAILED)?;
         }
     }
     Ok(())

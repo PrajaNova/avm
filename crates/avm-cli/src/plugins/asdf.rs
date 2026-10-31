@@ -34,7 +34,10 @@ impl AsdfToolProvider {
     ) -> Result<String> {
         let command_path = self.plugin_path.join("bin").join(command);
         if !command_path.exists() {
-            return Err(anyhow!("asdf plugin missing bin/{command}"));
+            return Err(anyhow!(fill(
+                msg::PLUGIN_ASDF_MISSING_BIN,
+                &[("command", command)]
+            )));
         }
 
         let mut cmd = Command::new(command_path);
@@ -156,7 +159,7 @@ impl ToolProvider for AsdfToolProvider {
             return Ok(());
         }
         let install_path = self.install_path(version)?;
-        fs::create_dir_all(&install_path).context("failed to create asdf install path")?;
+        fs::create_dir_all(&install_path).context(msg::PLUGIN_ASDF_INSTALL_PATH_FAILED)?;
         if let Err(err) = self.run_asdf_command("install", Some(version), ASDF_INSTALL_TIMEOUT_MS) {
             let _ = fs::remove_dir_all(&install_path);
             return Err(err);

@@ -1,4 +1,6 @@
 use crate::common::state::home_dir;
+use crate::common::ui;
+use crate::constants::msg::{self, fill};
 use crate::global::provider_by_name;
 use crate::lockfile::{LockedTool, Lockfile, PluginPin};
 use crate::plugins::PluginRegistry;
@@ -40,7 +42,7 @@ pub fn cmd_lock(platforms: Vec<String>) -> Result<()> {
     let root = lock_root(&cwd, &home)?;
     let cfg = crate::resolver::load_unlocked(&root, &home, HashMap::new())?;
     if lockfile::requested_tools(&cfg).is_empty() {
-        println!("Nothing to lock. Add a tool first: avm node use 20");
+        ui::info(msg::LOCK_NOTHING);
         return Ok(());
     }
     write_lock(&root, &cfg, platforms)
@@ -64,38 +66,40 @@ fn write_lock(root: &Path, cfg: &ResolvedConfig, mut platforms: Vec<String>) -> 
     };
     for (tool, requested) in lockfile::requested_tools(cfg) {
         lockfile::validate_tool(&tool)?;
-        let provider = manager.protocol_provider(&tool)
-            .ok_or_else(|| anyhow!("{tool} requires a native plugin with lockfile support; legacy asdf plugins can use `avm -p install` without a lockfile"))?;
+        let provider = manager
+            .protocol_provider(&tool)
+            .ok_or_else(|| anyhow!(fill(msg::LOCK_LEGACY_PLUGIN, &[("tool", &tool)])))?;
         let resolved = lockfile::resolve_spec(&provider, &requested)?;
         let downloads = provider
             .resolve_downloads(&resolved, &platforms)
-            .with_context(|| {
-                format!(
-                    "{tool} cannot lock downloads; its plugin is too old, run `avm plugin install {tool}`"
-                )
-            })?;
+            .with_context(|| fill(msg::LOCK_CANNOT_DOWNLOADS, &[("tool", &tool)]))?;
         if downloads.version != resolved {
-            return Err(anyhow!(
-                "{tool} resolve returned {} instead of {resolved}",
-                downloads.version
-            ));
+            return Err(anyhow!(fill(
+                msg::LOCK_RESOLVE_VERSION,
+                &[
+                    ("tool", &tool),
+                    ("returned", &downloads.version),
+                    ("resolved", &resolved)
+                ]
+            )));
         }
         if downloads.assets.keys().cloned().collect::<Vec<_>>() != platforms {
-            return Err(anyhow!(
-                "{tool} resolve returned downloads for a different set of platforms"
-            ));
+            return Err(anyhow!(fill(
+                msg::LOCK_RESOLVE_PLATFORMS,
+                &[("tool", &tool)]
+            )));
         }
         for platform in &platforms {
-            validate_asset(
-                downloads
-                    .assets
-                    .get(platform)
-                    .ok_or_else(|| anyhow!("{tool} did not return a download for {platform}"))?,
-            )?;
+            validate_asset(downloads.assets.get(platform).ok_or_else(|| {
+                anyhow!(fill(
+                    msg::LOCK_NO_DOWNLOAD,
+                    &[("tool", &tool), ("platform", platform)]
+                ))
+            })?)?;
         }
         let plugin = plugin_pin(&provider, &host)?;
         if plugin.name != tool || plugin.version.is_empty() {
-            return Err(anyhow!("invalid plugin manifest for {tool}"));
+            return Err(anyhow!(fill(msg::LOCK_BAD_MANIFEST, &[("tool", &tool)])));
         }
         lock.tools.insert(
             tool,
@@ -108,12 +112,16 @@ fn write_lock(root: &Path, cfg: &ResolvedConfig, mut platforms: Vec<String>) -> 
         );
     }
     lock.save(root)?;
-    println!(
-        "✓ Locked {} tools in {} ({})",
-        lock.tools.len(),
-        root.join(lockfile::LOCK_FILE).display(),
-        platforms.join(", ")
-    );
+    let count = lock.tools.len().to_string();
+    let path = root.join(lockfile::LOCK_FILE).display().to_string();
+    ui::info(fill(
+        msg::LOCK_DONE,
+        &[
+            ("count", &count),
+            ("path", &path),
+            ("platforms", &platforms.join(", ")),
+        ],
+    ));
     Ok(())
 }
 
@@ -127,9 +135,12 @@ fn lock_root(cwd: &Path, home: &Path) -> Result<PathBuf> {
         for file in files {
             match fs::metadata(dir.join(file)) {
                 Ok(meta) if meta.is_file() => return Ok(dir.to_path_buf()),
-                Ok(_) => return Err(anyhow!("{} is not a file", dir.join(file).display())),
+                Ok(_) => {
+                    let path = dir.join(file).display().to_string();
+                    return Err(anyhow!(fill(msg::LOCK_NOT_A_FILE, &[("path", &path)])));
+                }
                 Err(err) if err.kind() == std::io::ErrorKind::NotFound => continue,
-                Err(err) => return Err(err).context("find project lock directory"),
+                Err(err) => return Err(err).context(msg::LOCK_FIND_DIR),
             }
         }
     }
@@ -143,26 +154,27 @@ pub fn cmd_install(frozen: bool) -> Result<()> {
     let cfg = unlocked_state()?;
     let project_tools = !lockfile::requested_tools(&cfg).is_empty();
     if frozen && !project_tools {
-        println!("Nothing to install: no tools in .avm.json.");
+        ui::info(msg::INSTALL_NOTHING_FROZEN);
         return Ok(());
     }
     let mut lock = lockfile::load(&cwd)?;
     if frozen && lock.is_none() {
-        return Err(anyhow!(
-            "--frozen requires .avm.lock; run `avm plugin lock` and commit it first"
-        ));
+        return Err(anyhow!(msg::INSTALL_FROZEN_NO_LOCK));
     }
     if let Some(current) = &lock {
         if let Err(err) = current.validate_config(&cfg) {
             if frozen {
                 return Err(err);
             }
-            eprintln!("avm: {err:#}; installing from .avm.json and refreshing the lock");
+            ui::error(fill(
+                msg::INSTALL_STALE_LOCK,
+                &[("err", &format!("{err:#}"))],
+            ));
             lock = None;
         }
     }
     if !project_tools {
-        println!("No tools in .avm.json. Add one: avm node use 20");
+        ui::info(msg::INSTALL_NO_TOOLS);
     }
     let platform = host_platform()?;
     let mut plan = Vec::new();
@@ -182,7 +194,7 @@ pub fn cmd_install(frozen: bool) -> Result<()> {
             let entry = lock
                 .tools
                 .get(&tool)
-                .ok_or_else(|| anyhow!("{tool} missing from .avm.lock"))?;
+                .ok_or_else(|| anyhow!(fill(msg::INSTALL_MISSING_FROM_LOCK, &[("tool", &tool)])))?;
             (
                 entry.resolved.clone(),
                 Some(locked_asset(&tool, entry, &platform)?),
@@ -203,8 +215,13 @@ pub fn cmd_install(frozen: bool) -> Result<()> {
     for (tool, version, provider, asset) in plan {
         let global = !project_tools || !cfg.local_tools.contains_key(&tool);
         let label = if global { " (global)" } else { "" };
+        let vars = [
+            ("tool", tool.as_str()),
+            ("version", &version),
+            ("label", label),
+        ];
         if provider.is_installed(&version) {
-            done!("{tool} {version} already installed{label}");
+            ui::success(fill(msg::INSTALL_ALREADY, &vars));
         } else {
             if let Some(asset) = asset {
                 provider.install_locked(&version, &asset)?;
@@ -212,11 +229,9 @@ pub fn cmd_install(frozen: bool) -> Result<()> {
                 provider.install(&version)?;
             }
             if !provider.is_installed(&version) {
-                return Err(anyhow!(
-                    "{tool} {version} installer succeeded but the tool is not installed"
-                ));
+                return Err(anyhow!(fill(msg::INSTALL_NOT_INSTALLED, &vars)));
             }
-            done!("Installed {tool} {version}{label}");
+            ui::success(fill(msg::INSTALL_DONE, &vars));
         }
     }
     shims::reshim()?;
@@ -224,7 +239,10 @@ pub fn cmd_install(frozen: bool) -> Result<()> {
         // Best-effort: an old or asdf plugin must not turn a good install into a failure.
         let root = lock_root(&cwd, &home_dir()?)?;
         if let Err(err) = write_lock(&root, &cfg, Vec::new()) {
-            eprintln!("avm: installed, but could not write .avm.lock: {err:#}");
+            ui::error(fill(
+                msg::INSTALL_LOCK_WRITE_FAILED,
+                &[("err", &format!("{err:#}"))],
+            ));
         }
     }
     Ok(())
@@ -249,7 +267,10 @@ pub fn refresh_lock() {
         write_lock(&root, &cfg, platforms)
     };
     if let Err(err) = refresh() {
-        eprintln!("avm: could not refresh .avm.lock ({err:#}); run `avm plugin lock`");
+        ui::error(fill(
+            msg::INSTALL_REFRESH_FAILED,
+            &[("err", &format!("{err:#}"))],
+        ));
     }
 }
 
@@ -258,13 +279,13 @@ pub fn refresh_lock() {
 fn locked_asset(tool: &str, entry: &LockedTool, platform: &str) -> Result<LockedAsset> {
     let process = PluginRegistry::new()?
         .protocol_provider(tool)
-        .ok_or_else(|| anyhow!("{tool} requires a native plugin for locked installs"))?;
+        .ok_or_else(|| anyhow!(fill(msg::INSTALL_NO_NATIVE_PLUGIN, &[("tool", tool)])))?;
     let installed = plugin_pin(&process, platform)?;
     if installed.name != entry.plugin.name || installed.version != entry.plugin.version {
-        return Err(anyhow!(
-            "{tool} plugin differs from .avm.lock; install plugin {} or regenerate with `avm plugin lock`",
-            entry.plugin.version
-        ));
+        return Err(anyhow!(fill(
+            msg::INSTALL_PLUGIN_DIFFERS,
+            &[("tool", tool), ("version", &entry.plugin.version)]
+        )));
     }
     if let Some(expected) = entry.plugin.binaries.get(platform) {
         if installed
@@ -272,15 +293,22 @@ fn locked_asset(tool: &str, entry: &LockedTool, platform: &str) -> Result<Locked
             .get(platform)
             .is_none_or(|actual| !actual.eq_ignore_ascii_case(expected))
         {
-            return Err(anyhow!("{tool} plugin checksum differs from .avm.lock; restore the locked plugin or run `avm plugin lock`"));
+            return Err(anyhow!(fill(
+                msg::INSTALL_CHECKSUM_DIFFERS,
+                &[("tool", tool)]
+            )));
         }
     } else {
-        warn!("{tool} plugin binary not pinned for {platform}; only plugin name and version are checked");
+        ui::warn(fill(
+            msg::INSTALL_PLUGIN_UNPINNED,
+            &[("tool", tool), ("platform", platform)],
+        ));
     }
     entry.assets.get(platform).cloned().ok_or_else(|| {
-        anyhow!(
-            ".avm.lock has no {tool} download for {platform}; run `avm plugin lock --platform {platform}`"
-        )
+        anyhow!(fill(
+            msg::INSTALL_NO_LOCKED_DOWNLOAD,
+            &[("tool", tool), ("platform", platform)]
+        ))
     })
 }
 

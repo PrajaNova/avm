@@ -1,6 +1,7 @@
 //! The interactive pickers behind bare `avm <plugin>`, uninstall and version selection.
 use crate::common::state::load_state;
 use crate::common::ui;
+use crate::constants::msg::{self, fill};
 use crate::global::{cmd_provider_tool, print_provider_status, use_provider_version};
 use crate::resolver::ResolvedConfig;
 use anyhow::Result;
@@ -22,21 +23,22 @@ pub fn interactive_provider_menu(
 
     // (label, subcommand to re-dispatch). "__uninstall" needs a version picker
     // first, so it is handled inline rather than re-dispatched.
-    let actions: [(&str, &[&str]); 5] = [
-        ("Show selected & installed versions", &["list"]),
-        ("Browse & install a version", &["versions"]),
-        ("Install the latest version", &["install", "latest"]),
-        ("Uninstall an installed version", &["__uninstall"]),
-        ("Show all commands", &["help"]),
+    let actions: [&[&str]; 5] = [
+        &["list"],
+        &["versions"],
+        &["install", "latest"],
+        &["__uninstall"],
+        &["help"],
     ];
 
-    let labels: Vec<String> = actions.iter().map(|(label, _)| label.to_string()).collect();
-    let Some(idx) = ui::select(&format!("avm {provider_name} — what next?"), &labels)? else {
-        println!("Cancelled.");
+    let labels: Vec<String> = msg::PROVIDER_MENU_ACTIONS.map(String::from).to_vec();
+    let title = fill(msg::PROVIDER_MENU_TITLE, &[("name", provider_name)]);
+    let Some(idx) = ui::select(&title, &labels)? else {
+        ui::cancelled();
         return Ok(());
     };
 
-    let sub = actions[idx].1;
+    let sub = actions[idx];
     if sub.first() == Some(&"__uninstall") {
         return interactive_uninstall(provider_name, provider);
     }
@@ -50,20 +52,24 @@ pub fn interactive_provider_menu(
 pub fn interactive_uninstall(provider_name: &str, provider: &dyn ToolProvider) -> Result<()> {
     let installed = provider.installed_versions()?;
     if installed.is_empty() {
-        println!("No installed {provider_name} versions to remove.");
+        ui::info(fill(
+            msg::PROVIDER_UNINSTALL_NONE,
+            &[("name", provider_name)],
+        ));
         return Ok(());
     }
-    match ui::select(
-        &format!("Uninstall which {provider_name} version?"),
-        &installed,
-    )? {
+    let title = fill(msg::PROVIDER_UNINSTALL_TITLE, &[("name", provider_name)]);
+    match ui::select(&title, &installed)? {
         Some(i) => {
             provider.uninstall(&installed[i])?;
-            done!("Removed {provider_name} {}", installed[i]);
+            ui::success(fill(
+                msg::PROVIDER_UNINSTALLED,
+                &[("name", provider_name), ("version", &installed[i])],
+            ));
             Ok(())
         }
         None => {
-            println!("Cancelled.");
+            ui::cancelled();
             Ok(())
         }
     }
@@ -98,15 +104,13 @@ pub fn select_tool_version(
             format!("{mark} {}", v.label)
         })
         .collect();
-    match ui::select(
-        &format!("Available {provider_name} versions (✓ installed, ● selected)"),
-        &labels,
-    )? {
+    let title = fill(msg::PROVIDER_VERSIONS_TITLE, &[("name", provider_name)]);
+    match ui::select(&title, &labels)? {
         Some(selected) => {
             confirm_tool_version_selection(provider_name, provider, &versions[selected].version)
         }
         None => {
-            println!("Cancelled.");
+            ui::cancelled();
             Ok(())
         }
     }
@@ -120,14 +124,15 @@ pub fn confirm_tool_version_selection(
 ) -> Result<()> {
     // Local first: it creates `.avm.json` when the project has none, so a project
     // that only has `.nvmrc` can be pinned from here without `avm init`.
-    let scopes = [
-        "Local: this project (writes .avm.json)".to_string(),
-        "Global: every project".to_string(),
-    ];
-    match ui::select(&format!("Use {provider_name} {version} where?"), &scopes)? {
+    let scopes = [msg::PROVIDER_SCOPE_LOCAL, msg::PROVIDER_SCOPE_GLOBAL].map(String::from);
+    let title = fill(
+        msg::PROVIDER_SCOPE_TITLE,
+        &[("name", provider_name), ("version", version)],
+    );
+    match ui::select(&title, &scopes)? {
         Some(choice) => use_provider_version(provider_name, provider, version, choice == 1),
         None => {
-            println!("Cancelled.");
+            ui::cancelled();
             Ok(())
         }
     }

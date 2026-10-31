@@ -3,6 +3,7 @@
 //! trusted that exact file content. `~/.avm/trusted.json` maps each file's
 //! absolute path to the sha256 it had when trusted; any edit re-blocks it.
 use super::store;
+use crate::constants::msg::{self, fill};
 use anyhow::{Context, Result};
 use fs_err as fs;
 use std::collections::BTreeMap;
@@ -27,15 +28,19 @@ fn read_store() -> Result<BTreeMap<String, String>> {
 fn save(store: &BTreeMap<String, String>) -> Result<()> {
     let path = store_path()?;
     if let Some(dir) = path.parent() {
-        fs::create_dir_all(dir).context("failed to create avm home")?;
+        fs::create_dir_all(dir).context(msg::TRUST_STORE_HOME_FAILED)?;
     }
-    store::write_pretty(&path, store).context("failed to write trusted.json")
+    store::write_pretty(&path, store).context(msg::TRUST_STORE_WRITE_FAILED)
 }
 
 /// Canonical path used as the store key; errors if `file` does not exist.
 fn key(file: &Path) -> Result<PathBuf> {
-    file.canonicalize()
-        .with_context(|| format!("{} not found", file.display()))
+    file.canonicalize().with_context(|| {
+        fill(
+            msg::TRUST_STORE_NOT_FOUND,
+            &[("path", &file.display().to_string())],
+        )
+    })
 }
 
 /// Trusted if `AVM_TRUST_ALL=1`, it lives directly in `$HOME` (the global

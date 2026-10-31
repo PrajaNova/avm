@@ -1,6 +1,8 @@
 //! `avm plugin list`.
 use crate::common::config_utils::alias_source_label;
 use crate::common::state::{home_dir, load_state_with_aliases, untrusted_files, untrusted_notice};
+use crate::common::ui;
+use crate::constants::msg::{self, fill};
 use crate::plugins::PluginRegistry;
 use crate::resolver::ResolvedConfig;
 use anyhow::Result;
@@ -47,11 +49,11 @@ fn project_line(cfg: &ResolvedConfig) -> String {
         .map(|o| short_path(o))
         .collect();
     if files.is_empty() {
-        "Project: none here (no .avm.json). Showing global only.".to_string()
+        msg::PLUGIN_LIST_NO_PROJECT.to_string()
     } else {
-        format!(
-            "Project: {}",
-            files.into_iter().collect::<Vec<_>>().join(", ")
+        fill(
+            msg::PLUGIN_LIST_PROJECT,
+            &[("files", &files.into_iter().collect::<Vec<_>>().join(", "))],
         )
     }
 }
@@ -149,7 +151,7 @@ pub fn cmd_plugin_list() -> Result<()> {
     let cfg = load_state_with_aliases()?;
     let untrusted = untrusted_files(&cfg);
     if !untrusted.is_empty() {
-        eprintln!("{}", untrusted_notice(&untrusted));
+        ui::notice(untrusted_notice(&untrusted));
     }
     let installed = installed_by_tool();
     let plugin_aliases = visible_plugin_aliases(&cfg);
@@ -158,32 +160,36 @@ pub fn cmd_plugin_list() -> Result<()> {
     let has_aliases = !plugin_aliases.is_empty();
 
     if has_tools || has_aliases {
-        println!("{}", project_line(&cfg));
-        println!();
+        ui::info(project_line(&cfg));
+        ui::blank();
     }
     if has_tools {
         print_tool_table(&cfg, &installed);
-        println!();
+        ui::blank();
     }
     if !plugin_aliases.is_empty() {
-        println!("Plugin aliases:");
+        ui::info(msg::PLUGIN_LIST_ALIASES);
         for (section, items) in plugin_aliases {
-            println!("  {section}:");
+            ui::info(format!("  {section}:"));
             for (name, (command, source)) in items {
                 if source.is_empty() {
-                    println!("    {name} → {command}");
+                    ui::info(format!("    {name} → {command}"));
                 } else {
-                    println!("    {name} → {command} ({source})");
+                    ui::info(format!("    {name} → {command} ({source})"));
                 }
             }
         }
     }
     if !has_tools && !has_aliases {
-        println!("No plugins or tools yet.");
-        println!();
-        println!("Get started:");
-        println!("  avm plugin install <plugin>");
-        println!("  avm node use 20.11.1");
+        ui::info(msg::PLUGIN_LIST_EMPTY);
+        ui::blank();
+        ui::section(
+            msg::PLUGIN_LIST_GET_STARTED,
+            &[
+                msg::PLUGIN_LIST_START_INSTALL.into(),
+                msg::PLUGIN_LIST_START_USE.into(),
+            ],
+        );
     }
     Ok(())
 }

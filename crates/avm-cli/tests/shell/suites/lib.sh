@@ -47,8 +47,8 @@ check_aliases_and_env() {
   cd "$dir"
 
   log "$tag: global and local alias with the same name"
-  avm alias add -g hello "echo hello-global-$tag" >/dev/null
-  (cd "$project" && avm init >/dev/null && avm alias add hello "echo hello-local-$tag" >/dev/null)
+  avm alias add -y -g hello "echo hello-global-$tag" >/dev/null
+  (cd "$project" && avm init >/dev/null && avm alias add -y hello "echo hello-local-$tag" >/dev/null)
   expect_eq "outside the project the global alias runs" "$(avm hello)" "hello-global-$tag"
   expect_eq "inside the project the local alias wins" "$(cd "$project" && avm hello)" "hello-local-$tag"
   expect_contains "avm which hello (project)" "$(cd "$project" && avm which hello)" "local alias"
@@ -59,7 +59,7 @@ check_aliases_and_env() {
   (cd "$project" && avm env add AVM_E2E_SCOPE "local-$tag" >/dev/null)
   expect_contains "avm env outside → global value" "$(avm env)" "AVM_E2E_SCOPE=global-$tag"
   expect_contains "avm env in project → local value" "$(cd "$project" && avm env)" "AVM_E2E_SCOPE=local-$tag"
-  avm alias add -g scope 'echo scope=$AVM_E2E_SCOPE' >/dev/null
+  avm alias add -y -g scope 'echo scope=$AVM_E2E_SCOPE' >/dev/null
   expect_eq "alias sees the global env outside" "$(avm scope)" "scope=global-$tag"
   expect_eq "alias sees the local env in the project" "$(cd "$project" && avm scope)" "scope=local-$tag"
 }

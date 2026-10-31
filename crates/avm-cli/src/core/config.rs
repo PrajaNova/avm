@@ -1,3 +1,4 @@
+use crate::constants::msg::{self, fill};
 use anyhow::{anyhow, Context, Result};
 use fs_err as fs;
 use serde::Serialize;
@@ -42,7 +43,7 @@ fn validate_env_key(key: &str) -> bool {
 /// Errors naming the first env key that is not a valid variable name.
 pub(crate) fn validate_env(env: &HashMap<String, String>) -> Result<()> {
     match env.keys().find(|key| !validate_env_key(key)) {
-        Some(key) => Err(anyhow!("invalid env key: {key}")),
+        Some(key) => Err(anyhow!(fill(msg::CONFIG_INVALID_ENV_KEY, &[("key", key)]))),
         None => Ok(()),
     }
 }
@@ -50,7 +51,7 @@ pub(crate) fn validate_env(env: &HashMap<String, String>) -> Result<()> {
 /// Parse raw `.avm.json` bytes into a config; accepts the legacy flat alias map, structured sections, or `null`.
 /// Errors on invalid JSON, wrongly typed sections, or invalid env keys.
 fn parse_config(raw: &[u8]) -> Result<ConfigLoadResult> {
-    let root: serde_json::Value = serde_json::from_slice(raw).context("invalid config json")?;
+    let root: serde_json::Value = serde_json::from_slice(raw).context(msg::CONFIG_INVALID_JSON)?;
 
     match root {
         serde_json::Value::Object(object) => {
@@ -58,7 +59,7 @@ fn parse_config(raw: &[u8]) -> Result<ConfigLoadResult> {
                 // Legacy flat `{ "alias": "command" }` file; the next save
                 // rewrites it in the structured form.
                 let aliases = serde_json::from_value(serde_json::Value::Object(object))
-                    .context("invalid legacy flat config")?;
+                    .context(msg::CONFIG_INVALID_LEGACY)?;
                 return Ok(ConfigLoadResult {
                     aliases,
                     ..Default::default()
@@ -68,17 +69,16 @@ fn parse_config(raw: &[u8]) -> Result<ConfigLoadResult> {
             let mut cfg = ConfigLoadResult {
                 root: match object.get("root") {
                     None => false,
-                    Some(v) => v
-                        .as_bool()
-                        .ok_or_else(|| anyhow!("root must be a boolean"))?,
+                    Some(v) => v.as_bool().ok_or_else(|| anyhow!(msg::CONFIG_ROOT_BOOL))?,
                 },
                 aliases: parse_string_map(object.get("aliases"), "aliases")?,
                 env: parse_string_map(object.get("env"), "env")?,
                 tools: parse_string_map(object.get("tools"), "tools")?,
                 trusted_paths: match object.get("trusted_paths") {
                     None | Some(serde_json::Value::Null) => Vec::new(),
-                    Some(v) => serde_json::from_value(v.clone())
-                        .context("trusted_paths must be a list of strings")?,
+                    Some(v) => {
+                        serde_json::from_value(v.clone()).context(msg::CONFIG_TRUSTED_PATHS)?
+                    }
                 },
                 idiomatic_version_files: object
                     .get("idiomatic_version_files")
@@ -93,7 +93,7 @@ fn parse_config(raw: &[u8]) -> Result<ConfigLoadResult> {
             Ok(cfg)
         }
         serde_json::Value::Null => Ok(ConfigLoadResult::default()),
-        _ => Err(anyhow!("invalid config format")),
+        _ => Err(anyhow!(msg::CONFIG_INVALID_FORMAT)),
     }
 }
 
@@ -105,7 +105,7 @@ fn parse_string_map(
     match value {
         None | Some(serde_json::Value::Null) => Ok(HashMap::new()),
         Some(value) => serde_json::from_value(value.clone())
-            .with_context(|| format!("invalid structured config section: {section}")),
+            .with_context(|| fill(msg::CONFIG_INVALID_SECTION, &[("section", section)])),
     }
 }
 
@@ -118,9 +118,9 @@ pub fn load(root: &Path) -> Result<ConfigLoadResult> {
 pub fn load_file(file_path: &Path) -> Result<ConfigLoadResult> {
     match fs::read(file_path) {
         Ok(raw) => parse_config(&raw).with_context(|| {
-            format!(
-                "invalid {}; repair the file before continuing",
-                file_path.display()
+            fill(
+                msg::CONFIG_INVALID_FILE,
+                &[("path", &file_path.display().to_string())],
             )
         }),
         Err(err) if err.kind() == std::io::ErrorKind::NotFound => Ok(ConfigLoadResult::default()),
@@ -133,7 +133,7 @@ pub fn save(root: &Path, cfg: &ConfigLoadResult) -> Result<()> {
     validate_env(&cfg.env)?;
     let raw = serde_json::to_vec_pretty(cfg)?;
     avm_plugin_sdk::storage::atomic_write(&root.join(CONFIG_FILE), &raw)
-        .context("failed to save config")
+        .context(msg::CONFIG_SAVE_FAILED)
 }
 
 /// Low to high precedence within a directory. Profiles cannot name paths.
@@ -147,7 +147,10 @@ pub fn file_names(profiles: &str) -> Result<Vec<String>> {
                     .bytes()
                     .all(|c| c.is_ascii_alphanumeric() || b"_-".contains(&c))
             {
-                return Err(anyhow!("invalid environment profile: {profile}"));
+                return Err(anyhow!(fill(
+                    msg::CONFIG_INVALID_PROFILE,
+                    &[("profile", profile)]
+                )));
             }
             if profile != "local" {
                 names.push(format!(".avm.{profile}.json"));

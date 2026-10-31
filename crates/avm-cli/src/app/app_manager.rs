@@ -1,7 +1,8 @@
 //! App manager: avm itself (`self-update`, shell setup, plugin template).
 use crate::common::manager::Manager;
 use crate::common::shell::{pwsh_init_script, shell_init_script, Shell};
-use crate::constants::msg;
+use crate::common::ui;
+use crate::constants::msg::{self, fill};
 use crate::run::task::{Cmd, Task};
 use anyhow::{anyhow, Result};
 use clap::Subcommand;
@@ -30,11 +31,8 @@ impl Manager for AppManager {
     fn into_command(self) -> Cmd {
         match self {
             Self::Create { name } => Task::cmd(move || {
-                println!("{}", msg::PLUGIN_TEMPLATE_INTRO);
-                println!(
-                    "{}",
-                    msg::fill(msg::PLUGIN_TEMPLATE_CMD, &[("name", &name)])
-                );
+                ui::info(msg::PLUGIN_TEMPLATE_INTRO);
+                ui::info(fill(msg::PLUGIN_TEMPLATE_CMD, &[("name", &name)]));
                 Ok(())
             }),
             Self::ShellInit { shell } => Task::quiet(move || shell_init(shell.unwrap_or_default())),
@@ -50,11 +48,7 @@ impl Manager for AppManager {
 fn shell_init(shell: Shell) -> Result<()> {
     match shell {
         Shell::Pwsh => println!("{}", pwsh_init_script()),
-        Shell::Cmd => {
-            return Err(anyhow!(
-                "cmd has no init hook; run `avm-bin env --shell cmd` and use `avm-bin` directly"
-            ))
-        }
+        Shell::Cmd => return Err(anyhow!(msg::APP_CMD_NO_INIT_HOOK)),
         Shell::Sh => println!("{}", shell_init_script()),
     }
     Ok(())

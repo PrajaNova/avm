@@ -56,7 +56,9 @@ impl Sandbox {
             .env("AVM_NO_UPDATE_CHECK", "1")
             .env("AVM_TRUST_ALL", "0")
             .env_remove("AVM_ENV")
-            // Provider variables from the machine running the tests change what `avm env` prints.
+            // `avm env` prints `unset` for whatever the shell hook's saved baseline says was unset,
+            // and unsets provider variables that are set; ambient values of either would leak in.
+            .env_remove("_AVM_ENV_BASELINE")
             .env_remove("JAVA_HOME")
             .env_remove("ANDROID_HOME")
             .env_remove("ANDROID_SDK_ROOT");
